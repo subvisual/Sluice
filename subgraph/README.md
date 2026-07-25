@@ -98,12 +98,12 @@ Note: substitute `<YOUR_DEPLOY_KEY>` with your personal API key from Graph Studi
 
 ### Multi-Network
 
-Addresses are identical on 12 mainnet chains. To deploy to another chain:
+Addresses are identical on 12 mainnet chains. `networks.json` currently carries `mainnet` and `base` (Base start blocks: AquaRouter 38281777, AquaSwapVMRouter 38281787). To deploy to another chain:
 
 1. Add an entry to `networks.json` (file format: `{ "network-name": { "AquaRouter": { "address": "0x...", "startBlock": N }, "AquaSwapVMRouter": { ... } } }`).
-2. Find the chain's deployment block (when Aqua was deployed to that chain; start blocks above are for Ethereum mainnet Nov 2025).
-3. Build with: `graph build --network <network-name>`
-4. Deploy as above.
+2. Find the chain's deployment block (when Aqua was deployed to that chain; binary-search `eth_getCode` over block numbers if the explorer doesn't show it).
+3. Build with: `graph build --network <network-name>` — note this rewrites `subgraph.yaml` in place; restore it to mainnet (`git checkout subgraph.yaml`) after deploying.
+4. Deploy as above, to a per-network Studio subgraph (e.g. `graph deploy aqua-base`).
 
 ## 7. Querying from AI Agents (MCP)
 
@@ -115,9 +115,13 @@ Before querying a subgraph deployment:
 2. Query via `execute_query_by_subgraph_id` or `execute_query_by_ipfs_hash`.
 
 **This subgraph's deployment IDs** (Graph Studio, v0.1.0):
-- Query endpoint: `https://api.studio.thegraph.com/query/1756952/aqua-mainnet/version/latest`
-- Deployment ID / IPFS hash: `QmSbwxzvYVagQnB5PMgQaNT8tPs7VjFSxkG81vcWqRU6Ku`
-- Network Subgraph ID: pending publish to the decentralized network (Studio-only for now)
+
+| Network | Query endpoint | Deployment ID / IPFS hash |
+|---|---|---|
+| Ethereum mainnet | `https://api.studio.thegraph.com/query/1756952/aqua-mainnet/version/latest` | `QmSbwxzvYVagQnB5PMgQaNT8tPs7VjFSxkG81vcWqRU6Ku` |
+| Base | `https://api.studio.thegraph.com/query/1756952/aqua-base/version/latest` | `QmaBGy1FkqjWWJCUCEXPvVGVUDUxjV9U18sxVSntwpm2G4` |
+
+Network Subgraph IDs: pending publish to the decentralized network (Studio-only for now).
 
 ## 8. References
 

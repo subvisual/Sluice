@@ -2,5 +2,9 @@
   "mainnet": {
     "AquaRouter": { "address": "0x499943e74fb0ce105688beee8ef2abec5d936d31", "startBlock": 23816437 },
     "AquaSwapVMRouter": { "address": "0x8fdd04dbf6111437b44bbca99c28882434e0958f", "startBlock": 23816440 }
+  },
+  "base": {
+    "AquaRouter": { "address": "0x499943e74fb0ce105688beee8ef2abec5d936d31", "startBlock": 38281777 },
+    "AquaSwapVMRouter": { "address": "0x8fdd04dbf6111437b44bbca99c28882434e0958f", "startBlock": 38281787 }
   }
 }
