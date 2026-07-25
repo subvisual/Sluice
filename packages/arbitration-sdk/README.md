@@ -1,8 +1,40 @@
 # @sluice/arbitration-sdk
 
 F2 (Verified Private Recommendations) SDK. Currently: a **strategy composer CLI** (prompt +
-budget → a grammar-shaped strategy recommendation from a live 0G enclave) and a one-shot **0G
-inference CLI** (the Gate 0 round-trip it is built on).
+budget → a grammar-shaped strategy recommendation from a live 0G enclave), a one-shot **0G
+inference CLI** (the Gate 0 round-trip it is built on), and an **F3 subgraph book reader** (a
+maker's own Aqua book, read from The Graph).
+
+## Subgraph book reader (F3, job 1)
+
+Reads a maker's own book — committed per-token balances, live strategies, recent fills — from the
+Aqua subgraph, and shapes it (exact decimal amounts) into what the composer's `MarketContext`
+consumes. This is F3 **job 1** (the user's own book); job 2 (market depth / realised vol) comes
+from composed hosted DEX/price subgraphs and is not built here.
+
+    npm run subgraph -- meta
+    npm run subgraph -- book 0x471e8aad77a1a29335081850b4e34fa7863f762a
+
+The endpoint is a **config value, never a code assumption** (F3 §2): it defaults to the deployed
+Studio **Base** subgraph (real Aqua data, no local stack) and swaps to the local fork `graph-node`
+(`subgraph/local`, `make fork-up`) via `SLUICE_SUBGRAPH_URL` or `--url <endpoint>`. Only the local
+fork node sees positions **we** ship on the fork.
+
+**Wired into the composer.** `context.ts` builds a `MarketContext` whose **book (job 1) is real** —
+`liveContext(maker)` reads it from the subgraph and `contextPromptBlock` renders it into the prompt
+the enclave signs. Run it end-to-end with `--maker`:
+
+    npm run compose -- "add a rangebound ETH/USDC position" --budget WETH=2,USDC=3000 --maker 0x471e8aad77a1a29335081850b4e34fa7863f762a
+
+Without `--maker` the composer uses the stub context, exactly as before.
+
+**Scope:** read-only, job 1 only. The market half of the context (pool depth / realised vol) is
+**still a labelled stub** — job 2, F3 Open Q2 (which price subgraph). The `Recommendation`/`Template`
+join (Notion F3 §3) is not in the deployed schema yet — it needs `RecommendationRegistry`, deferred
+with F2 verifiability.
+
+Modules: `subgraph.ts` (client + pure shaping), `subgraph-cli.ts`, `context.ts` (`liveContext` /
+`bookToContext`).
 
 ## Strategy composer CLI
 

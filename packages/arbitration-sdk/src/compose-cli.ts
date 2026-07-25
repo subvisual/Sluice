@@ -2,18 +2,22 @@ import { ethers } from "ethers";
 import { loadConfig } from "./config.ts";
 import { initBroker, ensureLedgerFunded } from "./inference.ts";
 import { compose } from "./compose.ts";
-import { stubContext, tokenBySymbol } from "./context.ts";
+import { stubContext, liveContext, tokenBySymbol } from "./context.ts";
 import type { RecommendationRequest, TokenBudget } from "./recommendation.ts";
 
 const USAGE = `Usage:
-  npm run compose -- "<your prompt>" --budget WETH=2,USDC=1000 [--max-strategies N] [--max-deadline SEC]
+  npm run compose -- "<your prompt>" --budget WETH=2,USDC=1000 [--maker 0x..] [--max-strategies N] [--max-deadline SEC]
+
+  --maker 0x..  reads that maker's REAL book from the Aqua subgraph and feeds it
+                to the model (job 1). Omit it to run against the stub context.
 
 Example:
-  npm run compose -- "sell my ETH if it hits 3500" --budget WETH=2`;
+  npm run compose -- "sell my ETH if it hits 3500" --budget WETH=2 --maker 0x471e8aad77a1a29335081850b4e34fa7863f762a`;
 
 type Args = {
 	prompt: string;
 	budget: TokenBudget[];
+	maker?: string;
 	maxStrategies: number;
 	maxDeadlineSec: number;
 };
@@ -21,12 +25,14 @@ type Args = {
 function parseArgs(argv: string[]): Args | { error: string } {
 	const positional: string[] = [];
 	let budgetRaw = "";
+	let maker: string | undefined;
 	let maxStrategies = 3;
 	let maxDeadlineSec = 7 * 24 * 60 * 60; // 7 days
 
 	for (let i = 0; i < argv.length; i++) {
 		const a = argv[i];
 		if (a === "--budget") budgetRaw = argv[++i] ?? "";
+		else if (a === "--maker") maker = argv[++i]?.trim();
 		else if (a === "--max-strategies") maxStrategies = Number(argv[++i]);
 		else if (a === "--max-deadline") maxDeadlineSec = Number(argv[++i]);
 		else positional.push(a);
@@ -51,12 +57,14 @@ function parseArgs(argv: string[]): Args | { error: string } {
 		});
 	}
 
+	if (maker && !/^0x[0-9a-fA-F]{40}$/.test(maker))
+		return { error: `bad --maker address: "${maker}"` };
 	if (!Number.isFinite(maxStrategies) || maxStrategies < 1)
 		return { error: "bad --max-strategies" };
 	if (!Number.isFinite(maxDeadlineSec) || maxDeadlineSec < 1)
 		return { error: "bad --max-deadline" };
 
-	return { prompt, budget, maxStrategies, maxDeadlineSec };
+	return { prompt, budget, maker, maxStrategies, maxDeadlineSec };
 }
 
 async function main() {
@@ -80,12 +88,16 @@ async function main() {
 	const broker = await initBroker(wallet);
 	await ensureLedgerFunded(broker, cfg.depositZG);
 
-	const ctx = stubContext();
+	const ctx = parsed.maker ? await liveContext(parsed.maker) : stubContext();
+
 	const { parse, raw, attempts, source } = await compose(broker, cfg, req, ctx);
 
 	console.log(`prompt:  ${req.prompt}`);
 	console.log(
 		`budget:  ${req.budget.map((b) => `${b.symbol}=${b.amount}`).join(", ")}`,
+	);
+	console.log(
+		`context: ${ctx.source}${ctx.source === "subgraph" ? ` (maker ${ctx.userBook.maker}, ${ctx.userBook.liveStrategyCount} live @ block ${ctx.observedBlock})` : " (no live book)"}`,
 	);
 	console.log(
 		`0G:      model responded in ${raw.latencyMs}ms (attempt ${attempts}, chatID ${raw.chatID || "n/a"})`,
