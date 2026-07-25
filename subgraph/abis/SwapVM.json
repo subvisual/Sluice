@@ -1,0 +1,10 @@
+[
+  { "type": "event", "name": "Swapped", "anonymous": false, "inputs": [
+    { "name": "orderHash", "type": "bytes32", "indexed": false, "internalType": "bytes32" },
+    { "name": "maker", "type": "address", "indexed": false, "internalType": "address" },
+    { "name": "taker", "type": "address", "indexed": false, "internalType": "address" },
+    { "name": "tokenIn", "type": "address", "indexed": false, "internalType": "address" },
+    { "name": "tokenOut", "type": "address", "indexed": false, "internalType": "address" },
+    { "name": "amountIn", "type": "uint256", "indexed": false, "internalType": "uint256" },
+    { "name": "amountOut", "type": "uint256", "indexed": false, "internalType": "uint256" } ] }
+]

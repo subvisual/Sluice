@@ -1,0 +1,68 @@
+specVersion: 1.2.0
+description: Generic 1inch Aqua protocol subgraph — strategies, virtual balances, maker books, fills
+repository: https://github.com/josevazf/aqua-subgraph
+schema:
+  file: ./schema.graphql
+indexerHints:
+  prune: auto
+dataSources:
+  - kind: ethereum
+    name: AquaRouter
+    network: mainnet
+    source:
+      address: "0x499943e74fb0ce105688beee8ef2abec5d936d31"
+      abi: Aqua
+      startBlock: 23816437
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - AquaProtocol
+        - Maker
+        - App
+        - Token
+        - Strategy
+        - StrategyBalance
+        - MakerTokenBook
+        - BalanceEvent
+      abis:
+        - name: Aqua
+          file: ./abis/Aqua.json
+        - name: ERC20
+          file: ./abis/ERC20.json
+      eventHandlers:
+        - event: Shipped(address,address,bytes32,bytes)
+          handler: handleShipped
+        - event: Docked(address,address,bytes32)
+          handler: handleDocked
+        - event: Pulled(address,address,bytes32,address,uint256)
+          handler: handlePulled
+        - event: Pushed(address,address,bytes32,address,uint256)
+          handler: handlePushed
+      file: ./src/aqua.ts
+  - kind: ethereum
+    name: AquaSwapVMRouter
+    network: mainnet
+    source:
+      address: "0x8fdd04dbf6111437b44bbca99c28882434e0958f"
+      abi: SwapVM
+      startBlock: 23816440
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - AquaProtocol
+        - Token
+        - Strategy
+        - Fill
+      abis:
+        - name: SwapVM
+          file: ./abis/SwapVM.json
+        - name: ERC20
+          file: ./abis/ERC20.json
+      eventHandlers:
+        - event: Swapped(bytes32,address,address,address,address,uint256,uint256)
+          handler: handleSwapped
+      file: ./src/swap-vm.ts

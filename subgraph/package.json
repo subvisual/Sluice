@@ -1,0 +1,22 @@
+{
+  "name": "aqua-subgraph",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "test": "graph test",
+    "deploy": "graph deploy aqua-mainnet"
+  },
+  "dependencies": {
+    "@graphprotocol/graph-cli": "^0.97.1",
+    "@graphprotocol/graph-ts": "^0.38.0"
+  },
+  "devDependencies": {
+    "matchstick-as": "^0.6.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
