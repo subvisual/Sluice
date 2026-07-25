@@ -1,8 +1,8 @@
 import { assert, describe, test, beforeEach, clearStore, createMockedFunction } from "matchstick-as/assembly/index"
 import { Bytes, BigInt, Address, ethereum } from "@graphprotocol/graph-ts"
-import { handleShipped, handlePushed, handlePulled } from "../src/aqua"
+import { handleShipped, handlePushed, handlePulled, handleDocked } from "../src/aqua"
 import { strategyEntityId, balanceId, bookId } from "../src/helpers"
-import { MAKER, APP, HASH_A, HASH_B, USDC, WETH, TX_2, shippedEvent, pushedEvent, pulledEvent } from "./utils"
+import { MAKER, APP, HASH_A, HASH_B, USDC, WETH, TX_2, shippedEvent, pushedEvent, pulledEvent, dockedEvent } from "./utils"
 
 const STRATEGY_DATA = Bytes.fromHexString("0xdeadbeef")
 const N_10K = BigInt.fromI64(10_000_000_000) // 10,000 USDC (6 decimals)
@@ -129,5 +129,41 @@ describe("handlePulled", () => {
   test("Pulled for an unknown strategy is ignored", () => {
     handlePulled(pulledEvent(MAKER, APP, HASH_B, USDC, N_1K))
     assert.fieldEquals("MakerTokenBook", bookId(MAKER, USDC).toHexString(), "committedVirtual", N_10K.toString())
+  })
+})
+
+describe("handleDocked", () => {
+  beforeEach(() => {
+    clearStore()
+    setupTokenMocks()
+    handleShipped(shippedEvent(MAKER, APP, HASH_A, STRATEGY_DATA))
+    handlePushed(pushedEvent(MAKER, APP, HASH_A, USDC, N_10K))
+  })
+
+  test("zeroes balances, subtracts remaining (not initial) from book, flips status", () => {
+    const pull = pulledEvent(MAKER, APP, HASH_A, USDC, N_1K)
+    pull.transaction.hash = TX_2
+    handlePulled(pull) // remaining = 9,000
+
+    const dock = dockedEvent(MAKER, APP, HASH_A)
+    dock.transaction.hash = TX_2
+    handleDocked(dock)
+
+    const sid = strategyEntityId(MAKER, APP, HASH_A)
+    const bid = balanceId(sid, USDC).toHexString()
+    assert.fieldEquals("Strategy", sid.toHexString(), "status", "DOCKED")
+    assert.fieldEquals("Strategy", sid.toHexString(), "dockedTx", TX_2.toHexString())
+    assert.fieldEquals("StrategyBalance", bid, "virtualBalance", "0")
+    assert.fieldEquals("StrategyBalance", bid, "initialVirtual", N_10K.toString()) // history preserved
+    assert.fieldEquals("MakerTokenBook", bookId(MAKER, USDC).toHexString(), "committedVirtual", "0")
+    assert.fieldEquals("MakerTokenBook", bookId(MAKER, USDC).toHexString(), "liveStrategyCount", "0")
+    assert.fieldEquals("Maker", MAKER.toHexString(), "liveStrategyCount", "0")
+    assert.fieldEquals("Maker", MAKER.toHexString(), "strategyCount", "1")
+    assert.fieldEquals("AquaProtocol", "aqua", "liveStrategyCount", "0")
+  })
+
+  test("Docked for an unknown strategy is ignored", () => {
+    handleDocked(dockedEvent(MAKER, APP, HASH_B))
+    assert.fieldEquals("AquaProtocol", "aqua", "liveStrategyCount", "1")
   })
 })

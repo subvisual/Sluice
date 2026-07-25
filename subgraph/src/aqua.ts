@@ -42,7 +42,45 @@ export function handleShipped(event: Shipped): void {
   freshProtocol.save()
 }
 
-export function handleDocked(event: Docked): void {}
+export function handleDocked(event: Docked): void {
+  const strategyId = strategyEntityId(event.params.maker, event.params.app, event.params.strategyHash)
+  const strategy = Strategy.load(strategyId)
+  if (strategy == null) return
+
+  const tokens = strategy.tokenAddresses
+  for (let i = 0; i < tokens.length; i++) {
+    const tokenAddress = Address.fromBytes(tokens[i])
+    const balance = StrategyBalance.load(balanceId(strategyId, tokenAddress))
+    if (balance == null) continue
+    const book = getOrCreateBook(event.params.maker, tokenAddress, event.block)
+    book.committedVirtual = book.committedVirtual.minus(balance.virtualBalance)
+    book.liveStrategyCount -= 1
+    book.updatedAt = event.block.timestamp
+    book.save()
+    balance.virtualBalance = ZERO
+    balance.updatedAt = event.block.timestamp
+    balance.save()
+  }
+
+  strategy.status = "DOCKED"
+  strategy.dockedAt = event.block.timestamp
+  strategy.dockedAtBlock = event.block.number
+  strategy.dockedTx = event.transaction.hash
+  strategy.save()
+
+  const maker = getOrCreateMaker(event.params.maker, event.block)
+  maker.liveStrategyCount -= 1
+  maker.save()
+
+  const app = getOrCreateApp(event.params.app)
+  app.liveStrategyCount -= 1
+  app.save()
+
+  const protocol = getOrCreateProtocol(event.block)
+  protocol.liveStrategyCount -= 1
+  protocol.lastUpdatedBlock = event.block.number
+  protocol.save()
+}
 
 export function handlePulled(event: Pulled): void {
   const strategyId = strategyEntityId(event.params.maker, event.params.app, event.params.strategyHash)
