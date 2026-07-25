@@ -17,5 +17,21 @@
     "WETH": "0x4200000000000000000000000000000000000006",
     "USDC": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
   },
-  "_tokens": "Native USDC (6dp) and WETH (18dp) on Base. Sorted WETH < USDC, which is the tokenA/tokenB order MakerTraits requires."
+  "_tokens": "Native USDC (6dp) and WETH (18dp) on Base. Sorted WETH < USDC, which is the tokenA/tokenB order MakerTraits requires. Addresses only — contracts/test/ForkVenue.t.sol parses .tokens.<SYMBOL> as an address, so keep this a flat map.",
+
+  "tokenList": [
+    {
+      "symbol": "WETH",
+      "name": "Wrapped Ether",
+      "address": "0x4200000000000000000000000000000000000006",
+      "decimals": 18
+    },
+    {
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "address": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "decimals": 6
+    }
+  ],
+  "_tokenList": "Same tokens as above with display metadata for the app's token picker (packages/app/src/lib/tokens.ts). Keep the two in sync."
 }
