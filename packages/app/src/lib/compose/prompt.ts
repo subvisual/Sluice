@@ -1,7 +1,15 @@
 import { formatUnits, type Address } from "viem";
+import {
+  BAND,
+  COMPAT_RULES,
+  CURVES,
+  DEADLINE,
+  TEMPLATES,
+  WRAPPERS,
+  type InstructionSpec,
+  type Template,
+} from "../../../../arbitration-sdk/src/grammar.ts";
 import { PROMPT_VERSION, RECOMMENDATION_SCHEMA } from "./constants";
-import { SLOT_GRAMMAR, type SlotGrammar } from "./grammar";
-import { TEMPLATES, templateId, type TemplateSeed } from "./templates";
 import type {
   ComposePrompt,
   MarketContext,
@@ -16,15 +24,22 @@ import type {
  * The enclave signs whatever it returns, so the prompt is part of the security
  * surface. Six sections, in this order:
  *
- *   SYSTEM     role, the slot grammar and its compatibility rules, the output
- *              schema, and the rule that a response failing schema or
+ *   SYSTEM     role, the instruction menu and its compatibility rules, the
+ *              output schema, and the rule that a response failing schema or
  *              validation is rejected and retried
  *   REQUEST    the user's prompt verbatim, their selected tokens and amounts,
  *              maxStrategies, maxDeadlineSec
  *   CONTEXT    market data and the user's existing book (F3)
- *   TEMPLATES  the three seed shapes with the intent each serves
+ *   TEMPLATES  the seed shapes with the intent each serves
  *   HISTORY    violations from previous attempts THIS request, if any
  *   TASK       return ONLY the two fixed prefix lines plus the JSON body
+ *
+ * The grammar itself — instructions, rules, templates — is IMPORTED from
+ * `arbitration-sdk/src/grammar.ts`, the one place it lives. Every name it
+ * mentions resolves against the pinned opcode table of the deployed router, so
+ * this prompt cannot describe an instruction the venue cannot run. (The
+ * provisional six-slot grammar this module used to inject was replaced in
+ * PR #15; do not reintroduce it.)
  *
  * Pure and React-free on purpose: this module lifts into
  * `packages/composer-sdk/src/` unchanged once that package exists.
@@ -40,21 +55,16 @@ export type ComposePromptInput = {
   context: MarketContext | null;
   /** Carried forward across retries. Only violation history carries forward — F2 §4. */
   history?: ViolationRecord[];
-  grammar?: SlotGrammar;
-  templates?: TemplateSeed[];
 };
 
 export function buildComposePrompt(input: ComposePromptInput): ComposePrompt {
-  const grammar = input.grammar ?? SLOT_GRAMMAR;
-  const templates = input.templates ?? TEMPLATES;
-
   return {
     promptVersion: PROMPT_VERSION,
-    system: systemSection(grammar, input.request),
+    system: systemSection(input.request),
     user: [
       requestSection(input.request, input.tokens),
       contextSection(input.context),
-      templatesSection(templates),
+      templatesSection(TEMPLATES),
       historySection(input.history ?? []),
       taskSection(input.request, input.nonce, input.context !== null),
     ].join("\n\n"),
@@ -63,26 +73,36 @@ export function buildComposePrompt(input: ComposePromptInput): ComposePrompt {
 
 /* ------------------------------------------------------------------ SYSTEM */
 
-function systemSection(grammar: SlotGrammar, request: RecommendationRequest) {
-  const slotTable = grammar.slots
+const renderMenu = (list: InstructionSpec[]) =>
+  list
     .map(
-      (s) =>
-        `  ${s.index}. ${s.name} [${s.required}]\n     options: ${s.options.join(", ")}`,
+      (i) =>
+        `    ${i.name} — ${i.summary}${i.params ? `\n        params: ${i.params}` : ""}`,
     )
     .join("\n");
 
-  const rules = grammar.rules.map((r, i) => `  R${i + 1}. ${r}`).join("\n");
+function systemSection(request: RecommendationRequest) {
+  const rules = COMPAT_RULES.map((r, i) => `  R${i + 1}. ${r}`).join("\n");
 
   return `You compose market-making strategies for 1inch Aqua's SwapVM, on behalf of a
 user who described what they want in one sentence and declared a budget.
 
-You do not write bytecode. You fill in a fixed grammar: for each slot, which
-instruction goes in it and with what parameters. Instruction ORDER in SwapVM is
-security-critical, and our compiler owns it — mis-ordering is not something you
-can express, so do not try to express it.
+You do not write bytecode. You choose which instructions fill a fixed program
+shape, and their parameters. Instruction ORDER in SwapVM is security-critical,
+and our compiler owns it — mis-ordering is not something you can express, so do
+not try to express it.
 
-THE SLOT GRAMMAR
-${slotTable}
+THE INSTRUCTION MENU — this is the COMPLETE menu; nothing else exists on this venue
+  required on every strategy:
+${renderMenu([DEADLINE])}
+  optional band (MUST come before the fee and the curve):
+${renderMenu([BAND])}
+  optional wrappers (MUST come before the curve):
+${renderMenu(WRAPPERS)}
+  curve (EXACTLY ONE, and it goes LAST):
+${renderMenu(CURVES)}
+
+You do NOT choose a salt — the compiler emits one on every strategy.
 
 COMPATIBILITY RULES — these are enforced deterministically after you answer
 ${rules}
@@ -193,15 +213,14 @@ ${book}`;
 
 /* --------------------------------------------------------------- TEMPLATES */
 
-function templatesSection(templates: TemplateSeed[]) {
+function templatesSection(templates: Template[]) {
   const body = templates
     .map(
       (t) =>
         `### ${t.label}
-  templateId:  ${templateId(t.slug)}
+  templateId:  ${t.id}
   serves:      "${t.describesIntent}"
-  shape:       ${t.shape.join(" · ")}
-  tradeoff:    ${t.tradeoff}`,
+  shape:       ${[...t.wrappers, t.curve].join(" + ")} — ${t.shape}`,
     )
     .join("\n\n");
 
@@ -276,32 +295,32 @@ fence, and no comments. Angle brackets below mark where a value goes.
 ${observed}
   "strategies": [
     {
-      "templateId": "<0x-prefixed 32-byte id from TEMPLATES>",
+      "templateId": "<a template id from TEMPLATES>",
       "slots": {
-        "balances": { <per-token setup> },
-        "fees": { <fee configuration> },
-        "swapLogic": { "instruction": "<exactly one slot-3 option>" },
-        "oracleAdjust": { "instruction": "_oraclePriceAdjuster1D" },
-        "invalidation": { "instruction": "<one slot-5 option>" },
+        "band":     { "instruction": "${BAND.name}", "params": { "bandBps": <integer> } },
+        "fee":      { "instruction": "${WRAPPERS[0].name}", "params": { "feeBps": <integer> } },
+        "curve":    { "instruction": "<the curve>" },
         "deadline": { "deadline": <unix seconds> }
       },
-      "tokens": ["<address>"],
-      "virtualAmounts": ["<decimal string, base units>"],
-      "deadline": <unix seconds>
+      "tokens": ["<address>", ...],
+      "virtualAmounts": ["<decimal string, base units>", ...]
     }
   ]
 }
 
 Between 1 and ${request.maxStrategies} strategies.
 
-"fees" and "oracleAdjust" are the two optional slots: OMIT THE KEY ENTIRELY when
-the slot is unused. Never send it as null or as an empty object.
+"band" and "fee" are the two optional slots: OMIT THE KEY ENTIRELY when the
+slot is unused. Never send it as null or as an empty object. For the band you
+choose "bandBps" ONLY — the compiler derives the concentration deltas; never
+emit deltas.
+
+"tokens" are in canonical ASCENDING address order, and "virtualAmounts" are
+positionally matched to them — DECIMAL STRINGS in base units. Never a JSON
+number: a large amount through a float loses precision silently, and this is a
+signed artifact.
 
 ${observedNote}
-
-"virtualAmounts" are DECIMAL STRINGS in base units, positionally matched to
-"tokens". Never a JSON number — a large amount through a float loses precision
-silently, and this is a signed artifact.
 
 Return the two prefix lines and the JSON body. Nothing before them, nothing
 after them.`;

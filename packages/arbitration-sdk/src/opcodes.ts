@@ -10,16 +10,14 @@
 // and hand out named constants so a redeployment is a change to one JSON file
 // rather than a hunt through the templates.
 
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
+// A static import rather than an fs read: this module sits under grammar.ts,
+// which the app bundles into the browser, and a bundler can carry a JSON module
+// where it cannot carry node:fs. config/ at the repo root stays the shared home
+// — the address book lives beside this file and the subgraph reads both.
+import table from "../../../config/opcodes.8453.json" with { type: "json" };
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-
-// packages/arbitration-sdk/src -> repo root. The address book lives beside this
-// file and the subgraph reads both, so config/ is the shared home rather than
-// anything package-local.
-export const OPCODES_PATH = resolve(HERE, "../../../config/opcodes.8453.json");
+/// Repo-relative, for error messages.
+export const OPCODES_PATH = "config/opcodes.8453.json";
 
 type OpcodeTable = {
 	chainId: number;
@@ -33,7 +31,7 @@ type OpcodeTable = {
 };
 
 function load(): OpcodeTable {
-	const raw = JSON.parse(readFileSync(OPCODES_PATH, "utf8")) as OpcodeTable;
+	const raw = table as OpcodeTable;
 
 	// Validate on import rather than at the first bad emit. A malformed table is
 	// the one failure that can produce a program which runs and does nothing.

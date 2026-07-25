@@ -1,5 +1,4 @@
 import type { SlotRow } from "@/lib/book";
-import { SLOT_GRAMMAR } from "@/lib/compose/grammar";
 
 /**
  * The "Why this" slot-assignment table — the proof that the model's output is
@@ -52,10 +51,9 @@ export function SlotTable({
       ))}
       {sheet && (
         <p className="border-t border-border px-4 py-3 text-[11px] leading-relaxed text-muted-3">
-          Six slots, filled by selection — never free-form bytecode. Ordering
-          belongs to the compiler, not to the model.
-          {SLOT_GRAMMAR.provisional &&
-            " This grammar is provisional pending F1 Q2."}
+          Filled by selection from the venue&apos;s instruction menu — never
+          free-form bytecode. Ordering, and the salt, belong to the compiler,
+          not to the model.
         </p>
       )}
     </div>

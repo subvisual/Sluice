@@ -1,9 +1,21 @@
 import type { Address, Hex } from "viem";
+import {
+  DEFAULT_BAND_BPS,
+  DEFAULT_FEE_BPS,
+  selectTemplate,
+} from "../../../../arbitration-sdk/src/fallback.ts";
+import {
+  BAND,
+  CURVES,
+  DEADLINE,
+  WRAPPERS,
+  type Template,
+} from "../../../../arbitration-sdk/src/grammar.ts";
+import { FEE_BPS_ONE } from "../../../../arbitration-sdk/src/opcodes.ts";
 import { displayFrac, formatFixed } from "../amount";
 import type { Position, Provenance, RiskRating, SlotRow } from "../book";
 import { formatDayShort, formatDeadlineAbs } from "../time";
 import { buildComposePrompt } from "./prompt";
-import { TEMPLATES, templateId } from "./templates";
 import type {
   ComposePrompt,
   RecommendationRequest,
@@ -17,11 +29,14 @@ import type {
  * Nothing here is signed."
  *
  * What is real: the request envelope, the prompt assembled through
- * `buildComposePrompt` (the exact bytes the enclave will receive), the budget
- * arithmetic (per-token ceilings are divided across strategies, never
- * repeated), and the deadline bounds. What is fixture: bands, levels, fee
- * tiers and descriptions — market context is F3 and is not wired, so these
- * are demo values, not observations.
+ * `buildComposePrompt` (the exact bytes the enclave will receive), the
+ * template selection (the SDK's own deterministic `selectTemplate` heuristic —
+ * the same one the real TEMPLATE_FALLBACK path uses), the slot shape and
+ * default band/fee parameters (the SDK's fallback defaults), the budget
+ * arithmetic (the strategy draws exactly the ceilings the user declared), and
+ * the deadline bounds. What is fixture: risk ratings and the prose
+ * descriptions — market context is F3 and is not wired, so nothing here is an
+ * observation.
  *
  * Because no enclave produced this, the recommendation is marked
  * `TEMPLATE_FALLBACK` — the provenance the product already defines for
@@ -45,18 +60,20 @@ export const COMPOSE_STEPS = [
   },
 ] as const;
 
+/// The venue's fee instruction and curve — the menu holds exactly one of each.
+const [FEE] = WRAPPERS;
+const [CURVE] = CURVES;
+
 export type StubStrategy = {
-  templateId: Hex;
-  /** Full label with the `T1 · ` prefix, as recommendation cards show it. */
+  /** A seed template id from the SDK grammar, e.g. "banded-fee". */
+  templateId: string;
   templateLabel: string;
-  /** Label minus the prefix, as position cards show it. */
-  templateShort: string;
   description: string;
   risk: RiskRating;
   bandKind: "band" | "level";
   band: string;
   bandNote: string;
-  /** 2-col fact grid: BAND/LEVEL · DEADLINE · one ceiling per request token. */
+  /** 2-col fact grid: BAND · DEADLINE · one ceiling per request token. */
   facts: Array<{ label: string; value: string }>;
   legs: Array<{ token: TokenMeta; virtual: bigint }>;
   deadline: number;
@@ -114,61 +131,114 @@ function buildStrategies(
   const days = Math.round(request.maxDeadlineSec / 86_400);
   const deadlineFact = `${days}d · ${formatDayShort(deadline)}`;
 
-  const committed = Object.entries(request.budget)
+  const legs = Object.entries(request.budget)
     .map(([addr, amount]) => ({
       token: tokens.find(
         (t) => t.address.toLowerCase() === addr.toLowerCase(),
       )!,
-      amount,
+      virtual: amount,
     }))
     .filter((e) => e.token !== undefined);
 
-  // T1 takes ¾ of every ceiling; T3 sells the remainder of the most volatile
-  // committed token (highest-decimals) at a level. Sums stay within the
-  // user's budget per token — dividing, never repeating (rule R4).
-  const t1Legs = committed.map(({ token, amount }) => ({
-    token,
-    virtual: (amount * 3n) / 4n,
-  }));
-  const sellLeg = [...committed].sort(
-    (a, b) => b.token.decimals - a.token.decimals,
-  )[0];
-  const t3Virtual = sellLeg.amount - (sellLeg.amount * 3n) / 4n;
-
-  const strategies = [
-    tightClmm(request, tokens, t1Legs, deadline, deadlineFact),
+  // Mirrors the SDK's deterministic fallback (fallback.ts): the same keyword
+  // heuristic picks ONE seed template, and the one strategy draws exactly the
+  // ceilings the user declared — their tokens, their amounts (rule R6).
+  return [
+    fromTemplate(selectTemplate(request.prompt), request, tokens, legs, deadline, deadlineFact),
   ];
-  if (request.maxStrategies >= 2 && t3Virtual > 0n) {
-    strategies.push(
-      oracleLimit(
-        request,
-        tokens,
-        { token: sellLeg.token, virtual: t3Virtual },
-        deadline,
-        deadlineFact,
-      ),
-    );
-  }
-  return strategies;
 }
 
-const template = (slug: string) => {
-  const t = TEMPLATES.find((t) => t.slug === slug)!;
-  return {
-    templateId: templateId(t.slug),
-    templateLabel: t.label,
-    templateShort: t.label.replace(/^T\d+ · /, ""),
-  };
-};
+function fromTemplate(
+  t: Template,
+  request: RecommendationRequest,
+  tokens: TokenMeta[],
+  legs: Array<{ token: TokenMeta; virtual: bigint }>,
+  deadline: number,
+  deadlineFact: string,
+): StubStrategy {
+  const hasBand = t.wrappers.includes(BAND.name);
+  const hasFee = t.wrappers.includes(FEE.name);
+  const bandPct = pct(DEFAULT_BAND_BPS);
+  const feePct = pct(DEFAULT_FEE_BPS);
 
-/** "USDC 9 000.000000 · WETH 3.000000000000000000" — full base-unit precision. */
-const setupParams = (legs: Array<{ token: TokenMeta; virtual: bigint }>) =>
-  legs
-    .map(
-      ({ token, virtual }) =>
-        `${token.symbol} ${formatFixed(virtual, token.decimals, token.decimals)}`,
-    )
-    .join(" · ");
+  const feeSentence = hasFee
+    ? ` A ${feePct} maker fee is taken on every fill.`
+    : "";
+  const description = hasBand
+    ? `Concentrate the committed liquidity into a ±${bandPct} band around the shipped price — deeper quotes inside the band, and the inventory drains exactly at its edges.${feeSentence}`
+    : `Make a market across the whole curve: the shipped amounts set the price and the depth.${feeSentence}`;
+
+  const band = hasBand ? `±${bandPct} of shipped price` : "full range";
+
+  return {
+    templateId: t.id,
+    templateLabel: t.label,
+    description,
+    // Fixture ratings: a band exhausts on a move past its edge, the full
+    // curve does not — nothing here is a market observation.
+    risk: hasBand ? "medium" : "low",
+    bandKind: "band",
+    band,
+    bandNote: hasBand
+      ? "geometric band around the shipped ratio · drains at the edges"
+      : "constant product · the shipped ratio sets the price",
+    facts: [
+      { label: "BAND", value: band },
+      { label: "DEADLINE", value: deadlineFact },
+      ...ceilingFacts(request, tokens, legs),
+    ],
+    legs,
+    deadline,
+    slots: [
+      hasBand
+        ? {
+            index: 1,
+            name: "band",
+            instruction: BAND.name,
+            params: `bandBps ${group(DEFAULT_BAND_BPS)} · ±${bandPct}`,
+          }
+        : {
+            index: 1,
+            name: "band",
+            instruction: "— not used",
+            params: "full range — no concentration",
+          },
+      hasFee
+        ? {
+            index: 2,
+            name: "fee",
+            instruction: FEE.name,
+            params: `feeBps ${group(DEFAULT_FEE_BPS)} · ${feePct} on amountIn`,
+          }
+        : {
+            index: 2,
+            name: "fee",
+            instruction: "— not used",
+            params: "no maker fee",
+          },
+      {
+        index: 3,
+        name: "curve",
+        instruction: CURVE.name,
+        params: "no args · price = shipped ratio, depth = shipped size",
+      },
+      {
+        index: 4,
+        name: "deadline",
+        instruction: DEADLINE.name,
+        params: deadlineParams(deadline),
+      },
+    ],
+  };
+}
+
+/** Out of FEE_BPS_ONE (1e9 = 100%): 10 000 000 → "1%", 500 000 → "0.05%". */
+const pct = (bps: number) =>
+  `${Number(((bps / FEE_BPS_ONE) * 100).toFixed(4))}%`;
+
+/** "10 000 000" — grouped for reading, still base-1e9 units. */
+const group = (n: number) =>
+  String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 
 const deadlineParams = (deadline: number) =>
   `${deadline} · ${formatDeadlineAbs(deadline).replace(" · ", " ").replace(" UTC", "Z")}`;
@@ -190,76 +260,6 @@ const ceilingFacts = (
         : "—",
     };
   });
-
-function tightClmm(
-  request: RecommendationRequest,
-  tokens: TokenMeta[],
-  legs: Array<{ token: TokenMeta; virtual: bigint }>,
-  deadline: number,
-  deadlineFact: string,
-): StubStrategy {
-  return {
-    ...template("tight-clmm"),
-    description:
-      "Quote a narrow band around 2 460 and earn fees on the flow that crosses it. Fills in pieces.",
-    risk: "low",
-    bandKind: "band",
-    band: "2 400 – 2 520",
-    bandNote: "USDC per ETH · narrow band, partial fills",
-    facts: [
-      { label: "BAND", value: "2 400 – 2 520" },
-      { label: "DEADLINE", value: deadlineFact },
-      ...ceilingFacts(request, tokens, legs),
-    ],
-    legs,
-    deadline,
-    slots: [
-      { index: 1, name: "balance setup", instruction: "per-token setup", params: setupParams(legs) },
-      { index: 2, name: "fees", instruction: "fee configuration", params: "5 bps" },
-      { index: 3, name: "swap logic", instruction: "_xycConcentrateGrowLiquidityXD", params: "band 2 400 – 2 520 · 2 dims" },
-      { index: 4, name: "oracle adjust", instruction: "— not used", params: "no feed required" },
-      { index: 5, name: "invalidation", instruction: "_invalidateTokenIn1D", params: "required for partial fills" },
-      { index: 6, name: "deadline", instruction: "_deadline", params: deadlineParams(deadline) },
-    ],
-  };
-}
-
-function oracleLimit(
-  request: RecommendationRequest,
-  tokens: TokenMeta[],
-  leg: { token: TokenMeta; virtual: bigint },
-  deadline: number,
-  deadlineFact: string,
-): StubStrategy {
-  const amount = formatFixed(
-    leg.virtual,
-    leg.token.decimals,
-    displayFrac(leg.token.decimals),
-  );
-  return {
-    ...template("oracle-limit"),
-    description: `If the price spikes past 2 800, sell ${amount} ${leg.token.symbol} in one go. Nothing happens below that level.`,
-    risk: "medium",
-    bandKind: "level",
-    band: "sells at 2 800",
-    bandNote: "USDC per ETH · all-or-nothing, oracle-adjusted",
-    facts: [
-      { label: "LEVEL", value: "sells at 2 800" },
-      { label: "DEADLINE", value: deadlineFact },
-      ...ceilingFacts(request, tokens, [leg]),
-    ],
-    legs: [leg],
-    deadline,
-    slots: [
-      { index: 1, name: "balance setup", instruction: "per-token setup", params: setupParams([leg]) },
-      { index: 2, name: "fees", instruction: "— not used", params: "no fee tier on a limit level" },
-      { index: 3, name: "swap logic", instruction: "_limitSwapOnlyFull1D", params: "level 2 800 · full only" },
-      { index: 4, name: "oracle adjust", instruction: "_oraclePriceAdjuster1D", params: "ETH/USD feed · 60s heartbeat" },
-      { index: 5, name: "invalidation", instruction: "_invalidateBit1D", params: "single-use bit 0x11" },
-      { index: 6, name: "deadline", instruction: "_deadline", params: deadlineParams(deadline) },
-    ],
-  };
-}
 
 /* -------------------------------------------------------------- shipping */
 
@@ -284,7 +284,7 @@ export function toPositions(
       id: hash,
       strategyHash: hash,
       pair,
-      templateLabel: s.templateShort,
+      templateLabel: s.templateLabel,
       description: s.description,
       bandKind: s.bandKind,
       band: s.band,
