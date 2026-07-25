@@ -106,17 +106,26 @@ and the golden-fixture `strategyHash` match (needs F1's `compile`, not built).
 ## 4. Sealed composition inference (`arbitration-sdk/src/compose.ts`) · 🟡 partially delivered
 
 **Delivered (PR #10):** `compose(broker, cfg, request, ctx)` builds the §9 prompt (grammar +
-rules + output schema + request + stubbed context + retry history), runs the 0G round-trip via
+rules + output schema + request + context + retry history), runs the 0G round-trip via
 `inferChat`, parses the result, retries once on malformed output. Reuses the Gate 0 broker /
 `createRequire` interop / provider-metadata model.
 
-**Not delivered (deferred):** `verifyLocal()` — the enclave signature is received but **not
-checked** (⛔ verifiability). Context is the stub, not live F3.
+**Delivered (PR #17):** the context's **book half is now live**. `liveContext(maker)` reads the
+user's real Aqua book (committed balances, live strategies, recent fills) from the subgraph and
+`contextPromptBlock` renders it into the prompt the enclave signs (F3 job 1). The composer now
+reasons over the maker's actual positions, not a hardcoded book.
+
+**Not delivered:** `verifyLocal()` — the enclave signature is received but **not checked**
+(⛔ verifiability). The context's **market half** (pool depth / realised vol — F3 job 2) is still a
+**labelled stub**, pending the price source (F3 Open Q2 — the verified 1inch Spot Price + Volatility
+path, which needs the API key).
 
 ### Acceptance criteria
 - [x] `compose()` builds the prompt, POSTs, returns a parsed `StrategyRecommendation`.
+- [x] real F3 **book** context (job 1) wired via `liveContext` in place of the stub *(PR #17)*.
 - [ ] ⛔ `verifyLocal()` asserts `verifyMessage === registered signer` **and** `processResponse`.
-- [ ] real F3 `MarketContext` in place of the stub *(F3 work, not this issue)*.
+- [ ] ⬜ real F3 **market** context (job 2 — depth / realised vol) in place of the market stub
+  *(1inch Spot Price + Volatility, F3 Open Q2)*.
 
 ---
 
