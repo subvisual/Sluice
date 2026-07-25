@@ -7,6 +7,7 @@ import { positionStatus, type Position } from "@/lib/book";
 import { countdown, formatDayShort, formatDeadlineAbs } from "@/lib/time";
 import { ProvenanceChip, StatusChip } from "./chips";
 import { SlotTable } from "./slot-table";
+import { PairIcons } from "./token-icon";
 
 /**
  * Strategy detail — a right sheet over the blurred dashboard. Everything
@@ -51,15 +52,18 @@ export function DetailSheet({
       />
       <section className="relative flex h-full w-[600px] max-w-[92vw] animate-sheet flex-col border-l border-glass-line bg-sheet backdrop-blur-[20px]">
         <header className="flex items-start justify-between gap-4 border-b border-glass-line px-[26px] py-[22px]">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <h2 className="text-xl font-semibold tracking-[-0.02em]">
-                {position.pair}
-              </h2>
-              <StatusChip status={status} />
-            </div>
-            <div className="mt-[5px] font-mono text-[11px] text-muted">
-              {position.templateLabel} · {shortHash(position.strategyHash)}
+          <div className="flex items-center gap-2.5">
+            <PairIcons position={position} />
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h2 className="text-xl font-semibold tracking-[-0.02em]">
+                  {position.pair}
+                </h2>
+                <StatusChip status={status} />
+              </div>
+              <div className="mt-[5px] font-mono text-[11px] text-muted">
+                {position.templateLabel} · {shortHash(position.strategyHash)}
+              </div>
             </div>
           </div>
           <button

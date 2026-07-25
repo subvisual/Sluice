@@ -3,7 +3,8 @@
 import Image from "next/image";
 import { useState } from "react";
 import { getAddress, type Address } from "viem";
-import { CONFIG_CHAIN_ID } from "@/lib/tokens";
+import type { Position } from "@/lib/book";
+import { CONFIG_CHAIN_ID, tokenBySymbol } from "@/lib/tokens";
 
 /**
  * A token mark from the Trust Wallet assets repo, which keys art the same way
@@ -22,15 +23,57 @@ const CHAIN_SLUG: Record<number, string> = {
   8453: "base",
 };
 
-export function tokenIconUrl(address: Address, chainId: number): string | null {
-  const slug = CHAIN_SLUG[chainId];
-  if (!slug) return null;
+/**
+ * Candidate art URLs, most-specific first: the configured chain's directory,
+ * then `ethereum` — the repo's L2 directories are sparse, and a token's
+ * canonical L1 deployment usually carries the art. A miss on every candidate
+ * lands on the placeholder.
+ */
+export function tokenIconUrls(address: Address, chainId: number): string[] {
+  let checksummed: Address;
   try {
     // The repo keys assets by EIP-55 checksummed address.
-    return `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${slug}/assets/${getAddress(address)}/logo.png`;
+    checksummed = getAddress(address);
   } catch {
-    return null;
+    return [];
   }
+  const slugs = [...new Set([CHAIN_SLUG[chainId], "ethereum"])].filter(
+    (s): s is string => s !== undefined,
+  );
+  return slugs.map(
+    (slug) =>
+      `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${slug}/assets/${checksummed}/logo.png`,
+  );
+}
+
+/**
+ * A position's pair as two overlapped marks — the same representation on the
+ * dashboard cards and the detail sheet. A pair token isn't always a committed
+ * leg (a limit sell commits only the token it sells), so resolution tries the
+ * position's own legs first, then the address book.
+ */
+export function PairIcons({
+  position,
+  size = 30,
+}: {
+  position: Position;
+  size?: number;
+}) {
+  const [first, second] = position.pair.split(" / ");
+  const addressOf = (symbol: string) =>
+    position.legs.find((l) => l.symbol === symbol)?.token ??
+    tokenBySymbol(symbol)?.address;
+  return (
+    <div className="flex items-center">
+      <TokenIcon address={addressOf(first)} symbol={first} size={size} />
+      <TokenIcon
+        address={addressOf(second)}
+        symbol={second}
+        size={size}
+        className="-ml-[9px]"
+      />
+    </div>
+  );
 }
 
 export function TokenIcon({
@@ -44,11 +87,12 @@ export function TokenIcon({
   size: number;
   className?: string;
 }) {
-  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
-  const url = address ? tokenIconUrl(address, CONFIG_CHAIN_ID) : null;
+  const urls = address ? tokenIconUrls(address, CONFIG_CHAIN_ID) : [];
+  const url = urls[attempt];
 
-  if (!url || failed) {
+  if (!url) {
     return (
       <span
         style={{ width: size, height: size, fontSize: size >= 30 ? 8 : 7.5 }}
@@ -68,8 +112,9 @@ export function TokenIcon({
       // Served as-is: 30px marks gain nothing from the optimizer, and
       // bypassing it keeps remote images out of the optimizer's allowlist.
       unoptimized
-      onError={() => setFailed(true)}
-      className={`flex-none rounded-full ${className}`}
+      onError={() => setAttempt((a) => a + 1)}
+      // Hairline outline so overlapped marks separate cleanly on white cards.
+      className={`flex-none rounded-full border border-border bg-card ${className}`}
     />
   );
 }

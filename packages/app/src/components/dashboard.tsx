@@ -9,11 +9,11 @@ import {
   type Position,
   type PositionLeg,
 } from "@/lib/book";
+import { demoBook } from "@/lib/demo-book";
 import { countdown, formatDayShort } from "@/lib/time";
-import { tokenBySymbol } from "@/lib/tokens";
 import { DetailSheet } from "./detail-sheet";
 import { RiskChip, StatusChip } from "./chips";
-import { TokenIcon } from "./token-icon";
+import { PairIcons } from "./token-icon";
 
 /**
  * Dashboard — "what do I have live right now, and how is it doing?"
@@ -23,7 +23,7 @@ import { TokenIcon } from "./token-icon";
  * drags the small captions below AA).
  */
 export function Dashboard() {
-  const { positions, dock } = useBook();
+  const { positions, ship, dock } = useBook();
   const [openId, setOpenId] = useState<string | null>(null);
   const now = useNow();
 
@@ -51,7 +51,7 @@ export function Dashboard() {
       {positions === null ? (
         <BookUnavailable />
       ) : positions.length === 0 ? (
-        <EmptyState />
+        <EmptyState onDemo={() => ship(demoBook())} />
       ) : (
         <>
           <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
@@ -131,7 +131,6 @@ function PositionCard({
 }) {
   const status = positionStatus(position, now);
   const live = status === "Live";
-  const [first, second] = position.pair.split(" / ");
 
   return (
     <button
@@ -142,7 +141,7 @@ function PositionCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <PairIcons first={first} second={second} />
+          <PairIcons position={position} />
           <div>
             <div className="text-[17px] font-semibold tracking-[-0.01em]">
               {position.pair}
@@ -166,20 +165,6 @@ function PositionCard({
         <RiskChip risk={position.risk} />
       </div>
     </button>
-  );
-}
-
-function PairIcons({ first, second }: { first: string; second: string }) {
-  return (
-    <div className="flex items-center">
-      <TokenIcon address={tokenBySymbol(first)?.address} symbol={first} size={30} />
-      <TokenIcon
-        address={tokenBySymbol(second)?.address}
-        symbol={second}
-        size={30}
-        className="-ml-[9px]"
-      />
-    </div>
   );
 }
 
@@ -255,7 +240,7 @@ function BookUnavailable() {
   );
 }
 
-function EmptyState() {
+function EmptyState({ onDemo }: { onDemo: () => void }) {
   return (
     <section className="rounded-[20px] border border-glass-line bg-card-2 px-14 py-16 shadow-[var(--shadow)]">
       <div className="max-w-[640px]">
@@ -278,6 +263,14 @@ function EmptyState() {
           >
             New strategy
           </Link>
+          {/* Demo affordance, kept at the team's request (the handoff had
+              dropped it): seeds the session book with the fixture positions. */}
+          <button
+            onClick={onDemo}
+            className="rounded-[10px] border border-glass-line bg-card-2 px-5 py-[13px] text-sm text-muted shadow-[var(--shadow-sm)] transition-colors hover:border-muted hover:text-text"
+          >
+            Show demo positions
+          </button>
         </div>
         <p className="mt-8 text-xs leading-relaxed text-muted-3">
           A strategy is immutable once shipped — it can be docked or left to
