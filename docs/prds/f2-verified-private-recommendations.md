@@ -1,166 +1,160 @@
-> **⚠️ SUPERSEDED (2026-07-25) — the F2 Notion page pivoted after this was written.**
-> Sluice reframed from an autonomous daemon managing an over-committed book to a **creation-time
-> Strategy Composer**: `DecisionRegistry`→`RecommendationRegistry`, global monotonic epoch→**per-user
-> nonce**, mandate→request envelope + validator, tick loop→per-user request flow, and the **user**
-> (not an agent) signs and ships. This document describes the old framing and is kept for history
-> only — **do not build from it.** Read the pivoted
-> [F2 — Verified Private Recommendations](https://app.notion.com/p/3a8caae5863181609acbcfd69a5db06b)
-> and rebuild this PRD when F2 implementation resumes.
->
-> Additionally, the **Gate 0 live run** (2026-07-25) found that 0G signs a provider attestation
-> record (`reqHash:respHash:centralized:aliyun:certHash`), **not** our framed text — invalidating
-> the wire-format / registry-binding mechanism described below regardless of framing. See ADR-0001's
-> Gate 0 update.
+# F2 — Verified Private Recommendations · Build Plan
 
-# F2 — Verified Private Decisions · Build Plan
+Implementation plan for F2 under the **Strategy Composer** framing. **Notion is the source of
+truth** for the concept and schemas ([F2 page](https://app.notion.com/p/3a8caae5863181609acbcfd69a5db06b),
+[Wiring](https://app.notion.com/p/3a8caae58631816d9aa0eb077e013ffe)); this file is the local,
+implementation-specific build-out (files, signatures, sequence, tests). Regenerated 2026-07-25
+after the pivot from the old daemon design; the previous version is in git history.
 
-Implementation plan for F2, produced from the grill session on 2026-07-25. **Notion is the
-source of truth** for the concept and schemas ([F2 page](https://app.notion.com/p/3a8caae5863181609acbcfd69a5db06b));
-this file is the local, implementation-specific build-out (files, signatures, sequence, tests).
+**What F2 owns:** `RecommendationRegistry`, the recommendation codec, the request envelope and
+its invariants, sealed inference, the reviewer (stretch), and encrypted memory. **F2 does not
+own:** the strategy grammar/compiler being filled in (F1), the market/book data (F3), or the
+request flow that runs it (Wiring §4).
 
-## Decisions locked (this session)
+## Status
+
+- **Entry gate (Gate 0 / G2) — PASSED.** The 0G inference spike ran live against a Galileo
+  provider via `packages/arbitration-sdk` (PR #6). A **stable enclave signer** recovers across
+  runs. Captured: chainId **16602**; live chat model **`qwen/qwen2.5-omni-7b`** (provider
+  `0xa48f…7836`); TEE signer **`0x83df4B8E…508cF`**; `addLedger(3)` accepted; latency ~1–2.6s.
+- **Load-bearing Gate 0 finding — see "Open decision A" below.** The signed bytes are **not** our
+  text; they are a provider attestation record. This reshapes the on-chain binding and must be
+  resolved before the registry is built.
+
+## Open decision A — the on-chain binding (BLOCKS the registry)
+
+Gate 0 proved 0G's out-of-band `{ text, signature }` is EIP-191 over a fixed attestation record
+`reqHash:respHash:centralized:aliyun:certHash` — **not** the response text, and `respHash` is over
+a provider-internal representation we cannot reproduce (`sha256`/`keccak256` of the content do not
+match). So the Notion §2–§3 mechanism as drafted (dictate a 3-line `header / user+nonce / JSON`,
+have the enclave sign those exact bytes, read `user`+`nonce` from a fixed-width prefix on-chain via
+`_prefixOf`, `recommendationId = keccak256(signedText)` == our payload) is **not implementable**.
+
+What survives: `ecrecover(signedText) ∈ isRegisteredSigner` proves **TEE provenance** on-chain;
+`keccak256(signedText)` is a valid per-response anchor. What breaks: on-chain-parseable `user`/
+`nonce`, and a client-computable `recommendationId` that equals our payload hash.
+
+Candidate directions (pick one in Issue 1; then update Notion §2–§3 + ADR-0001):
+
+- **(a) Dual-commit.** Commit our own `keccak256(canonicalRecommendation)` **alongside** 0G's
+  `keccak256(signedText)`; bind them off-chain in the trace. Auditable, not signature-bound.
+- **(b) Request-side provenance.** Carry the recommendation/nonce in the *request*; lean on
+  `reqHash`. Still not on-chain-reproducible.
+- **(c) Provenance-oracle.** Treat 0G purely as a provenance oracle: `user`+`nonce` become
+  **committer-supplied args** to `commitRecommendation`, replay enforced there (not parsed from
+  signed bytes). The enclave signature only proves "a real TEE produced *some* text".
+
+`(c)` is the smallest change to the current contract and keeps the honest claim intact
+(provenance + committer authorisation + per-user replay); `(a)` adds the strongest auditability
+story. Recommend leaning `(c)` + the trace-side hash of `(a)` unless the redesign session says
+otherwise.
+
+## Decisions locked (from the pivot)
 
 | # | Decision | Where |
 | --- | --- | --- |
-| Signing | Enclave signs the **response text**, **EIP-191** personal_sign, signature fetched out-of-band `GET {provider}/v1/proxy/signature/{chatID}?model=…` → `{text, signature}`. NOT EIP-712, NOT `(request,response)`. Confirmed against 0G docs. | ADR-0001 |
-| On-chain binding | **Verify-over-text, not reproduce.** Contract verifies EIP-191 sig over `signedText` (bytes calldata) via OpenZeppelin `ECDSA`+`MessageHashUtils`; commits `keccak256(signedText)`. No Solidity serializer. | ADR-0001 |
-| Wire format | 3-line framed text: `header\nepoch(20-digit)\nJSON-body`. Epoch in prefix only. **JCS dropped** — carry exact bytes end-to-end. | ADR-0001 |
-| Reasoning | **Excluded from signed payload.** Separate narration call, signed over `decisionHash‖prose`, verified off-chain, runs **after** commit. | ADR-0001 |
-| Commit auth | Enclave signer is **shared per-provider** → add `onlyCommitter` (separate agent key). Owner-only for `registerSigner`/`registerCommitter`/`ownerFallback`. | ADR-0002 |
-| I14 | Split **I14a** (all-or-nothing, unconditional) / **I14b** (partial-fill, gated on `partialFillReverts`). New mandate fields `partialFillReverts` (default **true**) + `maxPerFill`. | Notion §5/§6 |
-| Tick / I12 | Tick **45–60s**; I12 window ≈ 2× measured p95 latency; conservative placeholder N≈20 Sepolia blocks, recalibrate at H14. | Notion §7/§11 |
-| Funding | `broker.ledger.depositFund` before inference; **"ledger funded ≥ verified min" is a hard M4 gate**. Verify deposit-min + faucet-cap in hour-1 spike; top up at 0G booth. | Notion §7/§10 |
-| Storage key | Derived from **owner/maker wallet** sig, not the agent committer key. Decrypt server-side (Next.js route). | Notion §8 |
+| Framing | Creation-time composer; **user signs and ships**; no daemon/tick loop. Flow: infer → validate → present → commit → ship. | Notion §2, Wiring §4 |
+| Registry | `RecommendationRegistry` with **per-user nonce** replay (not a global epoch). `commitRecommendation` is `onlyCommitter`; emits `RecommendationCommitted(user, nonce, recommendationId, signer, strategyHashes, templateIds)`. | Notion §2 |
+| Not in ship path | The registry is **not** gated into `ship()`. Binding is a **derivation** (subgraph joins Aqua ship events to the recommendation's declared `strategyHash`es), not an on-chain enforcement. | Wiring §5 |
+| Two txs | tx1 = `commitRecommendation` (**ours**, committer key, our gas); tx2 = `Multicall[ship,…]` (**user's**). tx2 need not wait on tx1. | Wiring §5 |
+| Request envelope | Replaces the mandate; **built per request** from the user's own input (`prompt`, `budget`, `maxStrategies`, `maxDeadlineSec`, `maxInferenceRetries`). No stored `realBalance`. `allowPartial` gone (structural, per F1 §5). | Notion §5 |
+| Validator | Deterministic `validate()` I1–I14; **rejects, never mutates**. Reject-and-re-infer (≤ `maxInferenceRetries`), then **TEMPLATE_FALLBACK** (labelled, never a model output). | Notion §4/§6 |
+| Reasoning | Excluded from the signed payload. Narration is a separate call signed over `recommendationId‖prose`, verified off-chain, run **after** commit. | Notion §3 |
+| Commit auth | Enclave signer shared per-provider → `onlyCommitter` (`SLUICE_COMMITTER_KEY`), separate from `SLUICE_OWNER_KEY`. | ADR-0002 |
+| Freshness | I12 re-checked at **commit time** (8b), not just at inference — a person takes minutes; the chain does not wait. | Notion §2, Wiring §4 |
+| Chain | Base **fork** at a pinned block (`config/addresses.8453.json`). chainId 8453 == mainnet, so guard with a **fork probe** + `SLUICE_ALLOW_MAINNET`, never a chainId assert. | Wiring §9 |
 
 ## Cross-feature dependencies
 
-- **F1 — chain:** DecisionRegistry deploys to **Ethereum Sepolia (11155111)** (F1 closed Q2). 0G inference on **Galileo** (chainId 16601/16602 — confirm on wallet hour-1). `ecrecover` is chain-agnostic. One agent keypair funded on **both** (0G on Galileo for compute, ETH on Sepolia for commit gas).
-- **F1 — strategy metadata:** validator I14a/I14b consume `strategy.allOrNothing` + `strategy.worstCaseDraw()` (F1 §5).
-- **F1 — hour-1 Q1:** partial-fill cap-vs-revert sets `partialFillReverts` (default true until proven).
-- **F1 — two-tx gate:** `SluiceApp` gates fills on the last **committed** epoch (Wiring §5). tx1 = `commitDecision`, tx2 = `AquaRouter` Multicall[dock, ship].
-- **F1 — enums:** reuse `DockReason` codes; `BookDecisionCommit.ship/dock` map to AquaRouter params.
-- **F3 — context:** `context.ts` (`MarketContext`: per-token derived metrics + per-strategy stats) ready by ~H17 (M3 H11–H17). Subgraph repoints after `Shipped`/`Docked`.
+- **F1 — grammar & compiler:** the validator (I5–I11, I14) and the codec consume F1's slot grammar,
+  `StrategyTemplate.compile()`, `worstCaseDraw()`, and `strategyHash = keccak256(abi.encode(strategy))`.
+  The registry emits `strategyHash`es F1's ship path produces. *F1 Open Q1 (partial-fill) / Q2
+  (`_decayXD` slot) must settle on the fork first.*
+- **F3 — context:** COMPOSE/VALIDATE consume `MarketContext` (`PairContext` + `userBook`) from
+  `context.ts`; `liveBalance` via `eth_call` at `observedBlock`, never the index.
+- **Wiring — flow/tx/config:** steps 3–5b, 8b, 9, 11 of the request flow are F2; `SLUICE_COMMITTER_KEY`
+  / `SLUICE_OWNER_KEY`, `ZG_*`, `SLUICE_DRY_RUN` per Wiring §9. Repo layout: F2 code lives in
+  `packages/composer-sdk/src/{inference,validate,review,memory}.ts` + `contracts/src/RecommendationRegistry.sol`.
 
----
+## Sub-components
 
-## Gate 0 — validate 0G inference FIRST (blocks all F2)
-
-Before any contract or codec code, run the inference spike against a **live Galileo provider**:
-`packages/arbitration-sdk/spike/inference-spike.ts`. It proves the one assumption everything
-rests on and captures the numbers the design needs. **F2 development does not start until this
-passes.**
-
-Run:
-```
-cd packages/arbitration-sdk
-npm i ethers @0gfoundation/0g-compute-ts-sdk tsx
-SPIKE_PRIVATE_KEY=0x… npx tsx spike/inference-spike.ts
-```
-
-**Gate passes iff:**
-- `verifyMessage(text, sig)` recovers a **stable signer** across calls → that address is exactly
-  what `registerSigner` receives (handle `targetSeparated`/`targetTeeAddress`).
-- you know whether the signed `text` is **byte-identical** to the received assistant content. If
-  it DIFFERS (server normalization), hash/parse/store the **signed** text everywhere — never the
-  received content. This directly decides what `keccak256(...)` covers on-chain.
-
-**Also captured (data, not pass/fail — record back into this plan):** real `depositFund` min +
-faucet reality, Galileo chainId (16601 vs 16602), first latency datapoint (seeds I12's window),
-and the 7B's 3-line framing-compliance rate on attempt 1 (seeds `maxInferenceRetries`).
-
-If EIP-191 recovery or byte-identity comes back different from what we drafted, the codec and
-contract adjust here — cheaply — instead of after they're built.
-
----
-
-## Sub-component 1 — `DecisionRegistry.sol` (`contracts/src/`)
+### 1. `RecommendationRegistry.sol` (`contracts/src/`)
 
 ```solidity
-function registerSigner(address signer)     external onlyOwner;      // enclave key (provenance)
-function registerCommitter(address agent)    external onlyOwner;      // our agent key (authz)
-function commitDecision(bytes calldata signedText, bytes calldata sig, BookDecisionCommit calldata d)
-    external onlyCommitter returns (bytes32 decisionHash);
-function ownerFallbackDock(bytes32[] calldata hashes) external onlyOwner;
-function _epochFromPrefix(bytes calldata signedText) internal pure returns (uint64); // header check + slice+atoi
+function registerSigner(address signer)   external onlyOwner;   // enclave key (provenance)
+function registerCommitter(address agent)  external onlyOwner;   // our agent key (authz)
+function commitRecommendation(bytes signedText, bytes sig, /* + fields per Issue 1 */)
+    external onlyCommitter returns (bytes32 recommendationId);
 ```
+`ecrecover(toEthSignedMessageHash(signedText), sig) ∈ isRegisteredSigner`; per-user nonce replay;
+`recommendationId = keccak256(signedText)`; emit `RecommendationCommitted(…, strategyHashes, templateIds)`.
+**Exact `user`/`nonce` sourcing is Issue 1's decision** (prefix vs committer-arg). Deploy to the
+Base fork; register signer + committer.
 
-- `commitDecision`: `ECDSA.recover(MessageHashUtils.toEthSignedMessageHash(signedText), sig)` ∈ `isRegisteredSigner`; `epoch = _epochFromPrefix(signedText)`; require `epoch > lastEpoch`; `decisionHash = keccak256(signedText)`.
-- Immutable `EXPECTED_HEADER = "sluice.book-decision/1;chain=11155111"` compared by `_epochFromPrefix`.
-- Errors: `StaleEpoch`, `UnregisteredSigner`, `UnauthorizedCommitter`.
+### 2. Recommendation codec (`packages/composer-sdk/src/recommendation.ts`)
 
-**Tests (Foundry):** signer recovers & commits (event) · unregistered signer reverts · unauthorized committer reverts · stale/equal epoch reverts · **replay with relabelled epoch reverts** (epoch read from prefix, not a submitter field) · **golden `_epochFromPrefix(checked-in text) == 42`**.
+`StrategyRecommendation` (`schema: "sluice.recommendation/1"`), `frame()`/`parse()`,
+`validateSchema()` (ajv/zod, no fences), `toCommitArgs()`. Amounts are **decimal strings**. Carry
+the enclave's exact signed bytes end-to-end (no canonicalization). Frame shape (whether we still
+dictate fixed prefix lines) follows Issue 1.
 
-## Sub-component 2 — decision codec (`packages/arbitration-sdk/src/decision.ts`)
+### 3. Sealed composition inference (`packages/composer-sdk/src/inference.ts`)
 
-```typescript
-const EXPECTED_HEADER = (chainId: number) => `sluice.book-decision/1;chain=${chainId}`;
-function frame(epoch: bigint, chainId: number, body: BookDecisionBody): string;   // build 3-line text
-function parse(signedText: string): { epoch: bigint; chainId: number; body: BookDecisionBody }; // throws on malformed / bad header
-function validateSchema(body: unknown): asserts body is BookDecisionBody;          // ajv/zod, no fences
-function toCommitStruct(p: ReturnType<typeof parse>): BookDecisionCommit;          // -> on-chain calldata
-```
+Extends the Gate-0 CLI client. `compose(broker, ctx, request)` builds the §9 prompt (grammar +
+schema + request + F3 context + templates + violation history), POSTs, reads `ZG-Res-Key`, fetches
+the out-of-band signature, `verifyLocal()` (`verifyMessage === registered signer` **and**
+`processResponse`). Per-attempt latency logged. Reuses the CLI's ledger-funded broker,
+`createRequire` CJS interop, and provider-metadata model.
 
-No canonicalization. Amounts are decimal strings (never JS number).
+### 4. Request envelope + validator (`packages/composer-sdk/src/validate.ts`)
 
-**Tests (TS):** `parse(golden text) == expectedStruct` · schema rejects fences/trailing commas · bigint amounts survive as decimal strings · malformed body counts as a retry (never throws to chain).
+`RecommendationRequest` type; `validate(r, q, s): Violation[]` I1–I14 (rejects, never mutates).
+I5–I11/I14 consume F1 grammar/compile; I12 freshness; I13 nonce; I2 budget; I15 **parked**
+(whole-balance only).
 
-## Sub-component 3 — mandate + validator (`packages/arbitration-sdk/src/mandate.ts`)
+### 5. Reject-and-re-infer + template fallback (`packages/composer-sdk/src/compose.ts`)
 
-```typescript
-type Mandate = { /* …+ */ partialFillReverts: boolean; perToken: Record<Address, { /* … */ maxPerFill: bigint }> };
-function validate(d: BookDecision, m: Mandate, s: BookState): Violation[];  // I1..I14b; REJECTS, never mutates
-```
+Flow steps 2–5b: re-snapshot each attempt (only violation history carries forward), ≤
+`maxInferenceRetries`, then `TEMPLATE_FALLBACK`. Then COMPILE (I14) → PRESENT → 8b FRESHEN → COMMIT
+(tx1). Narration fired after commit.
 
-- I14a unconditional; I14b active only when `m.partialFillReverts`. Uses `strategy.allOrNothing` / `worstCaseDraw()`.
+### 6. Post-commit narration
 
-**Tests:** property-fuzz — never "compliant" for a violating decision, **never mutates input** · I14a/I14b under `partialFillReverts` true/false · I7 stale-hash, I10 token-order, I12 stale-block fire on crafted inputs.
+Second enclave-signed call over `recommendationId‖prose`; verified off-chain; stored in the trace;
+never blocks the recommendation reaching the user.
 
-## Sub-component 4 — sealed inference (`packages/arbitration-sdk/src/inference.ts`)
+### 7. Encrypted memory (`packages/composer-sdk/src/memory.ts`, 0G Storage)
 
-```typescript
-function initBroker(wallet): Promise<ZGBroker>;                       // createZGComputeNetworkBroker
-function ensureLedgerFunded(broker, min): Promise<void>;              // depositFund if below min — M4 gate
-function infer(broker, ctx): Promise<InferResult>;                    // dictates header+epoch in prompt; getRequestHeaders (single-use); POST /chat/completions; read ZG-Res-Key; GET /v1/proxy/signature/{chatID}
-function verifyLocal(signedText, signature, expectedSigner): boolean; // ethers.verifyMessage === signer; also broker.inference.processResponse
-function narrate(broker, decisionHash, ctx): Promise<Narration>;      // 2nd call, signed over decisionHash‖prose, POST-COMMIT only
-// InferResult = { signedText, signature, signer, chatID, latencyMs }
-```
+`trace/{user}/{nonce}.json.enc` (prompt, `signedText`, signature, narration, verdict, rejected
+attempts, latencies, txHash, `payloadHash`, promptVersion); `weights.json.enc` (per-template
+priors, stretch); plaintext `index.json`. AES-256-GCM; **per-user key derivation (Open Q2)** —
+default: each user signs to derive their own key; decrypt server-side (Next.js route).
 
-Register `teeSignerAddress` (or `additionalInfo.targetTeeAddress` if `targetSeparated`) via `registerSigner`.
+### 8. Reviewer — Gate 2 (`packages/composer-sdk/src/review.ts`) · STRETCH
 
-**Tests:** **signature round-trip (= hour-1 spike)** — `verifyMessage(text, sig) === teeSignerAddress` and `text` byte-for-byte == assistant content · latency logged per attempt · malformed → retry → owner fallback.
+Second inference over an *already-valid* recommendation → risk rating + intent-match; **flags,
+never vetoes**; verdict signed over `recommendationId‖verdict`, stored in the trace. Build only
+after 1–7 are green; first to drop.
 
-## Sub-component 5 — encrypted memory (`packages/arbitration-sdk/src/memory.ts`)
+## Build sequence (dependency order — Wiring §7 track A 5–9, track B trace)
 
-```typescript
-function deriveKey(ownerWallet): Promise<Uint8Array>;      // sign fixed message -> HKDF (owner/maker key, NOT committer)
-function putTrace(epoch, trace): Promise<Root>;            // AES-256-GCM -> upload -> update plaintext index.json
-function getTrace(epoch): Promise<Trace>;                  // server-side; download() Node-only
-function putWeights(w) / getSummary(): …                   // rolling summary bounds prompt growth
-```
-
-Trace: `signedText`, decision sig, narration `{text,signature,signer}`, verdict, rejected attempts, per-attempt latency, txHash, `payloadHash == keccak256(signedText)`, promptVersion.
-
-**Tests:** encrypt→upload→download→decrypt round-trip · wrong key fails · `index.json` enumerable plaintext · **trace auditability: `keccak256(storedText) == on-chain decisionHash`**.
-
----
-
-## Build sequence — M4 (H14–H22), M5 (H22–H26)
-
-- **H0–H1 · GATE 0 (blocks all F2):** run `spike/inference-spike.ts` (see Gate 0 above). Must pass — and its captured numbers recorded — before any F2 code.
-- **H14 · re-confirm spike (~15m):** re-run the spike against the boot-current provider; confirm the recovered signer is unchanged and the ledger is funded ≥ verified min.
-- **H14–H16 · DecisionRegistry:** contract + Foundry tests (signer/committer/epoch/replay/golden `_epochFromPrefix`). Deploy to Sepolia; register signer + committer. *Dep: F1 chain closed.*
-- **H16–H18 · codec + inference client:** `decision.ts` framing + schema + TS round-trip/golden; `inference.ts` broker (ledger, infer, verifyLocal).
-- **H18–H20 · validator:** `mandate.ts` I1–I14b + property tests. *Dep: F1 `strategy.allOrNothing`/`worstCaseDraw`; hour-1 finding → `partialFillReverts`.*
-- **H20–H22 · loop:** reject-and-re-infer (re-snapshot each attempt) + owner fallback; integrate tick steps 5–8; narration post-commit. *Dep: F3 `context.ts` by ~H17.*
-  - **Gate:** induced-revert scenario resolved unattended + a rejected attempt in the trace.
-- **H22–H26 · M5 memory:** `memory.ts` 0G Storage encryption + server-side decrypt + `payloadHash` check + dashboard trace-panel decrypt.
+1. **Issue 1 — binding decision** (design; unblocks the registry). Update Notion §2–§3 + ADR-0001.
+2. **Registry + codec** (Issues 2–3) — deploy to fork, register keys; codec round-trip/golden.
+   *Dep: F1 chain/grammar.*
+3. **Sealed inference + validator** (Issues 4–5) — extend the CLI client; validator I1–I14 property
+   tests. *Dep: F1 grammar/compile, F3 `MarketContext`.*
+4. **Loop + fallback + commit** (Issue 6) — flow 2–5b, 8b, tx1; narration (Issue 7). *Dep: F3
+   context.* **Gate:** a prompt → validated, committed recommendation that compiles + ships, and a
+   rejected attempt in the trace (Notion §10 exit gate).
+5. **Encrypted memory + trace view** (Issues 8–9) — 0G Storage, per-user key, `payloadHash` check.
+6. **Reviewer** (Issue 10) — stretch.
 
 ## Open questions — status
 
-- **Q1 custom attested image:** plan **NO** (0G serves models, not arbitrary code) → reject-and-re-infer. Ask 0G booth early; never claim in-enclave validator on stage unless running.
-- **Q2 latency:** resolved (tick 45–60s, I12 recalibrated at H14).
-- **Q3 partial-fill cap/revert:** F1 hour-1; default `partialFillReverts=true`.
-- **Q4 canonical format:** resolved — framed text, JCS dropped.
-- **Q5 chains:** resolved — Registry on Sepolia 11155111, inference on Galileo; one keypair on both.
-- **Q6 two-tx gate:** resolved — SluiceApp gates on committed epoch.
+- **A. On-chain binding** — the Gate 0 finding above. **Blocks the registry;** Issue 1.
+- **Q1. Custom attested image?** Plan NO (0G serves models, not arbitrary code) → reject-and-re-infer;
+  never claim in-enclave validator on stage unless running. Ask 0G booth early. *(Notion §11)*
+- **Q2. Per-user trace key derivation** — blocks memory (M5). Default: each user signs to derive
+  their own key; decrypt server-side. Settle before the storage path is written. *(Notion §11)*
+- **Q3. User-facing latency** — first datapoint from Gate 0 (~1–2.6s). Decides streamed-"composing…"
+  vs plain spinner at flow step 3. *(Notion §11)*
