@@ -1,11 +1,11 @@
 # @sluice/app
 
-The Compose screen — [Wiring §6](https://app.notion.com/p/3a8caae58631816d9aa0eb077e013ffe),
-built against a stubbed composer (Track B item 2). Connect a wallet, type a sentence,
-set a per-token budget, and see the exact request envelope and prompt that would go to
-the enclave.
+The Compose screen — [Wiring §6](https://app.notion.com/p/3a8caae58631816d9aa0eb077e013ffe).
+Connect a wallet, type a sentence, set a per-token budget, and get back a risk-rated
+Aqua/SwapVM strategy recommendation from the enclave path (`/api/compose`) — real
+when the server holds a funded 0G key, labelled `TEMPLATE_FALLBACK` otherwise.
 
-Nothing is sent, signed, or written to a chain. The screen stops at the assembled prompt.
+Nothing is signed or written to a chain yet. The screen stops at the recommendation.
 
 ## Run
 
@@ -34,9 +34,12 @@ shared by the fork and by mainnet (F1 §1). Adding a token is a JSON edit.
 
 ## Not wired
 
-Sealed inference (F2), the deterministic gate I1–I14 (F2 §6), market context and the
-user's book (F3), and both transactions. `nonce` is a stand-in until
-`RecommendationRegistry` is deployed, and is labelled as one on screen.
+Sealed inference and the deterministic gate are wired via `/api/compose` (below):
+real, signed `ENCLAVE` recommendations when the server holds a key, otherwise the
+deterministic `TEMPLATE_FALLBACK` seed. Still not wired: market/pair context beyond
+the user's own book (F3 job 2), the `RecommendationRegistry` commit path, and the
+ship `Multicall`. `nonce` is a stand-in until `RecommendationRegistry` is deployed,
+and is labelled as one on screen.
 
 ## /api/compose — the server-side enclave path
 
