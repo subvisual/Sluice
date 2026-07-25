@@ -151,25 +151,31 @@ dispatchable/compilable here; **I15** is parked (whole-balance mode).
   mutates); property tests never return "valid" for a violating recommendation and never mutate.
 - [x] I6, I9 are N/A on the deployed venue (no opcode) — documented, never emitted.
 - [ ] ⛔ I4 user-equality, I13 nonce, I14 recompile-equality *(deferred with the commit/ship path)*.
-- [ ] ⬜ Wire the gate into the composer's reject-and-re-infer loop *(Issue 6)*.
+- [x] Wire the gate into the composer's reject-and-re-infer loop *(Issue 6)*.
 
 ---
 
 ## 6. Reject-and-re-infer loop + template fallback + commit (`arbitration-sdk/src/compose.ts`) · 🟡 partially delivered
 
-**Delivered:** the **one-retry** loop (PR #10) **and** the deterministic **TEMPLATE_FALLBACK** —
-after retries exhaust, `compose()` returns a labelled template recommendation built by `fallback.ts`,
-never a model output. `ComposeResult.source` is `ENCLAVE` | `TEMPLATE_FALLBACK`; the CLI surfaces it.
+**Delivered:** the **validator-driven reject-and-re-infer** loop **and** the deterministic
+**TEMPLATE_FALLBACK**. Each attempt is parsed for shape then run through `validate()` (Issue 5);
+a malformed OR violating output is fed the rejection reason and re-inferred (bounded by
+`MAX_COMPOSE_ATTEMPTS`). After the attempts are spent, `compose()` returns a labelled template
+recommendation built by `fallback.ts`, never a model output. `ComposeResult.source` is
+`ENCLAVE` | `TEMPLATE_FALLBACK` and `ComposeResult.violations` records the last model attempt's
+verdict; the CLI surfaces both. The validator's `ChainState` is derived from the F3 context by
+`chainStateFor()` (snapshot block = freshness reference, snapshot time bounds the deadline).
 
-**Not delivered:** the validator-driven reject-and-re-infer (⬜, waits on Issue 5) and the
-**commit (tx1)** + freshen steps (⛔ verifiability).
+**Not delivered:** the **commit (tx1)** + freshen steps (⛔ verifiability).
 
 ### Acceptance criteria
 - [x] Malformed output triggers a bounded re-infer.
 - [x] `TEMPLATE_FALLBACK` after retries (labelled, never a model output). `fallback.ts` +
   `selectTemplate` (deterministic intent heuristic); output is budget-bounded and within
   `maxDeadlineSec`; 8 unit tests.
-- [ ] ⬜ Validator-driven reject-and-re-infer *(needs Issue 5)*.
+- [x] Validator-driven reject-and-re-infer — `validate()` gates every well-formed attempt; a
+  violation is fed back as the next attempt's rejection notes. 6 unit tests via an injected fake
+  inference (`InferFn`), no broker/network.
 - [ ] ⛔ FRESHEN + COMMIT (tx1, committer key) *(deferred with the registry)*.
 
 ---
@@ -223,15 +229,14 @@ even under the original scope; **deferred**. Spec retained.
 
 ## What's actually left, under the current scope
 
-The recommendation path is working (composer + the deterministic template fallback), and the
-**validator** (Issue 5) is complete for this scope — it hard-rejects out-of-budget, wrong-chain,
-stale, mis-ordered-token, bad-deadline, unknown-template, and off-menu-instruction recommendations
-(I1–I5, I7, I8, I10–I12; I6/I9 are N/A on the deployed venue). The **in-scope, buildable** F2
-remainder is now essentially just:
+The recommendation path is working end-to-end: the composer now runs the **validator** (Issue 5)
+in a **reject-and-re-infer loop** (Issue 6) — a violating model output is fed the failing invariant
+and re-inferred, then falls through to the deterministic `TEMPLATE_FALLBACK`. The validator itself
+hard-rejects out-of-budget, wrong-chain, stale, mis-ordered-token, bad-deadline, unknown-template,
+and off-menu-instruction recommendations (I1–I5, I7, I8, I10–I12; I6/I9 are N/A on the deployed
+venue). The only **in-scope, buildable** F2 remainder is:
 
-- **Wire the validator into the compose loop** (Issue 6) — turn `validate()` into reject-and-re-infer
-  so a violating model output is fed back and re-inferred, then falls through to `TEMPLATE_FALLBACK`.
-- **Real F3 context** — swap the market stub; F3 work, tracked there.
+- **Real F3 context** — swap the job-2 market stub; F3 work, tracked there.
 
 Everything under ⛔ (verifiability: registry, commit, trace, I13/I14) waits on a decision to reinstate
 on-chain verifiability.

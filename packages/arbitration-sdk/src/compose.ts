@@ -4,10 +4,14 @@
 // Scope: this is the "just get a recommendation" path. It reuses the Gate 0
 // round-trip (inferChat) and receives the enclave signature, but does NOT
 // verify it, commit it, or persist anything — verifiability is out of scope.
-// One retry on malformed output; then the deterministic TEMPLATE_FALLBACK
-// (Wiring §4 step 5b) so a run always yields a well-formed recommendation.
-// The full validator-driven reject-and-re-infer loop is still Issue 5 (blocked
-// on the F1 grammar).
+//
+// The loop is validator-driven (F2 §4: "nothing is ever edited. Violations
+// reject and re-infer"). Each attempt is parsed for shape and then run through
+// the deterministic validator; a malformed OR violating output is fed back as
+// rejection feedback and re-inferred, up to MAX_COMPOSE_ATTEMPTS. When the
+// attempts are spent, the deterministic TEMPLATE_FALLBACK (Wiring §4 step 5b)
+// takes over so a run always yields a well-formed recommendation — labelled,
+// never presented as a model output.
 
 import type { Config } from "./config.ts";
 import { inferChat, type ChatMessage, type ZGBroker } from "./inference.ts";
@@ -24,6 +28,7 @@ import {
 	templateFallback,
 	type RecommendationSource,
 } from "./fallback.ts";
+import { validate, type ChainState, type Violation } from "./validate.ts";
 
 // Matches SlotAssignment in recommendation.ts — the slots that exist on the
 // deployed router, nothing else. (An earlier draft described the old six-slot
@@ -43,7 +48,7 @@ const OUTPUT_SCHEMA = `Return ONLY a JSON object (no markdown fences, no prose),
         "curve":    { "instruction": "XYC_SWAP_XD" },
         "deadline": { "deadline": <unix seconds> }
       },
-      "tokens": ["<token address>", ...],          // canonical order
+      "tokens": ["<token address>", ...],          // canonical ASCENDING address order
       "virtualAmounts": ["<decimal string>", ...]  // aligned with tokens; NEVER a number
     }
   ]
@@ -69,6 +74,12 @@ export function buildComposeMessages(
 		.map((b) => `  ${b.symbol} (${b.address}): up to ${b.amount}`)
 		.join("\n");
 
+	// Concrete values the model must ECHO, not invent. Without these a small model
+	// fabricates a chainId (it defaulted to 1) and a deadline off some training-era
+	// "now" — both rejected by the validator (I4, I7) on every attempt. State them.
+	const now = ctx.observedAt;
+	const deadlineMax = now + req.maxDeadlineSec;
+
 	const user = [
 		`USER PROMPT: ${req.prompt}`,
 		"",
@@ -76,6 +87,13 @@ export function buildComposeMessages(
 		budgetLines,
 		"",
 		`maxStrategies: ${req.maxStrategies} | maxDeadlineSec: ${req.maxDeadlineSec}`,
+		"",
+		"REQUIRED FIXED FIELDS — copy these EXACTLY into your JSON; do NOT invent them:",
+		`  chainId: ${BASE_CHAIN_ID}   (Base mainnet — the one venue every strategy ships to)`,
+		`  observedAt: ${now}`,
+		`  observedBlock: ${ctx.observedBlock}`,
+		`  now (current unix time) is ${now}. Every strategy's deadline MUST be a unix timestamp`,
+		`  in (now, now + maxDeadlineSec] = (${now}, ${deadlineMax}]; use ${deadlineMax} unless a shorter one is intended.`,
 		"",
 		contextPromptBlock(ctx),
 		extra
@@ -93,38 +111,85 @@ export type ComposeResult = {
 	parse: ParseResult;
 	raw: InferResult; // the underlying 0G response (unverified, by scope)
 	attempts: number;
+	// The validator verdict on the LAST model attempt. Empty when an ENCLAVE
+	// result was accepted; on TEMPLATE_FALLBACK it records the invariants the
+	// final model output violated — the reason the run fell back.
+	violations: Violation[];
 	// How the returned recommendation was produced. ENCLAVE = the model's
 	// output; TEMPLATE_FALLBACK = the deterministic seed used because inference
-	// never produced a well-formed one. Must never be blurred — see fallback.ts.
+	// never produced a well-formed, valid one. Never blurred — see fallback.ts.
 	source: RecommendationSource;
 };
+
+// The venue we ship to. The recommendation targets Base regardless of the 0G
+// inference chain in `cfg`; the address book lives in config/addresses.8453.json.
+export const BASE_CHAIN_ID = 8453;
+
+// One infer + parse + validate round is one attempt. Bounded so a model that
+// cannot produce a valid output falls through to the deterministic fallback
+// rather than looping — every retry is a round trip the user waits on.
+export const MAX_COMPOSE_ATTEMPTS = 2;
+
+// The inference seam. Real runs use inferChat (the 0G round-trip); tests inject
+// a fake so the loop is exercised without a broker, network, or signature fetch.
+export type InferFn = (
+	broker: ZGBroker,
+	cfg: Config,
+	messages: ChatMessage[],
+) => Promise<InferResult>;
+
+// The live chain facts the validator needs, derived from the context the
+// composer already holds: the snapshot's block is the freshness reference and
+// its time bounds the deadline. chainId is the venue we ship to, not the 0G
+// inference chain. Pure — no chain read.
+export function chainStateFor(
+	ctx: MarketContext,
+	chainId: number = BASE_CHAIN_ID,
+): ChainState {
+	return { chainId, headBlock: ctx.observedBlock, now: ctx.observedAt };
+}
 
 export async function compose(
 	broker: ZGBroker,
 	cfg: Config,
 	req: RecommendationRequest,
 	ctx: MarketContext,
+	opts: { infer?: InferFn; chainState?: ChainState } = {},
 ): Promise<ComposeResult> {
-	let raw = await inferChat(broker, cfg, buildComposeMessages(req, ctx));
-	let parse = parseRecommendation(raw.resultText, req);
-	let attempts = 1;
+	const infer = opts.infer ?? inferChat;
+	const chainState = opts.chainState ?? chainStateFor(ctx);
 
-	// One retry on malformed output, handing back the structural errors.
-	if (!parse.ok) {
-		const messages = buildComposeMessages(req, ctx, parse.errors.join("; "));
-		raw = await inferChat(broker, cfg, messages);
+	let raw!: InferResult;
+	let parse!: ParseResult;
+	let violations: Violation[] = [];
+	let feedback: string | undefined; // rejection notes handed to the next attempt
+	let attempts = 0;
+
+	while (attempts < MAX_COMPOSE_ATTEMPTS) {
+		raw = await infer(broker, cfg, buildComposeMessages(req, ctx, feedback));
 		parse = parseRecommendation(raw.resultText, req);
-		attempts = 2;
+		attempts += 1;
+
+		// Malformed shape: nothing to validate. Hand back the structural errors.
+		if (!parse.ok || !parse.recommendation) {
+			violations = [];
+			feedback = parse.errors.join("; ");
+			continue;
+		}
+
+		// Well-formed: the deterministic gate decides. No violations → accept.
+		violations = validate(parse.recommendation, req, chainState);
+		if (violations.length === 0) {
+			return { parse, raw, attempts, violations, source: "ENCLAVE" };
+		}
+		// Rejected, never rewritten (F2 §4): feed the invariants back and re-infer.
+		feedback = violations.map((v) => `${v.code}: ${v.message}`).join("; ");
 	}
 
-	// Retries exhausted and still not well-formed: fall back to a deterministic
-	// template recommendation, clearly labelled — never presented as a model
-	// output. `raw` still carries the last (rejected) model attempt for the trace.
-	if (!parse.ok) {
-		const rec = templateFallback(req, ctx);
-		parse = parseRecommendation(JSON.stringify(rec), req);
-		return { parse, raw, attempts, source: FALLBACK_SOURCE };
-	}
-
-	return { parse, raw, attempts, source: "ENCLAVE" };
+	// Attempts spent and the last model output was still malformed or violating:
+	// deterministic template fallback, clearly labelled — never a model output.
+	// `raw` and `violations` keep the last rejected attempt for the trace.
+	const rec = templateFallback(req, ctx);
+	parse = parseRecommendation(JSON.stringify(rec), req);
+	return { parse, raw, attempts, violations, source: FALLBACK_SOURCE };
 }
