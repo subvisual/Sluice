@@ -23,6 +23,10 @@ subgraph/build/
 subgraph/generated/
 subgraph/tests/.bin/
 subgraph/tests/.latest.json
+# local fork stack artifacts (anvil.log is covered by *.log)
+subgraph/local/.anvil.pid
+subgraph/local/networks-local.json
+subgraph/subgraph.local.yaml
 
 # Build output
 dist/

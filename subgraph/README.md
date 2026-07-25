@@ -105,6 +105,24 @@ Addresses are identical on 12 mainnet chains. `networks.json` currently carries 
 3. Build with: `graph build --network <network-name>` — note this rewrites `subgraph.yaml` in place; restore it to mainnet (`git checkout subgraph.yaml`) after deploying.
 4. Deploy as above, to a per-network Studio subgraph (e.g. `graph deploy aqua-base`).
 
+### Local fork (anvil)
+
+Studio can't index a local fork, so `local/` carries a self-hosted stack (graph-node + IPFS + Postgres) pointed at an anvil fork of Base. Requires Docker and Foundry.
+
+```bash
+make fork-up      # start anvil fork + graph-node, deploy the subgraph from the fork block
+make fork-status  # sync state + protocol counters
+make fork-reset   # full teardown + fresh start — REQUIRED after any anvil restart
+make fork-down    # stop everything, wipe index state
+```
+
+Query endpoint: `http://localhost:8000/subgraphs/name/sluice/aqua-local`. Override the upstream RPC with `BASE_RPC_URL=...` (defaults to the public `https://mainnet.base.org`).
+
+Rules that keep it honest (see the F3 wiring page for why):
+- The local subgraph indexes **from the fork block onward** — local activity only, never the 10M-block Base history (that path never catches up through anvil). Market/history context stays on the hosted Studio endpoints.
+- **Restarting anvil silently invalidates the index** (block hashes change; the store serves plausible wrong data). Always `make fork-reset` after an anvil restart.
+- Run `make fork-up` **before** sending local transactions — anything mined before the deployed start block is invisible to the index.
+
 ## 7. Querying from AI Agents (MCP)
 
 Load The Graph MCP server at conversation start: `graphql://subgraph` resource.
