@@ -19,7 +19,7 @@ export function loadConfig(): Config {
 		rpc: process.env.ZG_RPC ?? "https://evmrpc-testnet.0g.ai",
 		provider:
 			process.env.ZG_PROVIDER ?? "0xa48f01287233509FD694a22Bf840225062E67836",
-		model: process.env.ZG_MODEL ?? "qwen/qwen-2.5-7b-instruct",
+		model: process.env.ZG_MODEL ?? "qwen/qwen2.5-omni-7b",
 		depositZG: Number(process.env.ZG_DEPOSIT ?? "3"),
 		privateKey,
 	};
