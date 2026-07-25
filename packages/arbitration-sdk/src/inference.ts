@@ -77,10 +77,26 @@ export async function ensureLedgerFunded(
 	}
 }
 
+export type ChatMessage = {
+	role: "system" | "user" | "assistant";
+	content: string;
+};
+
+// Single-prompt convenience wrapper (used by the `infer` CLI): sends one user
+// message. The composer path uses `inferChat` directly to send a system +
+// user pair. Both run the identical 0G round-trip + signature fetch below.
 export async function infer(
 	broker: ZGBroker,
 	cfg: Config,
 	prompt: string,
+): Promise<InferResult> {
+	return inferChat(broker, cfg, [{ role: "user", content: prompt }]);
+}
+
+export async function inferChat(
+	broker: ZGBroker,
+	cfg: Config,
+	messages: ChatMessage[],
 ): Promise<InferResult> {
 	// FIX 3: acknowledge the provider's TEE signer once before the first
 	// inference. On reruns this throws "already acknowledged" — ignore that.
@@ -103,7 +119,6 @@ export async function infer(
 	const endpoint: string = meta.endpoint;
 	const model: string = meta.model;
 
-	const messages = [{ role: "user", content: prompt }];
 	const headers = await broker.inference.getRequestHeaders(
 		cfg.provider,
 		JSON.stringify(messages),
