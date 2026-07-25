@@ -27,6 +27,4 @@ Index Aqua's own events filtered by `app`, and join them to `RecommendationCommi
 `strategyHash` — we have no app in the ship path to emit from. **Never key `Position` on the bare
 hash:** `strategyHash = keccak256(strategy)` has no maker in the preimage, so two users composing
 identical bytes collide. Key on `(maker, app, strategyHash)` and join per `(maker, strategyHash)`.
-The ship event carries the full strategy bytes, so the subgraph can store the bytecode itself. No
-Aqua event has `indexed` fields — fine here, but the `eth_getLogs` fallback cannot filter by maker
-at the node.
+The ship event carries the full strategy bytes, so the subgraph can store the bytecode itself.
