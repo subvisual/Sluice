@@ -74,6 +74,12 @@ export function buildComposeMessages(
 		.map((b) => `  ${b.symbol} (${b.address}): up to ${b.amount}`)
 		.join("\n");
 
+	// Concrete values the model must ECHO, not invent. Without these a small model
+	// fabricates a chainId (it defaulted to 1) and a deadline off some training-era
+	// "now" — both rejected by the validator (I4, I7) on every attempt. State them.
+	const now = ctx.observedAt;
+	const deadlineMax = now + req.maxDeadlineSec;
+
 	const user = [
 		`USER PROMPT: ${req.prompt}`,
 		"",
@@ -81,6 +87,13 @@ export function buildComposeMessages(
 		budgetLines,
 		"",
 		`maxStrategies: ${req.maxStrategies} | maxDeadlineSec: ${req.maxDeadlineSec}`,
+		"",
+		"REQUIRED FIXED FIELDS — copy these EXACTLY into your JSON; do NOT invent them:",
+		`  chainId: ${BASE_CHAIN_ID}   (Base mainnet — the one venue every strategy ships to)`,
+		`  observedAt: ${now}`,
+		`  observedBlock: ${ctx.observedBlock}`,
+		`  now (current unix time) is ${now}. Every strategy's deadline MUST be a unix timestamp`,
+		`  in (now, now + maxDeadlineSec] = (${now}, ${deadlineMax}]; use ${deadlineMax} unless a shorter one is intended.`,
 		"",
 		contextPromptBlock(ctx),
 		extra

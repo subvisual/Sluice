@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 
 import {
 	compose,
+	buildComposeMessages,
 	chainStateFor,
 	BASE_CHAIN_ID,
 	MAX_COMPOSE_ATTEMPTS,
@@ -85,6 +86,25 @@ function fakeInfer(...texts: string[]): { fn: InferFn; calls: string[][] } {
 
 const BROKER = {} as unknown as ZGBroker;
 const CFG = {} as unknown as Config;
+
+test("the prompt states the concrete chain id, block, and deadline window", () => {
+	// Without these the 7B model invents chainId 1 and a training-era deadline —
+	// rejected by I4/I7 on every attempt. The prompt must hand it the values to
+	// echo. (See the 0G probe: this is what turns the validator loop from
+	// always-fallback into a first-attempt ENCLAVE result.)
+	const [, userMsg] = buildComposeMessages(REQ, CTX);
+	const now = CTX.observedAt;
+	const deadlineMax = now + REQ.maxDeadlineSec;
+
+	assert.match(userMsg.content, new RegExp(`chainId: ${BASE_CHAIN_ID}\\b`));
+	assert.match(userMsg.content, new RegExp(`observedAt: ${now}\\b`));
+	assert.match(
+		userMsg.content,
+		new RegExp(`observedBlock: ${CTX.observedBlock}\\b`),
+	);
+	// The exact validator window (now, now + maxDeadlineSec].
+	assert.match(userMsg.content, new RegExp(`\\(${now}, ${deadlineMax}\\]`));
+});
 
 test("chainStateFor derives the chain facts from the context", () => {
 	const s = chainStateFor(CTX);
