@@ -81,7 +81,7 @@ async function main() {
 	await ensureLedgerFunded(broker, cfg.depositZG);
 
 	const ctx = stubContext();
-	const { parse, raw, attempts } = await compose(broker, cfg, req, ctx);
+	const { parse, raw, attempts, source } = await compose(broker, cfg, req, ctx);
 
 	console.log(`prompt:  ${req.prompt}`);
 	console.log(
@@ -90,10 +90,20 @@ async function main() {
 	console.log(
 		`0G:      model responded in ${raw.latencyMs}ms (attempt ${attempts}, chatID ${raw.chatID || "n/a"})`,
 	);
+	console.log(`source:  ${source}`);
+	if (source === "TEMPLATE_FALLBACK") {
+		console.log(
+			"         ⚠ inference did not yield a well-formed recommendation; this is a DETERMINISTIC template, NOT a model output.",
+		);
+	}
 	console.log("");
 
 	if (parse.ok && parse.recommendation) {
-		console.log("recommendation (grammar-shaped, NOT compiled/verified):");
+		const label =
+			source === "TEMPLATE_FALLBACK"
+				? "recommendation (TEMPLATE_FALLBACK — deterministic, NOT a model output):"
+				: "recommendation (grammar-shaped, NOT compiled/verified):";
+		console.log(label);
 		console.log(JSON.stringify(parse.recommendation, null, 2));
 	} else {
 		console.log("could not parse a well-formed recommendation:");

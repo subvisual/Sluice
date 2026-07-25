@@ -4,8 +4,10 @@
 // Scope: this is the "just get a recommendation" path. It reuses the Gate 0
 // round-trip (inferChat) and receives the enclave signature, but does NOT
 // verify it, commit it, or persist anything — verifiability is out of scope.
-// One retry on malformed output; no reject-and-re-infer loop, no template
-// fallback (those are F2 Issues 5/6).
+// One retry on malformed output; then the deterministic TEMPLATE_FALLBACK
+// (Wiring §4 step 5b) so a run always yields a well-formed recommendation.
+// The full validator-driven reject-and-re-infer loop is still Issue 5 (blocked
+// on the F1 grammar).
 
 import type { Config } from "./config.ts";
 import { inferChat, type ChatMessage, type ZGBroker } from "./inference.ts";
@@ -17,6 +19,11 @@ import {
 	type ParseResult,
 	type RecommendationRequest,
 } from "./recommendation.ts";
+import {
+	FALLBACK_SOURCE,
+	templateFallback,
+	type RecommendationSource,
+} from "./fallback.ts";
 
 const OUTPUT_SCHEMA = `Return ONLY a JSON object (no markdown fences, no prose), shaped exactly:
 {
@@ -85,6 +92,10 @@ export type ComposeResult = {
 	parse: ParseResult;
 	raw: InferResult; // the underlying 0G response (unverified, by scope)
 	attempts: number;
+	// How the returned recommendation was produced. ENCLAVE = the model's
+	// output; TEMPLATE_FALLBACK = the deterministic seed used because inference
+	// never produced a well-formed one. Must never be blurred — see fallback.ts.
+	source: RecommendationSource;
 };
 
 export async function compose(
@@ -105,5 +116,14 @@ export async function compose(
 		attempts = 2;
 	}
 
-	return { parse, raw, attempts };
+	// Retries exhausted and still not well-formed: fall back to a deterministic
+	// template recommendation, clearly labelled — never presented as a model
+	// output. `raw` still carries the last (rejected) model attempt for the trace.
+	if (!parse.ok) {
+		const rec = templateFallback(req, ctx);
+		parse = parseRecommendation(JSON.stringify(rec), req);
+		return { parse, raw, attempts, source: FALLBACK_SOURCE };
+	}
+
+	return { parse, raw, attempts, source: "ENCLAVE" };
 }
