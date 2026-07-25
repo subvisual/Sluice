@@ -6,7 +6,7 @@
 // or safety — those are out of scope. Unknown opcode names are surfaced as
 // soft notes, not hard failures, because the F1 grammar itself is provisional.
 
-import { CURVE_OPTIONS, WRAPPER_OPTIONS, GUARD_OPTIONS } from "./grammar.ts";
+import { BAND_OPTIONS, CURVE_OPTIONS, WRAPPER_OPTIONS, GUARD_OPTIONS } from "./grammar.ts";
 
 export type TokenBudget = {
 	symbol: string;
@@ -32,6 +32,7 @@ export type SlotAssignment = {
 	templateId: string;
 	slots: {
 		guards?: Slot[];
+		band?: Slot; // params.bandBps only — the compiler derives the deltas
 		fee?: Slot;
 		curve: Slot;
 		deadline: { deadline: number };
@@ -137,6 +138,9 @@ export function parseRecommendation(
 		const fee = s?.slots?.fee?.instruction;
 		if (fee && !WRAPPER_OPTIONS.includes(fee))
 			notes.push(`${at}: fee "${fee}" is not in the grammar menu`);
+		const band = s?.slots?.band?.instruction;
+		if (band && !BAND_OPTIONS.includes(band))
+			notes.push(`${at}: band "${band}" is not in the grammar menu`);
 		for (const g of s?.slots?.guards ?? []) {
 			if (g?.instruction && !GUARD_OPTIONS.includes(g.instruction))
 				notes.push(`${at}: guard "${g.instruction}" is not in the grammar menu`);

@@ -54,6 +54,26 @@ export const WRAPPERS: InstructionSpec[] = [
 	},
 ];
 
+/// Optional band. MUST precede the fee and the curve, and requires a curve
+/// after it — it post-processes the computed amounts, so a program ending here
+/// reverts. The model chooses bandBps ONLY; the compiler derives the on-chain
+/// deltas from bandBps and the virtual amounts, the same way it owns bytes and
+/// ordering everywhere else. Raw deltas are never a model output.
+export const BAND: InstructionSpec = {
+	name: "XYC_CONCENTRATE_GROW_LIQUIDITY_2D",
+	opcode: op("XYC_CONCENTRATE_GROW_LIQUIDITY_2D"),
+	summary:
+		"Concentrates the shipped liquidity into a geometric band around the shipped " +
+		"price: the quoted price stays the ratio of the shipped amounts, the effective " +
+		"depth is multiplied, and the real inventory drains exactly at the band edges. " +
+		"Tighter band = deeper quotes = better taker pricing, but the position is " +
+		"exhausted by a smaller price move.",
+	params:
+		`bandBps: integer in (0, ${FEE_BPS_ONE}), out of ${FEE_BPS_ONE} like feeBps — ` +
+		"the price may move by this fraction above the shipped ratio (and the " +
+		"reciprocal below it) before the band's inventory is gone. 1% is 10000000.",
+};
+
 /// Exactly one, and it goes last. Terminal: it computes the amounts.
 export const CURVES: InstructionSpec[] = [
 	{
@@ -71,13 +91,11 @@ export const CURVES: InstructionSpec[] = [
 /// dispatches (jumps, progressive/output-side fees, the supply-share gate) is
 /// simply unused — no entry needed until someone reaches for one.
 export const OMITTED: Record<string, string> = {
-	XYC_CONCENTRATE_GROW_LIQUIDITY_2D:
-		"Parameterised by VIRTUAL BALANCE DELTAS on the deployed router, not the " +
-		"sqrtPriceMin/sqrtPriceMax bounds 1inch master uses. Until that arithmetic is " +
-		"settled and fill-tested, offering it would put an unverified curve behind a " +
-		"user's signature.",
 	XYC_CONCENTRATE_GROW_LIQUIDITY_XD:
-		"Same delta parameterisation as the 2D variant, plus an N-token argument list. Same reason.",
+		"N-token variant of the band. The 2D variant's delta arithmetic is settled " +
+		"(bandDeltas in swapvm.ts, mirrored from the deployed computeDeltas and " +
+		"fill-tested), but XD adds a variable-width token list no template needs — " +
+		"every strategy is one pair. Stays out until an intent needs three tokens.",
 	DECAY_XD:
 		"Reads state in quote mode without writing it, so quote() can succeed where " +
 		"swap() reverts. Stays out until that divergence is measured.",
@@ -95,6 +113,7 @@ export const COMPILER_EMITTED = ["SALT"] as const;
 
 export const CURVE_OPTIONS = CURVES.map((i) => i.name);
 export const WRAPPER_OPTIONS = WRAPPERS.map((i) => i.name);
+export const BAND_OPTIONS = [BAND.name];
 /// Empty until a taker-gate encoder exists — see OMITTED. Kept because
 /// recommendation.ts notes any guard the model invents against this list.
 export const GUARD_OPTIONS: string[] = [];
@@ -105,6 +124,8 @@ export const GUARD_OPTIONS: string[] = [];
 export const COMPAT_RULES: string[] = [
 	"Exactly one curve instruction, and it is LAST. It is terminal: the VM reverts if amounts were already computed.",
 	"The fee comes BEFORE the curve. Placed after, the VM reverts.",
+	"The band comes BEFORE the fee and the curve, and requires a curve after it. You choose bandBps only — the compiler derives the concentration deltas from the virtual amounts; never emit deltas.",
+	"A tighter band quotes deeper but exhausts on a smaller price move: the shipped amounts are drained exactly when the price reaches a band edge, and a draw past the edge reverts for the taker.",
 	"DEADLINE is always present, and within the request's maxDeadlineSec.",
 	"Amounts stay within the user's stated budget, PER TOKEN, summed across every strategy in the recommendation. Never a token the user did not select.",
 	"The virtual amounts set both the price (their ratio) and the depth (their size). For a pair that should trade near parity, ship equal nominal value on each side — mind that decimals differ, so 10000 USDC is 10000e6 and 10000 USDe is 10000e18.",
@@ -140,6 +161,26 @@ export const TEMPLATES: Template[] = [
 		wrappers: ["FLAT_FEE_AMOUNT_IN_XD"],
 		shape: "constant product with a flat input-side fee; higher edge per fill, fewer fills.",
 	},
+	{
+		id: "banded",
+		label: "banded · concentrate around the current price",
+		describesIntent:
+			"make a market on a pair I expect to stay near its current price — quote deep, accept that a move past the band exhausts me",
+		curve: "XYC_SWAP_XD",
+		wrappers: ["XYC_CONCENTRATE_GROW_LIQUIDITY_2D"],
+		shape:
+			"constant product concentrated into a band around the shipped price; same commitment, " +
+			"multiplied depth, inventory drains at the band edges. The one shape with sustained " +
+			"fills on real Base. Proven to fill on the fork.",
+	},
+	{
+		id: "banded-fee",
+		label: "banded + maker fee",
+		describesIntent: "same, but earn a spread on every fill inside the band",
+		curve: "XYC_SWAP_XD",
+		wrappers: ["XYC_CONCENTRATE_GROW_LIQUIDITY_2D", "FLAT_FEE_AMOUNT_IN_XD"],
+		shape: "the banded shape with a flat input-side fee taken on every fill inside the band.",
+	},
 ];
 
 export function grammarPromptBlock(): string {
@@ -150,6 +191,8 @@ export function grammarPromptBlock(): string {
 		"INSTRUCTION SET (this is the COMPLETE menu — nothing else exists on this venue):",
 		"  required on every strategy:",
 		render([DEADLINE]),
+		"  optional band (MUST come before the fee and the curve):",
+		render([BAND]),
 		"  optional wrappers (MUST come before the curve):",
 		render(WRAPPERS),
 		"  curve (EXACTLY ONE, and it goes LAST):",
@@ -173,6 +216,7 @@ export function grammarPromptBlock(): string {
 export function unknownInstructions(): string[] {
 	return [
 		DEADLINE.name,
+		BAND.name,
 		...WRAPPERS.map((i) => i.name),
 		...CURVES.map((i) => i.name),
 		...COMPILER_EMITTED,

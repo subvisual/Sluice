@@ -18,7 +18,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { fullRange, fullRangeWithFee, aquaOrder, shipBytes, strategyHash, toHex } from "./swapvm.ts";
+import { fullRange, fullRangeWithFee, banded, bandedWithFee, aquaOrder, shipBytes, strategyHash, toHex } from "./swapvm.ts";
 import { SWAPVM_ROUTER_VERSION } from "./opcodes.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -32,7 +32,15 @@ export type StrategyFixture = {
 	name: string;
 	description: string;
 	template: string;
-	inputs: { maker: string; salt: string; deadline: number; feeBps?: number; tokens: string[]; amounts: string[] };
+	inputs: {
+		maker: string;
+		salt: string;
+		deadline: number;
+		feeBps?: number;
+		bandBps?: number;
+		tokens: string[];
+		amounts: string[];
+	};
 	outputs: { traits: string; program: string; strategy: string; strategyHash: string };
 };
 
@@ -109,6 +117,75 @@ export function buildFixtures(): { routerVersion: string; strategies: StrategyFi
 				feeBps,
 				tokens: [usdc, usde],
 				amounts: ["10000000000", "10000000000000000000000"],
+			},
+			outputs: {
+				traits: `0x${order.traits.toString(16)}`,
+				program: toHex(program),
+				strategy: toHex(shipBytes(order)),
+				strategyHash: strategyHash(order),
+			},
+		});
+	}
+
+	{
+		const name = "usdc-usde-banded";
+		const salt = fixtureSalt(name);
+		// 1% geometric band. Same 1e9 base as feeBps.
+		const bandBps = 10_000_000;
+		const amounts: [bigint, bigint] = [10_000_000_000n, 10_000_000_000_000_000_000_000n];
+		const program = banded({ salt, deadline, bandBps, tokens: [usdc, usde], amounts });
+		const order = aquaOrder(maker, program);
+
+		strategies.push({
+			name,
+			description:
+				"The full-range commitment concentrated into a 1% geometric band around 1:1. " +
+				"Same amounts as the full-range fixture, ~200x the quoted depth: the fork test " +
+				"asserts a 100 USDC fill returns strictly more USDe than the full-range fill, " +
+				"which is the whole point of the band. The deltas are in the program, derived " +
+				"from the amounts — ship different amounts and the band sits at the wrong price.",
+			template: "banded",
+			inputs: {
+				maker,
+				salt: salt.toString(),
+				deadline,
+				bandBps,
+				tokens: [usdc, usde],
+				amounts: amounts.map((a) => a.toString()),
+			},
+			outputs: {
+				traits: `0x${order.traits.toString(16)}`,
+				program: toHex(program),
+				strategy: toHex(shipBytes(order)),
+				strategyHash: strategyHash(order),
+			},
+		});
+	}
+
+	{
+		const name = "usdc-usde-banded-fee";
+		const salt = fixtureSalt(name);
+		const bandBps = 10_000_000;
+		const feeBps = 500_000;
+		const amounts: [bigint, bigint] = [10_000_000_000n, 10_000_000_000_000_000_000_000n];
+		const program = bandedWithFee({ salt, deadline, bandBps, feeBps, tokens: [usdc, usde], amounts });
+		const order = aquaOrder(maker, program);
+
+		strategies.push({
+			name,
+			description:
+				"The banded shape with a 0.05% input-side maker fee. Exists so the composed " +
+				"band+fee bytes are shipped and filled on the fork like each piece alone — the " +
+				"nesting (band wraps fee wraps curve) is what the G3 test proves here.",
+			template: "banded-fee",
+			inputs: {
+				maker,
+				salt: salt.toString(),
+				deadline,
+				feeBps,
+				bandBps,
+				tokens: [usdc, usde],
+				amounts: amounts.map((a) => a.toString()),
 			},
 			outputs: {
 				traits: `0x${order.traits.toString(16)}`,

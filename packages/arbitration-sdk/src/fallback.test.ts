@@ -61,10 +61,28 @@ test("the fallback is deterministic — same inputs, identical output", () => {
 });
 
 test("selectTemplate routes fee/spread intent to the fee template", () => {
-	assert.equal(
-		selectTemplate("earn fees on ETH/USDC, rangebound this week").id,
-		"full-range-fee",
-	);
+	assert.equal(selectTemplate("earn a spread on every fill").id, "full-range-fee");
+});
+
+test("selectTemplate routes band intent to the banded templates", () => {
+	assert.equal(selectTemplate("make a tight market around the current price").id, "banded");
+	// Fee + band compose: "rangebound" was the old tight-clmm intent verbatim,
+	// and now the venue can actually express it.
+	assert.equal(selectTemplate("earn fees on ETH/USDC, rangebound this week").id, "banded-fee");
+});
+
+test("a banded fallback carries the band slot with bandBps, and still parses", () => {
+	const bandReq = { ...req, prompt: "concentrate around the current price" };
+	const rec = templateFallback(bandReq, stubContext());
+	const s = rec.strategies[0];
+	assert.equal(s.templateId, "banded");
+	assert.equal(s.slots.band?.instruction, "XYC_CONCENTRATE_GROW_LIQUIDITY_2D");
+	assert.equal(typeof s.slots.band?.params?.bandBps, "number");
+	const parsed = parseRecommendation(JSON.stringify(rec), bandReq);
+	assert.equal(parsed.ok, true);
+	assert.deepEqual(parsed.errors, []);
+	// The band instruction is on the menu, so no "not in the grammar" note.
+	assert.ok(!parsed.notes.some((n) => n.includes("band")), `unexpected note: ${parsed.notes}`);
 });
 
 test("an intent this venue cannot express falls back to the plain curve", () => {

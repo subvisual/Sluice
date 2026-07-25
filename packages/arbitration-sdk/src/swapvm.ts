@@ -113,6 +113,89 @@ export function flatFeeAmountIn(feeBps: number): Instruction {
 	return { opcode: op("FLAT_FEE_AMOUNT_IN_XD"), args: uintBytes(BigInt(feeBps), 4) };
 }
 
+// `_xycConcentrateGrowLiquidity2D` — grows both effective balances by a delta
+// before the curve runs, concentrating the shipped liquidity around the shipped
+// price. args are deltaLt || deltaGt (32 bytes each), keyed by TOKEN SORT ORDER:
+// the deployed build2D/parse2D map them back by comparing tokenIn < tokenOut at
+// swap time, so the encoder sorts here and callers pass deltas aligned with the
+// token order they were computed for.
+//
+// It is a wrapper like the fee (it calls ctx.runLoop() and post-processes), so
+// it MUST precede the curve, and it requires the curve to have computed both
+// amounts — a program ending in this instruction reverts. It also persists a
+// per-orderHash scale on the router (deltaScales), which fresh salted bytes
+// start clean — one more reason every strategy carries a salt.
+export function xycConcentrateGrowLiquidity2D(
+	tokenA: string,
+	tokenB: string,
+	deltaA: bigint,
+	deltaB: bigint,
+): Instruction {
+	const a = BigInt(tokenA);
+	const b = BigInt(tokenB);
+	if (a === b) throw new Error(`concentrate needs two distinct tokens, got ${tokenA} twice`);
+	const [deltaLt, deltaGt] = a < b ? [deltaA, deltaB] : [deltaB, deltaA];
+	const args = new Uint8Array(64);
+	args.set(uintBytes(deltaLt, 32), 0);
+	args.set(uintBytes(deltaGt, 32), 32);
+	return { opcode: op("XYC_CONCENTRATE_GROW_LIQUIDITY_2D"), args };
+}
+
+// --- band arithmetic ---------------------------------------------------------
+
+const ONE = 10n ** 18n; // the deployed XYCConcentrate's fixed point
+const SQRT_ONE = 10n ** 9n;
+
+// Floor integer square root, matching OZ Math.sqrt semantics.
+function isqrt(n: bigint): bigint {
+	if (n < 0n) throw new Error(`isqrt of negative: ${n}`);
+	if (n < 2n) return n;
+	let x0 = n;
+	let x1 = (n + 1n) / 2n;
+	while (x1 < x0) {
+		x0 = x1;
+		x1 = (x1 + n / x1) / 2n;
+	}
+	return x0;
+}
+
+// The deltas that concentrate `amounts` into a GEOMETRIC band around the
+// shipped price: priceMax/price = price/priceMin = 1 + bandBps/1e9.
+//
+// This is the deployed XYCConcentrateArgsBuilder.computeDeltas specialised to
+// that band: with both sqrt ratios equal, deltaA and deltaB are the same
+// multiple of their amounts, so the grown pool still quotes EXACTLY the shipped
+// ratio. An arithmetic band (price ± x%) makes the two multipliers differ and
+// silently shifts the quoted price off the shipped ratio by ~x% — that is the
+// unsettled arithmetic that kept this instruction in the grammar's OMITTED
+// list, and why this helper exists instead of taking raw priceMin/priceMax.
+//
+// The real inventory drains exactly when the price reaches a band edge; a draw
+// past the edge exceeds the shipped virtual amount and the fill reverts in
+// Aqua's pull. Ceilings, not promises — F1 §2.
+export function bandDeltas(
+	amountA: bigint,
+	amountB: bigint,
+	bandBps: number,
+): { deltaA: bigint; deltaB: bigint } {
+	if (!Number.isInteger(bandBps) || bandBps <= 0 || bandBps >= FEE_BPS_ONE) {
+		throw new Error(`bandBps must be an integer in (0, ${FEE_BPS_ONE}): got ${bandBps}`);
+	}
+	if (amountA <= 0n || amountB <= 0n) {
+		throw new Error(`band deltas need both amounts positive: got ${amountA}, ${amountB}`);
+	}
+	const bps = BigInt(FEE_BPS_ONE);
+	// sqrt(1 + band) in 1e18 fixed point, floor — same op order as the deployed
+	// computeDeltas: Math.sqrt(ratio1e18) * SQRT_ONE.
+	const sqrtGrow = isqrt((ONE * (bps + BigInt(bandBps))) / bps) * SQRT_ONE;
+	const denom = sqrtGrow - ONE;
+	if (denom <= 0n) {
+		// Flooring ate the whole band. Only reachable for bandBps < 3 (< 3e-7 %).
+		throw new Error(`bandBps ${bandBps} is too narrow to represent in the VM's fixed point`);
+	}
+	return { deltaA: (amountA * ONE) / denom, deltaB: (amountB * ONE) / denom };
+}
+
 // --- templates ---------------------------------------------------------------
 
 export type FullRangeParams = { salt: bigint; deadline: number };
@@ -134,6 +217,44 @@ export function fullRange(p: FullRangeParams): Uint8Array {
 
 export function fullRangeWithFee(p: FullRangeParams & { feeBps: number }): Uint8Array {
 	return encodeProgram([salt(p.salt), deadline(p.deadline), flatFeeAmountIn(p.feeBps), xycSwap()]);
+}
+
+export type BandedParams = FullRangeParams & {
+	bandBps: number; // geometric half-width, out of FEE_BPS_ONE (1e9) like feeBps
+	tokens: [string, string];
+	amounts: [bigint, bigint]; // raw units, aligned with tokens
+};
+
+// Concentrate the shipped liquidity into a band around the shipped price: same
+// price and same real commitment as full-range, but the depth a taker quotes
+// against is multiplied — tighter band, deeper quote, and the inventory drains
+// exactly at the band edges.
+//
+// Unlike full-range, the PROGRAM depends on the ship amounts: the concentrate
+// deltas are computed from them, so the amounts passed to ship() must be the
+// amounts compiled here or the band sits around the wrong price. The band goes
+// before the fee, and both before the curve — each wraps what follows, and the
+// VM reverts any other order. Matches the only shape with sustained fills on
+// real Base (SALT + CONCENTRATE_2D + XYC, 14 of the venue's 19 fills).
+export function banded(p: BandedParams): Uint8Array {
+	const { deltaA, deltaB } = bandDeltas(p.amounts[0], p.amounts[1], p.bandBps);
+	return encodeProgram([
+		salt(p.salt),
+		deadline(p.deadline),
+		xycConcentrateGrowLiquidity2D(p.tokens[0], p.tokens[1], deltaA, deltaB),
+		xycSwap(),
+	]);
+}
+
+export function bandedWithFee(p: BandedParams & { feeBps: number }): Uint8Array {
+	const { deltaA, deltaB } = bandDeltas(p.amounts[0], p.amounts[1], p.bandBps);
+	return encodeProgram([
+		salt(p.salt),
+		deadline(p.deadline),
+		xycConcentrateGrowLiquidity2D(p.tokens[0], p.tokens[1], deltaA, deltaB),
+		flatFeeAmountIn(p.feeBps),
+		xycSwap(),
+	]);
 }
 
 // --- the Aqua order ----------------------------------------------------------

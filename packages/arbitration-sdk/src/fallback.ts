@@ -24,6 +24,9 @@ import type {
 // TEMPLATE_FALLBACK) and F2 §8.
 /// 0.05%. feeBps is out of 1e9, not 1e4 — see config/opcodes.8453.json.
 const DEFAULT_FEE_BPS = 500_000;
+/// 1%. Same 1e9 base. Wide enough that a stable or slow pair stays inside it
+/// for a while, tight enough that the concentration visibly bites.
+const DEFAULT_BAND_BPS = 10_000_000;
 
 export const FALLBACK_SOURCE = "TEMPLATE_FALLBACK" as const;
 export type RecommendationSource = "ENCLAVE" | typeof FALLBACK_SOURCE;
@@ -35,14 +38,15 @@ const tmpl = (id: string): Template => TEMPLATES.find((t) => t.id === id)!;
 // wrong guess is a suboptimal-but-valid recommendation, never an unsafe one.
 export function selectTemplate(prompt: string): Template {
 	const p = prompt.toLowerCase();
-	// Wanting to earn a spread is the one distinction the current template set
-	// can actually express. Everything else falls back to the plain curve —
-	// which is the honest outcome, because the venue has no limit orders, no
-	// price levels and no oracle adjustment to aim at.
-	if (/(\bfee\b|\bspread\b|\bearn\b|\byield\b|\bincome\b|\bprofit\b|\bcharge\b)/.test(p)) {
-		return tmpl("full-range-fee");
-	}
-	return tmpl("full-range");
+	// Two independent signals, because the template set expresses exactly two
+	// distinctions: earning a spread (fee) and concentrating around the current
+	// price (band). "range" alone is NOT a band signal — "across the whole
+	// range" is the full-range intent — so the band match wants words that only
+	// mean concentration. Everything else falls back to the plain curve.
+	const wantsFee = /(\bfee\b|\bspread\b|\bearn\b|\byield\b|\bincome\b|\bprofit\b|\bcharge\b)/.test(p);
+	const wantsBand = /(\btight\b|\bnarrow\b|concentrat|\bband\b|\brangebound\b|\bstable\b|around the (current )?price)/.test(p);
+	if (wantsBand) return tmpl(wantsFee ? "banded-fee" : "banded");
+	return tmpl(wantsFee ? "full-range-fee" : "full-range");
 }
 
 export function templateFallback(
@@ -55,6 +59,14 @@ export function templateFallback(
 		templateId: t.id,
 		slots: {
 			curve: { instruction: t.curve },
+			...(t.wrappers.includes("XYC_CONCENTRATE_GROW_LIQUIDITY_2D")
+				? {
+						band: {
+							instruction: "XYC_CONCENTRATE_GROW_LIQUIDITY_2D",
+							params: { bandBps: DEFAULT_BAND_BPS },
+						},
+					}
+				: {}),
 			...(t.wrappers.includes("FLAT_FEE_AMOUNT_IN_XD")
 				? { fee: { instruction: "FLAT_FEE_AMOUNT_IN_XD", params: { feeBps: DEFAULT_FEE_BPS } } }
 				: {}),
