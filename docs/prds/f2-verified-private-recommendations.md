@@ -17,37 +17,34 @@ request flow that runs it (Wiring §4).
   provider via `packages/arbitration-sdk` (PR #6). A **stable enclave signer** recovers across
   runs. Captured: chainId **16602**; live chat model **`qwen/qwen2.5-omni-7b`** (provider
   `0xa48f…7836`); TEE signer **`0x83df4B8E…508cF`**; `addLedger(3)` accepted; latency ~1–2.6s.
-- **Load-bearing Gate 0 finding — see "Open decision A" below.** The signed bytes are **not** our
-  text; they are a provider attestation record. This reshapes the on-chain binding and must be
-  resolved before the registry is built.
+- **Load-bearing Gate 0 finding — see "Decision A" below (RESOLVED).** The signed bytes are **not**
+  our text; they are a provider attestation record. The binding redesign this forced is settled:
+  (c) provenance-oracle + (a) trace-side hash. The registry is unblocked.
 
-## Open decision A — the on-chain binding (BLOCKS the registry)
+## Decision A — the on-chain binding · **RESOLVED (2026-07-25): (c) + trace-side (a)**
 
 Gate 0 proved 0G's out-of-band `{ text, signature }` is EIP-191 over a fixed attestation record
 `reqHash:respHash:centralized:aliyun:certHash` — **not** the response text, and `respHash` is over
-a provider-internal representation we cannot reproduce (`sha256`/`keccak256` of the content do not
-match). So the Notion §2–§3 mechanism as drafted (dictate a 3-line `header / user+nonce / JSON`,
-have the enclave sign those exact bytes, read `user`+`nonce` from a fixed-width prefix on-chain via
-`_prefixOf`, `recommendationId = keccak256(signedText)` == our payload) is **not implementable**.
+a provider-internal representation we cannot reproduce. So the original Notion §2–§3 mechanism
+(dictate a 3-line `header / user+nonce / JSON`, sign those exact bytes, read `user`+`nonce` from a
+fixed-width prefix via `_prefixOf`, `recommendationId == our payload hash`) was **not
+implementable** and is dropped.
 
-What survives: `ecrecover(signedText) ∈ isRegisteredSigner` proves **TEE provenance** on-chain;
-`keccak256(signedText)` is a valid per-response anchor. What breaks: on-chain-parseable `user`/
-`nonce`, and a client-computable `recommendationId` that equals our payload hash.
+**Chosen (Issue 1):** **(c) provenance-oracle** on-chain + **(a) trace-side hash** for
+auditability. `(b)` rejected (depends on an unconfirmed request preimage; still not
+on-chain-reproducible). Full reasoning, security claim, and pinned contract shape are in
+**ADR-0001's Resolution section**; Notion §2–§3 updated to match. In one line:
 
-Candidate directions (pick one in Issue 1; then update Notion §2–§3 + ADR-0001):
+- **On-chain (c):** `user`/`nonce` are **committer-supplied args** to `commitRecommendation`;
+  replay enforced in the contract; the enclave signature proves only "a real 0G TEE produced
+  *some* text". `recommendationId = keccak256(signedText)`.
+- **Trace (a):** the trace stores `payloadHash = keccak256(canonicalRecommendation)`, recomputable
+  by anyone holding the decrypted trace to bind our recommendation to the committed record.
+  `recommendationId ≠ payloadHash` now — two distinct hashes.
 
-- **(a) Dual-commit.** Commit our own `keccak256(canonicalRecommendation)` **alongside** 0G's
-  `keccak256(signedText)`; bind them off-chain in the trace. Auditable, not signature-bound.
-- **(b) Request-side provenance.** Carry the recommendation/nonce in the *request*; lean on
-  `reqHash`. Still not on-chain-reproducible.
-- **(c) Provenance-oracle.** Treat 0G purely as a provenance oracle: `user`+`nonce` become
-  **committer-supplied args** to `commitRecommendation`, replay enforced there (not parsed from
-  signed bytes). The enclave signature only proves "a real TEE produced *some* text".
-
-`(c)` is the smallest change to the current contract and keeps the honest claim intact
-(provenance + committer authorisation + per-user replay); `(a)` adds the strongest auditability
-story. Recommend leaning `(c)` + the trace-side hash of `(a)` unless the redesign session says
-otherwise.
+**Still open (external, does not block build):** the 0G-booth check on whether a request/content
+preimage is retrievable — informs (a)'s optional `reqHash` lean and the `targetTeeAddress`
+question (§7). Tracked in ADR-0001.
 
 ## Decisions locked (from the pivot)
 
@@ -83,13 +80,19 @@ otherwise.
 ```solidity
 function registerSigner(address signer)   external onlyOwner;   // enclave key (provenance)
 function registerCommitter(address agent)  external onlyOwner;   // our agent key (authz)
-function commitRecommendation(bytes signedText, bytes sig, /* + fields per Issue 1 */)
-    external onlyCommitter returns (bytes32 recommendationId);
+function commitRecommendation(
+    bytes signedText, bytes sig,          // 0G attestation record (opaque) + EIP-191 sig
+    address user, uint64 nonce,           // committer-supplied (Decision A / (c))
+    bytes32 payloadHash,                  // keccak256(canonicalRecommendation) — trace anchor (a)
+    bytes32[] strategyHashes, bytes32[] templateIds
+) external onlyCommitter returns (bytes32 recommendationId);
 ```
-`ecrecover(toEthSignedMessageHash(signedText), sig) ∈ isRegisteredSigner`; per-user nonce replay;
-`recommendationId = keccak256(signedText)`; emit `RecommendationCommitted(…, strategyHashes, templateIds)`.
-**Exact `user`/`nonce` sourcing is Issue 1's decision** (prefix vs committer-arg). Deploy to the
-Base fork; register signer + committer.
+`ecrecover(toEthSignedMessageHash(signedText), sig) ∈ isRegisteredSigner`; per-user nonce replay
+(`nonce == nonceOf[user] + 1`); `recommendationId = keccak256(signedText)` (distinct from
+`payloadHash`); emit `RecommendationCommitted(user, nonce, recommendationId, signer, payloadHash,
+strategyHashes, templateIds)`. **`user`/`nonce` are committer-supplied args, not parsed from the
+signed bytes** (Decision A resolved — see ADR-0001). Deploy to the Base fork; register signer +
+committer.
 
 ### 2. Recommendation codec (`packages/composer-sdk/src/recommendation.ts`)
 
@@ -151,7 +154,8 @@ after 1–7 are green; first to drop.
 
 ## Open questions — status
 
-- **A. On-chain binding** — the Gate 0 finding above. **Blocks the registry;** Issue 1.
+- **A. On-chain binding** — **RESOLVED** (Issue 1): (c) provenance-oracle + (a) trace-side hash.
+  Registry unblocked. Residual external item: the 0G-booth preimage check (ADR-0001), non-blocking.
 - **Q1. Custom attested image?** Plan NO (0G serves models, not arbitrary code) → reject-and-re-infer;
   never claim in-enclave validator on stage unless running. Ask 0G booth early. *(Notion §11)*
 - **Q2. Per-user trace key derivation** — blocks memory (M5). Default: each user signs to derive
