@@ -205,6 +205,35 @@ describe("handleDocked", () => {
     assert.fieldEquals("AquaProtocol", "aqua", "liveStrategyCount", "1")
   })
 
+  test("Pushed after dock is ignored: the book only sums LIVE strategies", () => {
+    handleDocked(dockedEvent(MAKER, APP, HASH_A))
+
+    // only possible on-chain after an empty/partial dock (strategy still live there);
+    // the index closed it, so don't let the event corrupt the book
+    const push = pushedEvent(MAKER, APP, HASH_A, USDC, N_1K)
+    push.transaction.hash = TX_2
+    handlePushed(push)
+
+    const bid = balanceId(strategyEntityId(MAKER, APP, HASH_A), USDC).toHexString()
+    assert.fieldEquals("StrategyBalance", bid, "virtualBalance", "0")
+    assert.fieldEquals("MakerTokenBook", bookId(MAKER, USDC).toHexString(), "committedVirtual", "0")
+    assert.entityCount("BalanceEvent", 1) // only the original SHIP_FUND
+  })
+
+  test("Pulled after dock is ignored: the book only sums LIVE strategies", () => {
+    handleDocked(dockedEvent(MAKER, APP, HASH_A))
+
+    const pull = pulledEvent(MAKER, APP, HASH_A, USDC, N_1K)
+    pull.transaction.hash = TX_2
+    handlePulled(pull)
+
+    const bid = balanceId(strategyEntityId(MAKER, APP, HASH_A), USDC).toHexString()
+    assert.fieldEquals("StrategyBalance", bid, "virtualBalance", "0")
+    assert.fieldEquals("StrategyBalance", bid, "totalPulled", "0")
+    assert.fieldEquals("MakerTokenBook", bookId(MAKER, USDC).toHexString(), "committedVirtual", "0")
+    assert.entityCount("BalanceEvent", 1) // only the original SHIP_FUND
+  })
+
   test("a duplicate Docked is a no-op: counters don't go negative", () => {
     const dock = dockedEvent(MAKER, APP, HASH_A)
     handleDocked(dock)

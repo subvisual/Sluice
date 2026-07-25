@@ -93,6 +93,9 @@ export function handlePulled(event: Pulled): void {
   const strategyId = strategyEntityId(event.params.maker, event.params.app, event.params.strategyHash)
   const strategy = Strategy.load(strategyId)
   if (strategy == null) return
+  // only reachable after an empty/partial dock (the strategy is still live on-chain);
+  // the index closed it and removed it from the book, so keep its later events out too
+  if (strategy.status == "DOCKED") return
 
   const bid = balanceId(strategyId, event.params.token)
   const balance = StrategyBalance.load(bid)
@@ -127,6 +130,9 @@ export function handlePushed(event: Pushed): void {
   const strategyId = strategyEntityId(event.params.maker, event.params.app, event.params.strategyHash)
   const strategy = Strategy.load(strategyId)
   if (strategy == null) return // strategy predates indexing or was never shipped; nothing to account
+  // only reachable after an empty/partial dock (the strategy is still live on-chain);
+  // the index closed it and removed it from the book, so keep its later events out too
+  if (strategy.status == "DOCKED") return
 
   const token = getOrCreateToken(event.params.token)
   const book = getOrCreateBook(event.params.maker, event.params.token, event.block)

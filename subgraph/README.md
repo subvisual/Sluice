@@ -24,7 +24,7 @@ Mainnet deployment:
 - **Real wallet balances:** The maker's actual token balance is not stored — use a live `eth_call` to `balanceOf(maker)` at query time.
 - **PnL:** Handlers have no price data; profit/loss must be calculated off-chain.
 - **Starved / contention flags:** The subgraph records the numerator (`committedVirtual`). Consumers derive the denominator (real balance) and compute over-commitment ratio = `committedVirtual` ÷ `balanceOf(maker)` off-chain.
-- **Partial docks (known limitation):** `Aqua.dock()` checks the caller-supplied token list inside its loop, so a maker can dock a *subset* of a strategy's tokens (any group whose stored per-token count matches the list length) — or pass an empty list, emitting `Docked` for a still-live strategy while zeroing nothing on-chain. The `Docked` event carries no token list, so these are indistinguishable from a real full dock: the index treats the **first** `Docked` as closing the whole strategy (all balances zeroed, book decremented) and ignores repeats. A partial or empty-list dock therefore diverges from chain state — but only the maker can do this, and only to their own entities.
+- **Partial docks (known limitation):** `Aqua.dock()` checks the caller-supplied token list inside its loop, so a maker can dock a *subset* of a strategy's tokens (any group whose stored per-token count matches the list length) — or pass an empty list, emitting `Docked` for a still-live strategy while zeroing nothing on-chain. The `Docked` event carries no token list, so these are indistinguishable from a real full dock: the index treats the **first** `Docked` as closing the whole strategy (all balances zeroed, book decremented) and ignores repeats — along with any later `Pushed`/`Pulled` for that strategy, so the divergence stays contained to the docked strategy instead of drifting the maker's book. Only the maker can do this, and only to their own entities.
 - **Re-ships with new tokens (handled):** `ship()`'s immutability check is also per-token, so re-shipping an existing hash with a disjoint token set succeeds on-chain and re-emits `Shipped` + funding `Pushed` events (observed in real Base activity). The handler ignores the repeat `Shipped` (no entity overwrite, no double-counting) and records the new tokens' funding as `SHIP_FUND` — a `Pushed` with no prior balance can only be ship funding, since `push()` to a never-funded token reverts (`PushToNonActiveStrategyPrevented`).
 
 ## 3. Entity Model
@@ -85,7 +85,7 @@ npm run build
 npm test
 ```
 
-All tests must pass (12 + 1 continuity test). The continuity test verifies the invariant: `MakerTokenBook.committedVirtual == Σ(virtualBalance)` over LIVE strategies throughout a full lifecycle (ship, fill, ship again, dock).
+All 22 tests must pass. The continuity test verifies the invariant: `MakerTokenBook.committedVirtual == Σ(virtualBalance)` over LIVE strategies throughout a full lifecycle (ship, fill, ship again, dock).
 
 ## 6. Deploying / Other Networks
 
