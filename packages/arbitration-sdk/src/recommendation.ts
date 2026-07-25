@@ -6,7 +6,7 @@
 // or safety — those are out of scope. Unknown opcode names are surfaced as
 // soft notes, not hard failures, because the F1 grammar itself is provisional.
 
-import { SWAP_LOGIC_OPTIONS, INVALIDATION_OPTIONS } from "./grammar.ts";
+import { CURVE_OPTIONS, WRAPPER_OPTIONS, GUARD_OPTIONS } from "./grammar.ts";
 
 export type TokenBudget = {
 	symbol: string;
@@ -24,14 +24,16 @@ export type RecommendationRequest = {
 // A single slot value: an instruction name plus optional parameters.
 export type Slot = { instruction: string; params?: Record<string, unknown> };
 
+// The model's structured output. The slots are the ones that EXIST on the
+// deployed router — there is no balance-setup slot (Aqua supplies balances via
+// ship()), no oracle-adjust slot (no opcode anywhere) and no invalidation slot
+// (no opcode on this router). `salt` is absent because the compiler emits it.
 export type SlotAssignment = {
 	templateId: string;
 	slots: {
-		balances: Slot;
-		fees?: Slot;
-		swapLogic: Slot;
-		oracleAdjust?: Slot;
-		invalidation: Slot;
+		guards?: Slot[];
+		fee?: Slot;
+		curve: Slot;
 		deadline: { deadline: number };
 	};
 	tokens: string[]; // addresses, canonical order
@@ -101,10 +103,10 @@ export function parseRecommendation(
 
 	obj.strategies.forEach((s: any, i: number) => {
 		const at = `strategies[${i}]`;
-		if (!s?.slots?.swapLogic?.instruction)
-			errors.push(`${at}: missing slots.swapLogic.instruction`);
-		if (!s?.slots?.invalidation?.instruction)
-			errors.push(`${at}: missing slots.invalidation.instruction`);
+		// The curve is the only required instruction. There is no balance-setup,
+		// oracle-adjust or invalidation slot on this venue — see grammar.ts.
+		if (!s?.slots?.curve?.instruction)
+			errors.push(`${at}: missing slots.curve.instruction`);
 		if (typeof s?.slots?.deadline?.deadline !== "number")
 			errors.push(`${at}: missing slots.deadline.deadline`);
 
@@ -123,13 +125,22 @@ export function parseRecommendation(
 			}
 		}
 
-		// Soft notes — provisional grammar, so unknown names don't fail the run.
-		const sl = s?.slots?.swapLogic?.instruction;
-		if (sl && !SWAP_LOGIC_OPTIONS.includes(sl))
-			notes.push(`${at}: swapLogic "${sl}" is not in the grammar menu`);
-		const inv = s?.slots?.invalidation?.instruction;
-		if (inv && !INVALIDATION_OPTIONS.includes(inv))
-			notes.push(`${at}: invalidation "${inv}" is not in the grammar menu`);
+		// Soft notes. Names outside the menu are surfaced rather than rejected —
+		// this is a structural parse, not the F2 validator. But a name that is not
+		// on the menu is now a real problem rather than a provisional one: the menu
+		// is the complete instruction set of the deployed router, so anything else
+		// cannot be compiled at all.
+		const curve = s?.slots?.curve?.instruction;
+		if (curve && !CURVE_OPTIONS.includes(curve))
+			notes.push(`${at}: curve "${curve}" is not a curve on this venue`);
+		if (!curve) notes.push(`${at}: no curve — a strategy that computes no amounts cannot fill`);
+		const fee = s?.slots?.fee?.instruction;
+		if (fee && !WRAPPER_OPTIONS.includes(fee))
+			notes.push(`${at}: fee "${fee}" is not in the grammar menu`);
+		for (const g of s?.slots?.guards ?? []) {
+			if (g?.instruction && !GUARD_OPTIONS.includes(g.instruction))
+				notes.push(`${at}: guard "${g.instruction}" is not in the grammar menu`);
+		}
 
 		// Budget containment (soft-ish): flag tokens outside the budget or amounts over it.
 		if (req) {

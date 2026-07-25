@@ -60,19 +60,27 @@ test("the fallback is deterministic — same inputs, identical output", () => {
 	assert.equal(JSON.stringify(a), JSON.stringify(b));
 });
 
-test("selectTemplate matches all-or-nothing intent to T3, rangebound to T1", () => {
-	assert.equal(
-		selectTemplate("sell my ETH if it hits 3500, all at once").id,
-		"T3",
-	);
+test("selectTemplate routes fee/spread intent to the fee template", () => {
 	assert.equal(
 		selectTemplate("earn fees on ETH/USDC, rangebound this week").id,
-		"T1",
+		"full-range-fee",
 	);
 });
 
-test("selectTemplate falls back to T1 for an unrecognised intent", () => {
-	assert.equal(selectTemplate("do something with my tokens").id, "T1");
+test("an intent this venue cannot express falls back to the plain curve", () => {
+	// "sell if it hits X, all at once" is a price level executed all-or-nothing.
+	// The deployed router has no LimitSwap and no oracle adjuster, so there is
+	// nothing to aim at — the honest outcome is the plain curve, not a template
+	// that pretends to honour the level. The old grammar answered this with T3
+	// (_limitSwapOnlyFull1D + _oraclePriceAdjuster1D), which has no opcode.
+	assert.equal(
+		selectTemplate("sell my ETH if it hits 3500, all at once").id,
+		"full-range",
+	);
+});
+
+test("selectTemplate falls back to the plain curve for an unrecognised intent", () => {
+	assert.equal(selectTemplate("do something with my tokens").id, "full-range");
 });
 
 test("FALLBACK_SOURCE is the labelled, non-model source", () => {
