@@ -1,42 +1,88 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useMemo, useRef, useState } from "react";
 import type { Address } from "viem";
 import { useConnection } from "wagmi";
 import { parseAmount } from "@/lib/amount";
+import { useBook } from "@/lib/book";
 import { EXPECTED_CHAIN_ID, REQUEST_DEFAULTS } from "@/lib/compose/constants";
-import { buildComposePrompt } from "@/lib/compose/prompt";
-import { buildRecommendationRequest } from "@/lib/compose/request";
+import {
+  buildRecommendationRequest,
+  type RequestIssue,
+} from "@/lib/compose/request";
+import {
+  COMPOSE_STEPS,
+  composeStub,
+  toPositions,
+  type StubRecommendation,
+  type StubStrategy,
+} from "@/lib/compose/stub-composer";
 import type { TokenSelection } from "@/lib/compose/types";
 import { TOKENS } from "@/lib/tokens";
 import { useTokenBalances } from "@/lib/use-token-balances";
-import { ConnectButton } from "./connect-button";
+import { ProvenanceChip, RiskChip } from "./chips";
 import { PromptBox } from "./prompt-box";
-import { RequestPreview } from "./request-preview";
+import { SlotTable } from "./slot-table";
 import { TokenPicker, type PickerRow } from "./token-picker";
 
 /**
- * Compose — Wiring §6, screen 1 of 4.
+ * Compose — "this is the entire input: a sentence and a budget."
  *
- * Track B item 2: the app shell against a STUBBED composer. It builds the
- * request envelope and assembles the prompt, and stops there. Nothing is sent,
- * nothing is signed, nothing touches a chain.
+ * Validation is `buildRecommendationRequest()`, not re-derived here; the only
+ * screen-level check is MALFORMED (an unparseable amount never becomes a
+ * bigint, so the builder cannot see it). The composer round trip is stubbed —
+ * see `stub-composer.ts` for exactly what is real and what is fixture.
  */
+
+type Phase = "idle" | "composing" | "done";
+
 export function ComposeScreen() {
+  const router = useRouter();
+  const { ship } = useBook();
   const { address, chainId, isConnected } = useConnection();
   const { balances, isLoading: balancesLoading } = useTokenBalances(address);
 
   const [prompt, setPrompt] = useState("");
   const [rows, setRows] = useState<Record<Address, PickerRow>>({});
-  const [revealed, setRevealed] = useState(false);
+  const [phase, setPhase] = useState<Phase>("idle");
+  const [step, setStep] = useState(0);
+  const [rec, setRec] = useState<StubRecommendation | null>(null);
+  // Any edit invalidates an in-flight or finished run — the request changed.
+  const runRef = useRef(0);
 
+  const invalidate = () => {
+    runRef.current += 1;
+    setPhase("idle");
+    setRec(null);
+  };
+
+  const malformed = useMemo(
+    () =>
+      TOKENS.filter((t) => {
+        const row = rows[t.address];
+        return (
+          row?.selected &&
+          row.input.trim() !== "" &&
+          parseAmount(row.input, t.decimals) === null
+        );
+      }),
+    [rows],
+  );
+
+  // Malformed rows are excluded — there is no bigint to carry them in.
   const selections: TokenSelection[] = useMemo(
     () =>
-      TOKENS.filter((t) => rows[t.address]?.selected).map((t) => ({
+      TOKENS.filter(
+        (t) =>
+          rows[t.address]?.selected &&
+          !malformed.some((m) => m.address === t.address),
+      ).map((t) => ({
         token: t.address,
         amount: parseAmount(rows[t.address]?.input ?? "", t.decimals) ?? 0n,
       })),
-    [rows],
+    [rows, malformed],
   );
 
   const built = useMemo(
@@ -53,88 +99,117 @@ export function ComposeScreen() {
     [address, chainId, prompt, selections, balances],
   );
 
+  const issues: RequestIssue[] = useMemo(() => {
+    const base = built.ok ? [] : built.issues;
+    return [
+      // A malformed row otherwise double-reports as NO_TOKENS.
+      ...(malformed.length > 0
+        ? base.filter((i) => i.code !== "NO_TOKENS")
+        : base),
+      ...malformed.map((t) => ({
+        code: "MALFORMED" as const,
+        message: `${t.symbol}: that is not a number we can read.`,
+      })),
+    ];
+  }, [built, malformed]);
+
+  const ok = built.ok && malformed.length === 0;
+
   // `nonceOf[user] + 1` (I13). RecommendationRegistry is not deployed yet, so
-  // this is a stand-in and is labelled as one in the preview rather than
-  // quietly presented as a real read.
+  // this is a stand-in.
   const nonce = 1;
 
-  const composed = useMemo(
-    () =>
-      built.ok
-        ? buildComposePrompt({
-            request: built.request,
-            tokens: TOKENS,
-            nonce,
-            // F3 is not wired. Passing null makes the prompt say so explicitly
-            // instead of inventing depth and volatility numbers.
-            context: null,
-          })
-        : null,
-    [built],
-  );
+  const compose = async () => {
+    if (!ok || !built.ok) return;
+    const run = ++runRef.current;
+    setPhase("composing");
+    setStep(0);
+    setRec(null);
+    const result = await composeStub({
+      request: built.request,
+      tokens: TOKENS,
+      nonce,
+      onStep: (i) => {
+        if (runRef.current === run) setStep(i);
+      },
+    });
+    if (runRef.current !== run) return;
+    setRec(result);
+    setPhase("done");
+  };
+
+  const shipSet = () => {
+    if (!rec) return;
+    // Real path: one wallet signature over the Multicall, then the book
+    // subgraph picks the positions up. Neither is wired — see stub-composer.
+    ship(toPositions(rec, TOKENS));
+    router.push("/");
+  };
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-6 py-10">
-      <header className="mb-10 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Sluice</h1>
-          <p className="mt-1 text-sm text-muted">
-            Address SwapVM in a sentence. Your tokens never leave your wallet.
-          </p>
-        </div>
-        <ConnectButton />
-      </header>
+    <div className="mx-auto max-w-[1180px]">
+      <Link
+        href="/"
+        className="mb-5 inline-block text-[13px] text-muted transition-colors hover:text-text"
+      >
+        ← Positions
+      </Link>
 
-      <div className="space-y-5">
-        <PromptBox value={prompt} onChange={setPrompt} />
+      <div className="mb-6">
+        <h1 className="text-[28px] leading-[34px] font-semibold tracking-[-0.025em]">
+          New strategy
+        </h1>
+        <p className="mt-1.5 text-[13px] text-muted">
+          This is the entire input: a sentence and a budget.
+        </p>
+      </div>
+
+      <div className="flex max-w-[760px] flex-col gap-4">
+        <PromptBox
+          value={prompt}
+          onChange={(v) => {
+            setPrompt(v);
+            invalidate();
+          }}
+        />
 
         <TokenPicker
           tokens={TOKENS}
           rows={rows}
           balances={balances}
           balancesLoading={balancesLoading && isConnected}
-          onChange={(token, row) =>
-            setRows((prev) => ({ ...prev, [token]: row }))
-          }
+          onChange={(token, row) => {
+            setRows((prev) => ({ ...prev, [token]: row }));
+            invalidate();
+          }}
         />
 
-        <section className="rounded-xl border border-border bg-surface p-5">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="text-xs text-muted">
-              <span className="mr-4">
-                maxStrategies{" "}
-                <span className="font-mono text-foreground">
-                  {REQUEST_DEFAULTS.maxStrategies}
-                </span>
-              </span>
-              <span className="mr-4">
-                maxDeadline{" "}
-                <span className="font-mono text-foreground">
-                  {REQUEST_DEFAULTS.maxDeadlineSec / 86400}d
-                </span>
-              </span>
-              <span>
-                retries{" "}
-                <span className="font-mono text-foreground">
-                  {REQUEST_DEFAULTS.maxInferenceRetries}
-                </span>
-              </span>
-            </div>
-
-            <button
-              disabled={!built.ok}
-              onClick={() => setRevealed(true)}
-              className="rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Build request
-            </button>
+        <section className="rounded-[18px] border border-glass-line bg-card p-6 shadow-[var(--shadow-sm)]">
+          <h3 className="mb-3.5 font-mono text-[10.5px] tracking-[0.09em] text-muted-2">
+            REQUEST LIMITS · READ-ONLY
+          </h3>
+          <div className="flex flex-col gap-2.5">
+            <LimitRow label="maxStrategies" value={String(REQUEST_DEFAULTS.maxStrategies)} />
+            <LimitRow label="maxDeadline" value={`${REQUEST_DEFAULTS.maxDeadlineSec / 86400}d`} />
+            <LimitRow label="retries" value={String(REQUEST_DEFAULTS.maxInferenceRetries)} />
           </div>
 
-          {!built.ok && built.issues.length > 0 && (
-            <ul className="mt-4 space-y-1 border-t border-border pt-4">
-              {built.issues.map((issue) => (
-                <li key={issue.code + issue.message} className="text-xs text-muted">
-                  <span className="mr-2 font-mono text-[10px] text-muted/70">
+          <button
+            disabled={!ok || phase === "composing"}
+            onClick={compose}
+            className="mt-5 w-full rounded-lg bg-ink px-5 py-[13px] text-[15px] font-medium text-white shadow-[var(--shadow)] transition-colors hover:bg-ink-2 disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted disabled:shadow-[inset_0_0_0_1px_var(--border)]"
+          >
+            {phase === "composing" ? "Composing…" : "Compose"}
+          </button>
+
+          {issues.length > 0 && (
+            <ul className="mt-4 flex flex-col gap-[7px] border-t border-border pt-4">
+              {issues.map((issue) => (
+                <li
+                  key={issue.code + issue.message}
+                  className="text-xs leading-normal text-muted"
+                >
+                  <span className="mr-2 font-mono text-[10px] text-muted-3">
                     {issue.code}
                   </span>
                   {issue.message}
@@ -144,20 +219,190 @@ export function ComposeScreen() {
           )}
         </section>
 
-        {revealed && built.ok && composed && (
-          <RequestPreview
-            request={built.request}
-            prompt={composed}
-            nonce={nonce}
-          />
-        )}
+        {phase === "composing" && <ComposingCard step={step} />}
       </div>
 
-      <footer className="mt-10 border-t border-border pt-5 text-xs leading-relaxed text-muted">
-        Not wired yet: sealed inference (F2), the deterministic gate I1–I14, market
-        context and the user&apos;s book (F3), and both transactions. This screen
-        stops at the assembled prompt.
-      </footer>
-    </main>
+      {phase === "done" && rec && (
+        <RecommendationSet
+          rec={rec}
+          onDecline={invalidate}
+          onShip={shipSet}
+        />
+      )}
+    </div>
+  );
+}
+
+function LimitRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="text-[13px] text-muted">{label}</span>
+      <span className="font-mono text-[13px] tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+/* ----------------------------------------------------------- composing */
+
+function ComposingCard({ step }: { step: number }) {
+  return (
+    <section className="rounded-[18px] border border-glass-line bg-card p-6 shadow-[var(--shadow-sm)]">
+      <h3 className="mb-4 font-mono text-[10.5px] tracking-[0.09em] text-aqua-text">
+        COMPOSING · SEALED
+      </h3>
+      <div className="flex flex-col gap-3.5">
+        {COMPOSE_STEPS.map((s, i) => {
+          const done = i < step;
+          const current = i === step;
+          return (
+            <div key={s.label} className="flex items-start gap-3">
+              <span
+                className={`flex h-5 w-5 flex-none items-center justify-center rounded-full font-mono text-[11px] ${
+                  done
+                    ? "bg-aqua-soft text-aqua-text"
+                    : current
+                      ? "animate-step bg-surface-2 text-aqua-text"
+                      : "bg-surface-2 text-muted-3"
+                }`}
+              >
+                {done ? "✓" : current ? "›" : "·"}
+              </span>
+              <div className="min-w-0">
+                <div
+                  className={`text-[13.5px] ${
+                    done || current ? "text-text" : "text-muted-3"
+                  }`}
+                >
+                  {s.label}
+                </div>
+                <div className="mt-[3px] font-mono text-[10.5px] leading-normal text-muted-3">
+                  {s.detail}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-[18px] text-[11.5px] leading-relaxed text-muted-3">
+        Inference runs inside the enclave. The response is signed there; a
+        deterministic validator checks it before you ever see it.
+      </p>
+    </section>
+  );
+}
+
+/* -------------------------------------------------------------- results */
+
+function RecommendationSet({
+  rec,
+  onDecline,
+  onShip,
+}: {
+  rec: StubRecommendation;
+  onDecline: () => void;
+  onShip: () => void;
+}) {
+  const n = rec.strategies.length;
+
+  return (
+    <section className="mt-8 animate-fade">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold tracking-[-0.02em]">
+            Recommendation · {n} {n === 1 ? "strategy" : "strategies"}
+          </h2>
+          <p className="mt-[5px] text-[12.5px] text-muted">
+            {rec.provenance === "ENCLAVE"
+              ? "Signed in the enclave and validated. Accept the set and it ships as one signature."
+              : "Composed from a template seed — sealed inference is stubbed in this build. Accept the set and it ships as one signature."}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <ProvenanceChip provenance={rec.provenance} />
+          <span className="rounded-md border border-border px-2.5 py-[5px] font-mono text-[10px] text-muted">
+            nonce <span className="text-text">{rec.nonce}</span>
+          </span>
+        </div>
+      </div>
+
+      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(400px,1fr))]">
+        {rec.strategies.map((s) => (
+          <RecommendationCard key={s.templateId} strategy={s} />
+        ))}
+      </div>
+
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-[18px] border border-glass-line bg-card px-6 py-5 shadow-[var(--shadow-sm)]">
+        <div>
+          <p className="text-[13.5px] text-text-2">
+            {n === 1 ? "The strategy ships" : n === 2 ? "Both strategies ship" : `All ${n} strategies ship`}{" "}
+            in a single{" "}
+            <span className="font-mono text-[12.5px]">Multicall</span> — one
+            signature.
+          </p>
+          {/* Declining is a normal outcome — never styled as failure. */}
+          <p className="mt-[5px] text-xs text-muted-3">
+            Declining is a normal outcome; nothing has been sent anywhere yet.
+          </p>
+        </div>
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={onDecline}
+            className="rounded-[10px] border border-glass-line bg-card-2 px-[18px] py-3 text-sm text-muted shadow-[var(--shadow-sm)] transition-colors hover:border-muted hover:text-text"
+          >
+            Decline
+          </button>
+          <button
+            onClick={onShip}
+            className="rounded-[10px] bg-ink px-6 py-[13px] text-[15px] font-medium text-white shadow-[var(--shadow)] transition-colors hover:bg-ink-2"
+          >
+            Ship — 1 signature
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function RecommendationCard({ strategy }: { strategy: StubStrategy }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="flex flex-col gap-4 rounded-[18px] border border-glass-line bg-card p-[22px] shadow-[var(--shadow-sm)]">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="font-mono text-[11px] text-muted">
+            {strategy.templateLabel}
+          </div>
+          <p className="mt-2 text-[15px] leading-[1.55] text-pretty">
+            {strategy.description}
+          </p>
+        </div>
+        <RiskChip risk={strategy.risk} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 border-t border-hairline pt-4">
+        {strategy.facts.map((fact) => (
+          <div key={fact.label}>
+            <div className="font-mono text-[10px] tracking-[0.06em] text-muted-2">
+              {fact.label}
+            </div>
+            <div className="mt-[5px] font-mono text-sm tabular-nums">
+              {fact.value}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="flex items-center justify-between gap-2.5 rounded-lg border border-border bg-surface-2 px-3.5 py-2.5 text-[12.5px] text-text-2 transition-colors hover:border-muted"
+      >
+        <span>Why this</span>
+        <span className="font-mono text-[11px] text-muted">
+          {expanded ? "−" : "+"}
+        </span>
+      </button>
+      {expanded && <SlotTable slots={strategy.slots} variant="card" />}
+    </div>
   );
 }

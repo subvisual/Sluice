@@ -20,7 +20,13 @@ export type RequestIssue = {
     | "EMPTY_PROMPT"
     | "NO_TOKENS"
     | "ZERO_AMOUNT"
-    | "OVER_BALANCE";
+    | "OVER_BALANCE"
+    /**
+     * Emitted by the screen, not this builder: an unparseable amount never
+     * reaches `selections` (there is no bigint to carry it in), so the
+     * component reports it against the raw input.
+     */
+    | "MALFORMED";
   message: string;
 };
 

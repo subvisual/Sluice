@@ -1,36 +1,144 @@
 @import "tailwindcss";
 
+/*
+ * "Mid ocean" palette from docs/design_handoff_sluice_redesign/README.md.
+ * Colors, radii and shadows are final — measured for AA contrast, not guessed.
+ * In particular: --aqua / --warn are FILL colors; small text, chips, eyebrows
+ * and links must use --aqua-text / --warn-text (the bright pair fails AA at
+ * 9–12px on white).
+ */
 :root {
-  --background: #08090c;
-  --surface: #0e1015;
-  --surface-2: #141821;
-  --border: #232936;
-  --foreground: #e8eaf0;
-  --muted: #8b93a7;
-  --accent: #4ade9b;
-  --accent-dim: #1c3d30;
-  --warn: #f0b429;
-  --danger: #f87171;
+  /* desk + glass shell */
+  --desk-1: #b9d3ea;
+  --desk-2: #7ea8cf;
+  --desk-3: #9dc0dd;
+  --glass: rgba(255, 255, 255, 0.46);
+  --glass-2: rgba(255, 255, 255, 0.6);
+  --glass-3: rgba(255, 255, 255, 0.34);
+  --glass-line: rgba(255, 255, 255, 0.72);
+  --glass-edge: rgba(255, 255, 255, 0.55);
+  --sheet: rgba(255, 255, 255, 0.94);
+
+  /* surfaces */
+  --page: #f2f6f8;
+  --surface: #ffffff;
+  --surface-2: #eaf1f5;
+  --card: #ffffff;
+  --card-2: rgba(255, 255, 255, 0.72);
+  --border: #d7e2e9;
+  --hairline: #e8eef2;
+  --track: #e3ebf1;
+  --track-2: #b6c8d3;
+  --slot-line: #c2d3dd;
+
+  /* text */
+  --text: #0b2233;
+  --text-2: #33505f;
+  --muted: #42596a;
+  --muted-2: #556b7a;
+  --muted-3: #5f7382;
+
+  /* accent — aqua carries primary-signal duty, ink carries primary actions */
+  --aqua: #0d8ba6;
+  --aqua-text: #096174;
+  --aqua-soft: #e2f2f7;
+  --aqua-line: #a4d5e3;
+  --ink: #12293c;
+  --ink-2: #1d3c53;
+
+  /* status */
+  --warn: #a9762a;
+  --warn-text: #7d5518;
+  --warn-soft: #f9f0dd;
+  --warn-line: #e3cca1;
+  --danger: #b93f34;
+  --danger-soft: #fbe9e6;
+  --danger-line: #e9b6ae;
+
+  --scrim: rgba(9, 36, 50, 0.38);
+
+  --shadow-sm: 0 1px 2px rgba(16, 50, 72, 0.06);
+  --shadow: 0 6px 20px rgba(16, 50, 72, 0.1);
+  --shadow-lg: 0 24px 60px rgba(11, 38, 56, 0.22);
 }
 
 @theme inline {
-  --color-background: var(--background);
+  --color-page: var(--page);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-card: var(--card);
+  --color-card-2: var(--card-2);
   --color-border: var(--border);
-  --color-foreground: var(--foreground);
+  --color-hairline: var(--hairline);
+  --color-track: var(--track);
+  --color-track-2: var(--track-2);
+  --color-slot-line: var(--slot-line);
+  --color-glass: var(--glass);
+  --color-glass-2: var(--glass-2);
+  --color-glass-3: var(--glass-3);
+  --color-glass-line: var(--glass-line);
+  --color-glass-edge: var(--glass-edge);
+  --color-sheet: var(--sheet);
+  --color-text: var(--text);
+  --color-text-2: var(--text-2);
   --color-muted: var(--muted);
-  --color-accent: var(--accent);
-  --color-accent-dim: var(--accent-dim);
+  --color-muted-2: var(--muted-2);
+  --color-muted-3: var(--muted-3);
+  --color-aqua: var(--aqua);
+  --color-aqua-text: var(--aqua-text);
+  --color-aqua-soft: var(--aqua-soft);
+  --color-aqua-line: var(--aqua-line);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
   --color-warn: var(--warn);
+  --color-warn-text: var(--warn-text);
+  --color-warn-soft: var(--warn-soft);
+  --color-warn-line: var(--warn-line);
   --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-line: var(--danger-line);
+  --color-scrim: var(--scrim);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --animate-step: sl-pulse 1.1s ease-in-out infinite;
+  --animate-reading: sl-pulse 1.4s ease-in-out infinite;
+  --animate-sheet: sl-panel 0.22s ease;
+  --animate-fade: sl-fade 0.4s ease;
+}
+
+@keyframes sl-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes sl-panel {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes sl-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--desk-2);
+  color: var(--text);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
@@ -41,5 +149,10 @@ input[type="text"].amount {
 }
 
 ::selection {
-  background: var(--accent-dim);
+  background: var(--aqua-soft);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
 }

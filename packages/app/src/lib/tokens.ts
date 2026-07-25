@@ -21,3 +21,8 @@ export const CONFIG_CHAIN_ID = addresses.chainId;
 export function tokenBy(address: Address): TokenMeta | undefined {
   return TOKENS.find((t) => t.address.toLowerCase() === address.toLowerCase());
 }
+
+/** Display-side lookup (pair labels carry symbols, not addresses). */
+export function tokenBySymbol(symbol: string): TokenMeta | undefined {
+  return TOKENS.find((t) => t.symbol === symbol);
+}

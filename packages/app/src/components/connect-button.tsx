@@ -19,19 +19,19 @@ export function ConnectButton() {
   if (isConnected && address) {
     const wrongChain = chainId !== EXPECTED_CHAIN_ID;
     return (
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
         {wrongChain && (
-          <span className="rounded-md border border-danger/40 bg-danger/10 px-2 py-1 text-xs text-danger">
+          <span className="rounded-md border border-danger-line bg-danger-soft px-2 py-1 text-xs text-danger">
             chain {chainId} — expected {EXPECTED_CHAIN_ID}
           </span>
         )}
         <div className="text-right">
-          <div className="font-mono text-sm">{short(address)}</div>
-          <div className="text-[11px] text-muted">{RPC_URL}</div>
+          <div className="font-mono text-[13px] text-text">{short(address)}</div>
+          <div className="text-[10px] text-muted-3">{RPC_URL}</div>
         </div>
         <button
           onClick={() => disconnect.mutate({})}
-          className="rounded-md border border-border px-3 py-1.5 text-sm text-muted transition-colors hover:border-muted hover:text-foreground"
+          className="rounded-[9px] border border-glass-line bg-card-2 px-[13px] py-[7px] text-[13px] text-muted shadow-[var(--shadow-sm)] transition-colors hover:text-text"
         >
           Disconnect
         </button>
@@ -56,7 +56,7 @@ export function ConnectButton() {
           key={connector.uid}
           disabled={busy}
           onClick={() => connect.mutate({ connector })}
-          className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="rounded-[10px] bg-ink px-[18px] py-2.5 text-[13px] font-medium text-white shadow-[var(--shadow)] transition-colors hover:bg-ink-2 disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted disabled:shadow-[inset_0_0_0_1px_var(--border)]"
         >
           {busy ? "Connecting…" : `Connect ${connector.name}`}
         </button>

@@ -1,5 +1,5 @@
-import { ComposeScreen } from "@/components/compose-screen";
+import { Dashboard } from "@/components/dashboard";
 
 export default function Page() {
-  return <ComposeScreen />;
+  return <Dashboard />;
 }
