@@ -9,8 +9,5 @@ evm_version = "cancun"
 # root rather than being duplicated here. Read-only.
 fs_permissions = [{ access = "read", path = "../config" }]
 
-[rpc_endpoints]
-base = "${SLUICE_RPC_URL}"
-
 [fmt]
 line_length = 120

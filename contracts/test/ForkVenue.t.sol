@@ -32,11 +32,18 @@ interface IERC5267 {
 ///         depends on getting that right.
 ///
 ///         Run:
-///           cd contracts && SLUICE_RPC_URL=<base rpc> forge test
+///           cd contracts && forge test
+///
+///         The RPC comes from SLUICE_RPC_URL when set, falling back to Base's public
+///         endpoint so this runs with no setup. Note that Foundry reads .env from its own
+///         project root — contracts/ — not the repo root; see .env.example.
 ///
 ///         Needs no funding, no private key and no shipped strategy — everything here is
 ///         a read against the pinned fork block in config/addresses.8453.json.
 contract ForkVenueTest is Test {
+    /// @dev Rate-limits. Fine for these reads, not for the taker driver.
+    string internal constant PUBLIC_BASE_RPC = "https://mainnet.base.org";
+
     address internal aqua;
     address internal router;
     address internal weth;
@@ -51,7 +58,7 @@ contract ForkVenueTest is Test {
         usdc = vm.parseJsonAddress(cfg, ".tokens.USDC");
         forkBlock = vm.parseJsonUint(cfg, ".forkBlock");
 
-        vm.createSelectFork(vm.rpcUrl("base"), forkBlock);
+        vm.createSelectFork(vm.envOr("SLUICE_RPC_URL", PUBLIC_BASE_RPC), forkBlock);
     }
 
     /// @notice The fork is pinned where we said it is.
