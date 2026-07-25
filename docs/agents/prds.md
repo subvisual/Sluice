@@ -10,9 +10,9 @@ One PRD per feature, named with the slug of the Notion feature it implements:
 
 | Slug | Notion page |
 | --- | --- |
-| `f1-over-committed-book` | F1 — The Over-Committed Book (1inch Aqua + SwapVM) |
-| `f2-verified-private-decisions` | F2 — Verified Private Decisions (0G) |
-| `f3-agents-eyes` | F3 — The Agent's Eyes (The Graph) |
+| `f1-aqua-strategy-vm` | F1 — Aqua & the Strategy VM (1inch Aqua + SwapVM) |
+| `f2-verified-private-recommendations` | F2 — Verified Private Recommendations (0G) |
+| `f3-market-book-context` | F3 — Market & Book Context (The Graph) |
 | `wiring-delivery` | Wiring & Delivery |
 
 URLs are in `CLAUDE.md` and in each `docs/features/<slug>/README.md`.

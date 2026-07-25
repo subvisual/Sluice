@@ -35,11 +35,11 @@ terms or decisions actually get resolved.
 │   ├── adr/                               ← cross-cutting decisions
 │   ├── agents/                            ← this file + prds.md
 │   ├── features/
-│   │   ├── f1-over-committed-book/
+│   │   ├── f1-aqua-strategy-vm/
 │   │   │   ├── README.md                  ← Notion link + local scope
 │   │   │   └── adr/                       ← feature-scoped decisions
-│   │   ├── f2-verified-private-decisions/
-│   │   ├── f3-agents-eyes/
+│   │   ├── f2-verified-private-recommendations/
+│   │   ├── f3-market-book-context/
 │   │   └── wiring-delivery/
 │   └── prds/                              ← <slug>.md + <slug>-issues.md
 └── src/
@@ -56,9 +56,11 @@ hypothesis, a test name), use the term as defined in `CONTEXT.md` and on the Wir
 Don't drift to synonyms the glossary explicitly avoids — this project has already been
 burned by imprecise language:
 
-- It is a **fillability layer**, not a solvency layer. Aqua cannot go insolvent.
-- Never write **"headroom"** unqualified. It is one of `balanceFloor`,
-  `largestAllOrNothingDraw`, or `exposureHeadroom`, and conflating them is a real bug.
+- Sluice is a **strategy composer**, not a book manager or trading bot — it acts once at
+  creation time. The "fillability layer / over-committed book" framing is **parked** future work.
+- A **recommendation** compiles to one or more **positions**; it is one user signature over a
+  `Multicall`. The parked vocabulary (`balanceFloor`, `largestAllOrNothingDraw`,
+  `exposureHeadroom`, unqualified "headroom") belongs only to the future whole-balance mode.
 
 If the concept you need isn't in the glossary yet, that's a signal — either you're inventing
 language the project doesn't use (reconsider) or there's a real gap (note it for
