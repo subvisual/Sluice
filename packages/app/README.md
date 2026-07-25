@@ -1,9 +1,11 @@
 # @sluice/app
 
 The Compose screen — [Wiring §6](https://app.notion.com/p/3a8caae58631816d9aa0eb077e013ffe).
-Connect a wallet, type a sentence, set a per-token budget, and get back a risk-rated
+Connect a wallet, type a sentence, set a per-token budget, and get back an
 Aqua/SwapVM strategy recommendation from the enclave path (`/api/compose`) — real
 when the server holds a funded 0G key, labelled `TEMPLATE_FALLBACK` otherwise.
+Risk ratings arrive with the deferred reviewer (F2 Gate 2); until then the UI
+shows "risk rating unavailable".
 
 Nothing is signed or written to a chain yet. The screen stops at the recommendation.
 

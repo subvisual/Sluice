@@ -158,4 +158,5 @@ Network Subgraph IDs: pending publish to the decentralized network (Studio-only 
 - **1inch Aqua:** [1inch/aqua on GitHub](https://github.com/1inch/aqua)
 - **SwapVM:** [1inch/swap-vm on GitHub](https://github.com/1inch/swap-vm)
 - **Aqua SDK:** [@1inch/aqua-sdk on npm](https://www.npmjs.com/package/@1inch/aqua-sdk) — ABI and address source of truth
-- **Design spec:** `docs/superpowers/specs/2026-07-25-aqua-subgraph-design.md`
+- **Design spec:** `docs/superpowers/specs/2026-07-25-aqua-subgraph-design.md` — on the
+  `aqua-subgraph` branch only (commit `dea6b04`); not present on `main`
