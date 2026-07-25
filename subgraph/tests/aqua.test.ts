@@ -1,8 +1,8 @@
 import { assert, describe, test, beforeEach, clearStore, createMockedFunction } from "matchstick-as/assembly/index"
 import { Bytes, BigInt, Address, ethereum } from "@graphprotocol/graph-ts"
-import { handleShipped, handlePushed } from "../src/aqua"
+import { handleShipped, handlePushed, handlePulled } from "../src/aqua"
 import { strategyEntityId, balanceId, bookId } from "../src/helpers"
-import { MAKER, APP, HASH_A, HASH_B, USDC, WETH, TX_2, shippedEvent, pushedEvent } from "./utils"
+import { MAKER, APP, HASH_A, HASH_B, USDC, WETH, TX_2, shippedEvent, pushedEvent, pulledEvent } from "./utils"
 
 const STRATEGY_DATA = Bytes.fromHexString("0xdeadbeef")
 const N_10K = BigInt.fromI64(10_000_000_000) // 10,000 USDC (6 decimals)
@@ -101,5 +101,33 @@ describe("handlePushed", () => {
     assert.fieldEquals("Strategy", sid.toHexString(), "tokenAddresses",
       "[" + USDC.toHexString() + ", " + WETH.toHexString() + "]")
     assert.entityCount("StrategyBalance", 2)
+  })
+})
+
+describe("handlePulled", () => {
+  beforeEach(() => {
+    clearStore()
+    setupTokenMocks()
+    handleShipped(shippedEvent(MAKER, APP, HASH_A, STRATEGY_DATA))
+    handlePushed(pushedEvent(MAKER, APP, HASH_A, USDC, N_10K))
+  })
+
+  test("decrements balance and book, records PULL", () => {
+    const pull = pulledEvent(MAKER, APP, HASH_A, USDC, N_1K)
+    pull.transaction.hash = TX_2
+    handlePulled(pull)
+
+    const sid = strategyEntityId(MAKER, APP, HASH_A)
+    const bid = balanceId(sid, USDC).toHexString()
+    assert.fieldEquals("StrategyBalance", bid, "virtualBalance", N_10K.minus(N_1K).toString())
+    assert.fieldEquals("StrategyBalance", bid, "totalPulled", N_1K.toString())
+    assert.fieldEquals("MakerTokenBook", bookId(MAKER, USDC).toHexString(), "committedVirtual", N_10K.minus(N_1K).toString())
+    assert.fieldEquals("Strategy", sid.toHexString(), "pullCount", "1")
+    assert.entityCount("BalanceEvent", 2) // SHIP_FUND + PULL
+  })
+
+  test("Pulled for an unknown strategy is ignored", () => {
+    handlePulled(pulledEvent(MAKER, APP, HASH_B, USDC, N_1K))
+    assert.fieldEquals("MakerTokenBook", bookId(MAKER, USDC).toHexString(), "committedVirtual", N_10K.toString())
   })
 })

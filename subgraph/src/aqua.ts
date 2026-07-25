@@ -43,7 +43,40 @@ export function handleShipped(event: Shipped): void {
 }
 
 export function handleDocked(event: Docked): void {}
-export function handlePulled(event: Pulled): void {}
+
+export function handlePulled(event: Pulled): void {
+  const strategyId = strategyEntityId(event.params.maker, event.params.app, event.params.strategyHash)
+  const strategy = Strategy.load(strategyId)
+  if (strategy == null) return
+
+  const bid = balanceId(strategyId, event.params.token)
+  const balance = StrategyBalance.load(bid)
+  if (balance == null) return // contract enforces balance existence; guard for pre-index strategies
+
+  balance.virtualBalance = balance.virtualBalance.minus(event.params.amount)
+  balance.totalPulled = balance.totalPulled.plus(event.params.amount)
+  balance.updatedAt = event.block.timestamp
+  balance.save()
+
+  strategy.pullCount += 1
+  strategy.save()
+
+  const book = getOrCreateBook(event.params.maker, event.params.token, event.block)
+  book.committedVirtual = book.committedVirtual.minus(event.params.amount)
+  book.updatedAt = event.block.timestamp
+  book.save()
+
+  const be = new BalanceEvent(eventId(event))
+  be.strategy = strategy.id
+  be.token = getOrCreateToken(event.params.token).id
+  be.kind = "PULL"
+  be.amount = event.params.amount
+  be.balanceAfter = balance.virtualBalance
+  be.ts = event.block.timestamp
+  be.block = event.block.number
+  be.tx = event.transaction.hash
+  be.save()
+}
 
 export function handlePushed(event: Pushed): void {
   const strategyId = strategyEntityId(event.params.maker, event.params.app, event.params.strategyHash)
