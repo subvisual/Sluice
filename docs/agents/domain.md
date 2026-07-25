@@ -2,8 +2,9 @@
 
 How the building skills should consume this repo's domain documentation.
 
-This repo is **single-context**, organised **by feature**. The features are the four in
-Notion — see the table in `CLAUDE.md`.
+This repo is **single-context**, organised **by feature**. Notion has **three** features
+(F1/F2/F3) plus **Wiring & Delivery**, the shared context that connects them — see the table in
+`CLAUDE.md`.
 
 ## Notion first
 
@@ -46,7 +47,7 @@ terms or decisions actually get resolved.
 ```
 
 A decision that touches only one feature belongs in that feature's `adr/`. A decision that
-changes how features connect — the tick loop, the transaction shape, the shared vocabulary
+changes how features connect — the request flow, the transaction shape, the shared vocabulary
 — belongs in `docs/adr/` **and** on the Wiring page in Notion.
 
 ## Use the glossary's vocabulary
