@@ -47,10 +47,16 @@ export async function POST(request: Request) {
   }
 
   const budget: ServerBudgetEntry[] = [];
+  const seen = new Set<string>();
   for (const entry of b.budget) {
     if (typeof entry?.address !== "string" || !ADDRESS.test(entry.address)) {
       return bad("budget entries need a 0x token address");
     }
+    const lower = entry.address.toLowerCase();
+    if (seen.has(lower)) {
+      return bad(`duplicate token ${entry.address} in budget`);
+    }
+    seen.add(lower);
     const meta = tokenBy(entry.address as Address);
     if (!meta) {
       return bad(`token ${entry.address} is not in the token list`);
