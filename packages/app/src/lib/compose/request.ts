@@ -1,0 +1,141 @@
+import type { Address } from "viem";
+import { REQUEST_DEFAULTS } from "./constants";
+import type { RecommendationRequest, TokenMeta, TokenSelection } from "./types";
+
+/**
+ * Building the request envelope (F2 §5) from what the Compose screen collected,
+ * plus the checks the CLIENT can honestly make.
+ *
+ * These are not the validator. Gate 1 (F2 §6, I1–I14) runs over the *model's
+ * output* against this request; everything here runs over the *input* before
+ * anything is sent, and exists only to stop us spending an inference round trip
+ * on a request that cannot be satisfied.
+ */
+
+export type RequestIssue = {
+  /** Stable code so the UI can key on it without matching prose. */
+  code:
+    | "NO_WALLET"
+    | "WRONG_CHAIN"
+    | "EMPTY_PROMPT"
+    | "NO_TOKENS"
+    | "ZERO_AMOUNT"
+    | "OVER_BALANCE";
+  message: string;
+};
+
+export type RequestDraft = {
+  user: Address | undefined;
+  chainId: number | undefined;
+  expectedChainId: number;
+  prompt: string;
+  selections: TokenSelection[];
+  /** Live balances at the current head, keyed by token. Undefined = not yet read. */
+  balances: Record<Address, bigint | undefined>;
+  tokens: TokenMeta[];
+};
+
+export type BuildResult =
+  | { ok: true; request: RecommendationRequest; issues: [] }
+  | { ok: false; request: null; issues: RequestIssue[] };
+
+export function buildRecommendationRequest(draft: RequestDraft): BuildResult {
+  const issues: RequestIssue[] = [];
+  const symbolOf = (token: Address) =>
+    draft.tokens.find((t) => eq(t.address, token))?.symbol ?? token;
+
+  if (!draft.user) {
+    issues.push({ code: "NO_WALLET", message: "Connect a wallet to compose." });
+  }
+
+  if (draft.chainId !== undefined && draft.chainId !== draft.expectedChainId) {
+    issues.push({
+      code: "WRONG_CHAIN",
+      message: `Wrong chain: connected to ${draft.chainId}, expected ${draft.expectedChainId}.`,
+    });
+  }
+
+  if (draft.prompt.trim().length === 0) {
+    issues.push({
+      code: "EMPTY_PROMPT",
+      message: "Describe what you want in your own words.",
+    });
+  }
+
+  if (draft.selections.length === 0) {
+    issues.push({
+      code: "NO_TOKENS",
+      message: "Select at least one token and set an amount.",
+    });
+  }
+
+  for (const sel of draft.selections) {
+    if (sel.amount <= 0n) {
+      issues.push({
+        code: "ZERO_AMOUNT",
+        message: `${symbolOf(sel.token)}: set an amount above zero.`,
+      });
+      continue;
+    }
+    // Wiring §6: "amount inputs bounded by the wallet balance". This is a
+    // product affordance, NOT invariant I2 — the budget is a ceiling the user
+    // declared, and the live balance is a separate number checked at
+    // observedBlock. An unread balance (undefined) never blocks.
+    const balance = draft.balances[sel.token];
+    if (balance !== undefined && sel.amount > balance) {
+      issues.push({
+        code: "OVER_BALANCE",
+        message: `${symbolOf(sel.token)}: more than the wallet holds.`,
+      });
+    }
+  }
+
+  if (issues.length > 0 || !draft.user) {
+    return { ok: false, request: null, issues };
+  }
+
+  // Later duplicate selections would silently overwrite earlier ones, so fold
+  // them by adding — the user meant the total they typed across both rows.
+  const budget: Record<Address, bigint> = {};
+  for (const sel of draft.selections) {
+    budget[sel.token] = (budget[sel.token] ?? 0n) + sel.amount;
+  }
+
+  return {
+    ok: true,
+    issues: [],
+    request: {
+      user: draft.user,
+      chainId: draft.expectedChainId,
+      prompt: draft.prompt,
+      budget,
+      ...REQUEST_DEFAULTS,
+    },
+  };
+}
+
+/**
+ * JSON-safe view of the request, for display and for the trace.
+ *
+ * `bigint` through `JSON.stringify` throws, and coercing to a JS number is a
+ * silent correctness bug — amounts are decimal strings everywhere they leave
+ * this process (F2 §3).
+ */
+export function serializeRequest(request: RecommendationRequest) {
+  return {
+    user: request.user,
+    chainId: request.chainId,
+    prompt: request.prompt,
+    budget: Object.fromEntries(
+      Object.entries(request.budget).map(([token, amount]) => [
+        token,
+        amount.toString(),
+      ]),
+    ),
+    maxStrategies: request.maxStrategies,
+    maxDeadlineSec: request.maxDeadlineSec,
+    maxInferenceRetries: request.maxInferenceRetries,
+  };
+}
+
+const eq = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
