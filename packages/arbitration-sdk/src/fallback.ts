@@ -22,6 +22,9 @@ import type {
 // The source label that must travel with a fallback recommendation so nothing
 // downstream mistakes it for a model output. See Wiring §6 (ENCLAVE vs
 // TEMPLATE_FALLBACK) and F2 §8.
+/// 0.05%. feeBps is out of 1e9, not 1e4 — see config/opcodes.8453.json.
+const DEFAULT_FEE_BPS = 500_000;
+
 export const FALLBACK_SOURCE = "TEMPLATE_FALLBACK" as const;
 export type RecommendationSource = "ENCLAVE" | typeof FALLBACK_SOURCE;
 
@@ -32,22 +35,14 @@ const tmpl = (id: string): Template => TEMPLATES.find((t) => t.id === id)!;
 // wrong guess is a suboptimal-but-valid recommendation, never an unsafe one.
 export function selectTemplate(prompt: string): Template {
 	const p = prompt.toLowerCase();
-	// T3 — a level, executed all-or-nothing.
-	if (
-		/(all.at.once|all.or.nothing|\bif it (hits|reaches|gets)|\btarget\b|\blimit\b|\blevel\b|\bsell .* (at|if|when)\b)/.test(
-			p,
-		)
-	) {
-		return tmpl("T3");
+	// Wanting to earn a spread is the one distinction the current template set
+	// can actually express. Everything else falls back to the plain curve —
+	// which is the honest outcome, because the venue has no limit orders, no
+	// price levels and no oracle adjustment to aim at.
+	if (/(\bfee\b|\bspread\b|\bearn\b|\byield\b|\bincome\b|\bprofit\b|\bcharge\b)/.test(p)) {
+		return tmpl("full-range-fee");
 	}
-	// T2 — wide, uncertain about the range.
-	if (
-		/(\bwide\b|not confident|unsure|uncertain|\bexposure\b|not sure)/.test(p)
-	) {
-		return tmpl("T2");
-	}
-	// T1 — tight, rangebound flow capture (also the default).
-	return tmpl("T1");
+	return tmpl("full-range");
 }
 
 export function templateFallback(
@@ -59,9 +54,10 @@ export function templateFallback(
 	const strategy: SlotAssignment = {
 		templateId: t.id,
 		slots: {
-			balances: { instruction: "perTokenSetup" },
-			swapLogic: { instruction: t.swapLogic },
-			invalidation: { instruction: t.invalidation },
+			curve: { instruction: t.curve },
+			...(t.wrappers.includes("FLAT_FEE_AMOUNT_IN_XD")
+				? { fee: { instruction: "FLAT_FEE_AMOUNT_IN_XD", params: { feeBps: DEFAULT_FEE_BPS } } }
+				: {}),
 			// Within the request's bound (satisfies the composer's I7-style check).
 			deadline: { deadline: ctx.observedAt + req.maxDeadlineSec },
 		},

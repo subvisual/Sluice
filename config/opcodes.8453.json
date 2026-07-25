@@ -1,0 +1,50 @@
+{
+  "chainId": 8453,
+  "router": "0x8fdd04dbf6111437b44bbca99c28882434e0958f",
+  "routerVersion": "1.0.0",
+
+  "_source": "The dispatch table of the DEPLOYED AquaSwapVMRouter v1.0.0, taken from its Sourcify-verified source (exact_match) at src/opcodes/AquaOpcodes.sol, and confirmed by executing each opcode on a Base fork.",
+
+  "_neverDeriveFromMaster": "1inch/swap-vm master uses a completely different scheme — opcodes banked by instruction family with reserved gaps (0x20 conditions, 0x50 curves, 0x70 fees) dispatched through an if/else chain. Essentially no number carries over: SALT is 0x15 here against 0x02 there, DEADLINE 0x0d against 0x20, DECAY 0x14 against 0x9c. Master also has a different instruction SET — LimitSwap, the three invalidators, both balances instructions, PeggedSwap and OraclePriceAdjuster have no opcode here at any number.",
+
+  "_neverReadTheLiteralTopToBottom": "The deployed _opcodes() builds a static function[29] and ends with `result := instructions; mstore(result, 28)`. A static memory array carries no length prefix, so writing the length overwrites element 0 and the usable array starts at the old element 1 — every opcode sits ONE position below a plain reading of the source literal.",
+
+  "firstRealOpcode": 10,
+  "lastRealOpcode": 27,
+  "_firstRealOpcode": "0x0a. Opcodes 0x00-0x09 are `_notInstruction` — REAL no-ops that do NOT revert. An opcode landing there executes, does nothing, and the program runs to completion having computed no amounts. That is the silent-failure region, and because the mstore shift above moves things DOWN by one, an off-by-one lands inside it.",
+  "_lastRealOpcode": "0x1b. The dispatch array has length 28 and is indexed directly (`ctx.vm.opcodes[opcode]`), so anything past the end reverts Panic(0x32) — an unnamed array-out-of-bounds, not a named error.",
+
+  "opcodes": {
+    "JUMP": 10,
+    "JUMP_IF_TOKEN_IN": 11,
+    "JUMP_IF_TOKEN_OUT": 12,
+    "DEADLINE": 13,
+    "ONLY_TAKER_TOKEN_BALANCE_NON_ZERO": 14,
+    "ONLY_TAKER_TOKEN_BALANCE_GTE": 15,
+    "ONLY_TAKER_TOKEN_SUPPLY_SHARE_GTE": 16,
+    "XYC_SWAP_XD": 17,
+    "XYC_CONCENTRATE_GROW_LIQUIDITY_XD": 18,
+    "XYC_CONCENTRATE_GROW_LIQUIDITY_2D": 19,
+    "DECAY_XD": 20,
+    "SALT": 21,
+    "FLAT_FEE_AMOUNT_IN_XD": 22,
+    "FLAT_FEE_AMOUNT_OUT_XD": 23,
+    "PROGRESSIVE_FEE_IN_XD": 24,
+    "PROGRESSIVE_FEE_OUT_XD": 25,
+    "PROTOCOL_FEE_AMOUNT_OUT_XD": 26,
+    "AQUA_PROTOCOL_FEE_AMOUNT_OUT_XD": 27
+  },
+  "_opcodes": "Decimal, because Foundry's vm.parseJsonUint reads numbers. 10=0x0a through 27=0x1b. SALT sits at 21 (0x15), after DECAY, because Controls._salt was appended when the table grew rather than kept with the other Controls entries.",
+
+  "argWidths": {
+    "JUMP": 2,
+    "DEADLINE": 5,
+    "SALT": 8,
+    "XYC_SWAP_XD": 0,
+    "FLAT_FEE_AMOUNT_IN_XD": 4
+  },
+  "_argWidths": "Bytes of arguments, from each instruction's natspec in the deployed source. Only the ones we emit are listed. The VM slices by offset, so a wrong width silently misreads every later field. JUMP_IF_TOKEN_IN/OUT are 22 (20-byte token + 2-byte target); the concentrate variants are variable. argsLength is a single byte, so 255 is the hard ceiling for any instruction.",
+
+  "feeBpsOne": 1000000000,
+  "_feeBpsOne": "1e9 = 100%, NOT 1e4. The parameter is named feeBps but 0.3% is 3_000_000. _flatFeeAmountInXD divides by (BPS - feeBps), so the value must be strictly less than 1e9."
+}

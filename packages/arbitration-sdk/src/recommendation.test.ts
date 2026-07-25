@@ -23,11 +23,9 @@ function goodPayload() {
 		observedBlock: 22500000,
 		strategies: [
 			{
-				templateId: "T3",
+				templateId: "full-range",
 				slots: {
-					balances: { instruction: "perTokenSetup" },
-					swapLogic: { instruction: "_limitSwapOnlyFull1D" },
-					invalidation: { instruction: "_invalidateBit1D" },
+					curve: { instruction: "XYC_SWAP_XD" },
 					deadline: { deadline: 1750600000 },
 				},
 				tokens: [WETH],
@@ -42,7 +40,7 @@ test("parses a well-formed recommendation, even inside markdown fences", () => {
 	const r = parseRecommendation(text, req);
 	assert.equal(r.ok, true);
 	assert.equal(r.errors.length, 0);
-	assert.equal(r.recommendation?.strategies[0].templateId, "T3");
+	assert.equal(r.recommendation?.strategies[0].templateId, "full-range");
 });
 
 test("fails when strategies is empty", () => {
@@ -69,12 +67,12 @@ test("notes (does not fail) an amount over budget", () => {
 	assert.ok(r.notes.some((n) => /exceeds budget/.test(n)));
 });
 
-test("notes an unknown opcode without failing (grammar is provisional)", () => {
+test("notes an instruction that is not on this venue, without failing the parse", () => {
 	const p = goodPayload();
-	p.strategies[0].slots.swapLogic.instruction = "_notARealOpcode";
+	p.strategies[0].slots.curve.instruction = "_limitSwapOnlyFull1D";
 	const r = parseRecommendation(JSON.stringify(p), req);
 	assert.equal(r.ok, true);
-	assert.ok(r.notes.some((n) => /not in the grammar menu/.test(n)));
+	assert.ok(r.notes.some((n) => /is not a curve on this venue/.test(n)));
 });
 
 test("returns ok:false on non-JSON output", () => {
