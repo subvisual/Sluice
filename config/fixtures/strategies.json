@@ -1,0 +1,31 @@
+{
+  "_generated": "DO NOT EDIT. Written by `npm run fixtures` from packages/arbitration-sdk/src/fixtures.ts.",
+  "_why": "The contracts have no strategy encoder. These bytes come from the same code the composer uses, so the fork test proves the bytes we actually ship will fill.",
+  "routerVersion": "1.0.0",
+  "strategies": [
+    {
+      "name": "usdc-usde-full-range",
+      "description": "Market-make USDC/USDe across the whole price range. Both are dollar-denominated, so equal nominal value on each side prices near 1:1. The 6dp/18dp difference is carried entirely by the amounts — 10_000e6 against 10_000e18 IS the 1:1 price, and there is no decimals field anywhere in the program.",
+      "template": "full-range",
+      "inputs": {
+        "maker": "0x00000000000000000000000000000000000f1152",
+        "salt": "12326070210853360937",
+        "deadline": 1800000000,
+        "tokens": [
+          "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34"
+        ],
+        "amounts": [
+          "10000000000",
+          "10000000000000000000000"
+        ]
+      },
+      "outputs": {
+        "traits": "0x40000000000000000000000000000000000000000000000000000000000f1152",
+        "program": "0x1508ab0eff8cea7055290d05006b49d2001100",
+        "strategy": "0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000f115240000000000000000000000000000000000000000000000000000000000f1152000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000131508ab0eff8cea7055290d05006b49d200110000000000000000000000000000",
+        "strategyHash": "0x82a75b4c6928f1a1c652218e91fec46e8330e21bc9852e61825c9e469ed14081"
+      }
+    }
+  ]
+}
