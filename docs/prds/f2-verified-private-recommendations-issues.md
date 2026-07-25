@@ -3,222 +3,213 @@
 Derived from [`f2-verified-private-recommendations.md`](./f2-verified-private-recommendations.md)
 and the Notion [F2](https://app.notion.com/p/3a8caae5863181609acbcfd69a5db06b) /
 [Wiring](https://app.notion.com/p/3a8caae58631816d9aa0eb077e013ffe) pages. Issues in dependency
-order. **Notion wins** on any disagreement. Regenerated 2026-07-25 for the Composer framing.
+order. **Notion wins** on any disagreement.
+
+**Reconciled 2026-07-25** against two things the original plan predates: (1) a **scope pivot** —
+*get a recommendation working; defer verifiability* — and (2) the **strategy composer** shipped in
+PR #10, built directly rather than through `issue-worker`. The verifiability half of F2
+(on-chain commit, provenance, trace, reviewer) is **deferred, not deleted** — the specs below are
+kept so the work is recoverable if that scope returns.
+
+## Status legend
+
+- ✅ **delivered**
+- 🟡 **partially delivered** — core landed (usually via the composer, PR #10); the cut part is the verifiability/commit side
+- ⛔ **deferred (out of current scope)** — verifiability; build only if the scope call reverses
+- 🚧 **blocked** — on an external prerequisite
+- ⬜ **planned** — in scope, not started
 
 ## Dependency graph
 
 ```
-0 Gate 0 (DONE) ──▶ 1 Binding (RESOLVED) ──▶ 2 Registry ──┬─▶ 3 Codec ─────────┐
-  (CLI, PR #6)        (c)+(a); ADR-0001       (Base fork)  └─▶ 4 Sealed compose ┤
-                                                                                ├─▶ 6 Loop + fallback + commit ─┬─▶ 7 Narration ─┐
-                                            5 Validator I1–I14 ◀─ F1, F3 ───────┘                               └─▶ 8 Enc. memory ┴─▶ 9 Trace view ─▶ 10 Reviewer (stretch)
+0 Gate 0 (DONE) ──▶ 1 Binding (RESOLVED) ──▶ 2 Registry ⛔ ──┬─▶ 3 Codec 🟡 ───────┐
+  (CLI, PR #6)        (c)+(a); ADR-0001       (deferred)     └─▶ 4 Sealed compose 🟡┤
+                                                                                    ├─▶ 6 Loop+fallback+commit 🟡 ─┬─▶ 7 Narration ⛔ ─┐
+                                          5 Validator 🚧 (F1 Q2) ───────────────────┘                             └─▶ 8 Enc. memory ⛔ ┴─▶ 9 Trace view ⛔ ─▶ 10 Reviewer ⛔
 ```
 
-**Parallelisable:** 3 ∥ 4 · 7 ∥ 8. **Cross-feature:** 2/3/5/6 need F1 (grammar, `compile`,
-`strategyHash`); 5/6 need F3 `MarketContext`; 9 overlaps the app.
+The composer (PR #10) delivers the recommendation spine that cuts across **3, 4, and the retry
+part of 6** — minus every verifiability step. **Cross-feature:** 5 needs F1 (grammar `compile`,
+blocked on F1 Open Q2); real market/book context is F3, not an F2 issue.
 
 ---
 
-## Already delivered — not a work item
+## Already delivered — not work items
 
-**Gate 0 — validate 0G inference:** shipped as the inference CLI (`packages/arbitration-sdk`,
-PR #6). A stable enclave signer recovers across ≥3 runs; captured chainId 16602, model
-`qwen/qwen2.5-omni-7b`, TEE signer `0x83df4B8E…508cF`, `addLedger(3)` accepted, latency ~1–2.6s.
-**Finding:** the signature is over a provider attestation record, not our text — fed Issue 1.
-Recorded in ADR-0001 + the package README + Notion.
+**Gate 0 — validate 0G inference (PR #6).** The inference CLI (`packages/arbitration-sdk`). A
+stable enclave signer recovers across ≥3 runs; chainId 16602, model `qwen/qwen2.5-omni-7b`, TEE
+signer `0x83df4B8E…508cF`, `addLedger(3)` accepted, latency ~1–2.6s. **Finding:** the signature is
+over a provider attestation record, not our text — fed Issue 1.
 
 **Issue 1 — Binding decision (design): RESOLVED 2026-07-25.** Chose **(c) provenance-oracle +
 (a) trace-side hash**: `user`/`nonce` are committer-supplied args on `commitRecommendation`
-(replay enforced in the contract, no `_prefixOf`); `recommendationId = keccak256(signedText)`;
-the trace stores `payloadHash = keccak256(canonicalRecommendation)` as the off-chain audit anchor.
-Security claim + pinned contract shape in **ADR-0001's Resolution section**; PRD Decision A and
-Notion §2–§3 updated to match. **Residual (external, non-blocking):** the 0G-booth preimage /
-`targetTeeAddress` check. **`issue-worker` now starts at Issue 2.**
+(replay enforced in the contract, no `_prefixOf`); `recommendationId = keccak256(signedText)`; the
+trace stores `payloadHash = keccak256(canonicalRecommendation)`. Security claim + pinned contract
+shape in **ADR-0001**; PRD Decision A and Notion §2–§3 updated. Merged in PR #8. *(This decision
+only bites once the deferred verifiability work resumes.)*
+
+**The strategy composer (PR #10)** — prompt + budget → a grammar-shaped `StrategyRecommendation`
+from a live 0G call. `grammar.ts` (six-slot menu + templates T1–T3), `context.ts` (stubbed F3
+context), `compose.ts` (prompt + round-trip, one retry), `recommendation.ts` (types + light
+structural parse), `compose` CLI. Output is grammar-**shaped**, not compiled/verified/persisted.
+This is what makes Issues 3/4/6 below *partially* delivered.
 
 ---
 
-## 2. `RecommendationRegistry.sol` (tracer)
+## 2. `RecommendationRegistry.sol` (tracer) · ⛔ deferred
 
-**Depends on:** 1 (resolved — ADR-0001) · **F1:** chain on the Base fork
+**Deferred** under the current scope (verifiability). Build only if on-chain provenance is
+reinstated; the pinned shape below is ready when it is.
+
+**Depends on:** 1 (resolved) · **F1:** chain on the Base fork
 
 ### Description
-Thinnest slice proving the verified-recommendation path: deploy the registry to the Base fork,
-register signer + committer, commit a signed recommendation.
+Deploy the registry to the Base fork, register signer + committer, commit a signed recommendation.
 
 ### Acceptance criteria
 - [ ] `registerSigner`/`registerCommitter` (onlyOwner) + `commitRecommendation` (onlyCommitter),
-  deployed to the **Base fork** (`config/addresses.8453.json`). Pinned signature (Decision A /
-  ADR-0001): `commitRecommendation(bytes signedText, bytes sig, address user, uint64 nonce,
-  bytes32 payloadHash, bytes32[] strategyHashes, bytes32[] templateIds)`.
+  deployed to the **Base fork** (`config/addresses.8453.json`). Pinned signature (ADR-0001):
+  `commitRecommendation(bytes signedText, bytes sig, address user, uint64 nonce, bytes32
+  payloadHash, bytes32[] strategyHashes, bytes32[] templateIds)`.
 - [ ] `ecrecover(signedText, sig) ∈ isRegisteredSigner`; **per-user `nonceOf` replay**
-  (`nonce == nonceOf[user] + 1`, then `nonceOf[user] = nonce`); `recommendationId =
-  keccak256(signedText)` (**distinct from** the committer-supplied `payloadHash`); emits
-  `RecommendationCommitted(user, nonce, recommendationId, signer, payloadHash, strategyHashes, templateIds)`.
-- [ ] **`user`/`nonce` are committer-supplied args, NOT parsed from `signedText`** (Decision A
-  chose (c) provenance-oracle — the signed record is opaque; there is no `_prefixOf`).
+  (`nonce == nonceOf[user] + 1`); `recommendationId = keccak256(signedText)` (**distinct from**
+  `payloadHash`); emits `RecommendationCommitted(user, nonce, recommendationId, signer,
+  payloadHash, strategyHashes, templateIds)`.
+- [ ] **`user`/`nonce` are committer-supplied args, NOT parsed from `signedText`** (no `_prefixOf`).
 - [ ] Reverts: unregistered signer, unauthorized committer, **stale/replayed nonce**.
 - [ ] **Not** wired into the ship path (binding is a subgraph derivation, Wiring §5).
 
 ### Technical notes
-OZ `ECDSA` + `MessageHashUtils`. Register `teeSignerAddress` (or `targetTeeAddress` if
-`targetSeparated` — Gate 0 saw a centralized broker) from the on-chain Service record. Committer =
-`SLUICE_COMMITTER_KEY`, separate from `SLUICE_OWNER_KEY` (ADR-0002).
+OZ `ECDSA` + `MessageHashUtils`. Committer = `SLUICE_COMMITTER_KEY`, separate from
+`SLUICE_OWNER_KEY` (ADR-0002). Needs a `contracts/` Foundry workspace, which does not yet exist.
 
 ---
 
-## 3. Recommendation codec (`composer-sdk/src/recommendation.ts`)
+## 3. Recommendation codec (`arbitration-sdk/src/recommendation.ts`) · 🟡 partially delivered
 
-**Depends on:** 1 · *(parallel with 4)*
+**Delivered (PR #10):** the `StrategyRecommendation` / `SlotAssignment` types and a **light
+structural parse** (`parseRecommendation`) — parseable, right shape, decimal-string amounts,
+budget containment; unknown opcodes are soft notes (grammar is provisional). Six unit tests.
 
-### Description
-Build/consume the `StrategyRecommendation` payload and its commit args.
+**Not delivered (deferred / blocked):** `frame()`/`toCommitArgs()` (commit-side, ⛔ verifiability)
+and the golden-fixture `strategyHash` match (needs F1's `compile`, not built).
 
 ### Acceptance criteria
-- [ ] `StrategyRecommendation` type (`schema: "sluice.recommendation/1"`, one-or-more `strategies`,
-  each `{templateId, slots, tokens, virtualAmounts, deadline}`); `frame()`/`parse()`;
-  `validateSchema()` (rejects fences/trailing commas); `toCommitArgs()` → registry calldata.
-- [ ] **Golden fixture:** a checked-in signed-text string round-trips `parse` → expected struct, and
-  `strategyHash`es match F1's `compile` output.
-- [ ] `virtualAmounts` survive as **decimal strings** (never JS number); a malformed body counts as a
-  retry, never throws to the chain.
-
-### Technical notes
-Carry the enclave's exact `signedText` bytes end-to-end (no canonicalization of the signed text).
-**Separately** compute a canonical recommendation string and hash it into `payloadHash =
-keccak256(canonicalRecommendation)` — the trace-side (a) anchor, distinct from `recommendationId`.
-No fixed prefix lines: user/nonce are committer args, not in the body (Decision A / ADR-0001).
+- [x] `StrategyRecommendation` type; parse of the model output; decimal-string amounts preserved;
+  malformed body is a retry, never a throw.
+- [ ] ⛔ `frame()`/`toCommitArgs()` → registry calldata *(deferred with the registry)*.
+- [ ] 🚧 golden fixture: signed text round-trips and `strategyHash`es match F1 `compile`
+  *(blocked on F1)*.
 
 ---
 
-## 4. Sealed composition inference (`composer-sdk/src/inference.ts`)
+## 4. Sealed composition inference (`arbitration-sdk/src/compose.ts`) · 🟡 partially delivered
 
-**Depends on:** 2 · *(parallel with 3)* · **extends the Gate-0 CLI client**
+**Delivered (PR #10):** `compose(broker, cfg, request, ctx)` builds the §9 prompt (grammar +
+rules + output schema + request + stubbed context + retry history), runs the 0G round-trip via
+`inferChat`, parses the result, retries once on malformed output. Reuses the Gate 0 broker /
+`createRequire` interop / provider-metadata model.
 
-### Description
-Turn the Gate-0 round-trip into a composition call that returns a `StrategyRecommendation`.
+**Not delivered (deferred):** `verifyLocal()` — the enclave signature is received but **not
+checked** (⛔ verifiability). Context is the stub, not live F3.
 
 ### Acceptance criteria
-- [ ] `compose(broker, ctx, request)` builds the §9 prompt (grammar + rules + output schema +
-  request verbatim + F3 context + templates + violation history), POSTs `/chat/completions`, reads
-  `ZG-Res-Key`, fetches the out-of-band signature.
-- [ ] `verifyLocal()` asserts `verifyMessage(text, sig) === registered signer` **and**
-  `processResponse === true`; per-attempt latency logged.
-- [ ] Reuses the CLI's funded broker, `createRequire` CJS interop, and `getServiceMetadata` model;
-  malformed output counts as a retry, never throws to the chain.
-
-### Technical notes
-Prompt contract Notion §9: mandate/grammar verbatim, `rationale` excluded (separate narration), no
-tool use / no CoT in output, `promptVersion` into every trace.
+- [x] `compose()` builds the prompt, POSTs, returns a parsed `StrategyRecommendation`.
+- [ ] ⛔ `verifyLocal()` asserts `verifyMessage === registered signer` **and** `processResponse`.
+- [ ] real F3 `MarketContext` in place of the stub *(F3 work, not this issue)*.
 
 ---
 
-## 5. Request envelope + validator I1–I14 (`composer-sdk/src/validate.ts`)
+## 5. Request envelope + validator I1–I14 (`arbitration-sdk/src/validate.ts`) · 🚧 blocked
 
-**Depends on:** 2 · **F1:** grammar + `compile`/`strategyHash` · **F3:** `MarketContext`
-
-### Description
-The deterministic gate that **rejects** (never mutates) a non-compliant recommendation.
+The deterministic gate that **rejects** (never mutates) a non-compliant recommendation. A
+`RecommendationRequest` type and a **light** budget/shape check already exist in the composer, but
+the full I1–I14 validator is **blocked**: F1 §5 grammar is provisional and explicitly "the
+validator must not be built against it" until **F1 Open Q2** settles against the forked bytecode.
+Building it now would encode a grammar known to be wrong (e.g. `_xycConcentrateGrowLiquidityXD` is
+not a real opcode; "exactly one swap-logic instruction" is not a protocol rule).
 
 ### Acceptance criteria
-- [ ] `RecommendationRequest` type (`prompt`, `budget`, `maxStrategies`, `maxDeadlineSec`,
-  `maxInferenceRetries`); no stored `realBalance`.
-- [ ] `validate(r, q, s): Violation[]` implements **I1–I14** (budget/authority I1–I4; grammar
-  I5–I11; freshness/replay I12–I13; recompile-equality I14). **I15 parked** (whole-balance only).
-- [ ] Property tests: never returns "valid" for a violating recommendation; **never mutates input**.
-  Crafted-input tests fire I2 (budget over-sum), I6 (partial-fill missing invalidation), I10 (token
-  order), I12 (stale block).
-
-### Technical notes
-Consumes F1 grammar/compatibility table and `compile` (I14 recompile-equality). `q.budget` is the
-user's ceiling — never conflate with a live balance.
+- [ ] 🚧 `validate(r, q, s): Violation[]` implements **I1–I14** (rejects, never mutates) *(unblock
+  when F1 Q2 lands)*.
+- [ ] Property tests: never returns "valid" for a violating recommendation; never mutates input.
+- Note: budget/authority checks (I1–I4) do not depend on the grammar and are partly covered by the
+  composer's light parse; the grammar-dependent invariants (I5–I11, I14) are what's blocked.
 
 ---
 
-## 6. Reject-and-re-infer loop + template fallback + commit (`composer-sdk/src/compose.ts`)
+## 6. Reject-and-re-infer loop + template fallback + commit (`arbitration-sdk/src/compose.ts`) · 🟡 partially delivered
 
-**Depends on:** 4, 5 · **F3:** `context.ts`
+**Delivered (PR #10):** a **one-retry** loop — malformed output re-infers once with the errors fed
+back.
 
-### Description
-Wire the request-flow spine (Wiring §4 steps 2–5b, 6, 8b, 9) with retries and the deterministic
-template fallback, and the commit tx.
+**Not delivered:** the full reject-and-re-infer against the validator (⬜, waits on Issue 5), the
+labelled **TEMPLATE_FALLBACK** (⬜, in scope), and the **commit (tx1)** + freshen steps
+(⛔ verifiability).
 
 ### Acceptance criteria
-- [ ] Steps wired: SNAPSHOT → COMPOSE → VERIFY → VALIDATE → (COMPILE + I14) → PRESENT → **8b FRESHEN
-  (re-check I12)** → COMMIT (tx1, committer key).
-- [ ] A violation triggers **re-snapshot + re-infer** (only violation history forward) up to
-  `maxInferenceRetries`, then `TEMPLATE_FALLBACK` (labelled, never a model output).
-- [ ] Every attempt (incl. rejected) captured for the trace with per-attempt latency; commit does
-  **not** block the user's ship (tx2).
-
-### Technical notes
-Re-snapshot each attempt or I12 funnels slow inference into permanent fallback (Notion §4). Consumes
-F3 `MarketContext`; `SLUICE_DRY_RUN` composes+validates but commits/ships nothing.
+- [x] Malformed output triggers a bounded re-infer.
+- [ ] ⬜ `TEMPLATE_FALLBACK` after `maxInferenceRetries` (labelled, never a model output).
+- [ ] ⬜ Validator-driven reject-and-re-infer *(needs Issue 5)*.
+- [ ] ⛔ FRESHEN + COMMIT (tx1, committer key) *(deferred with the registry)*.
 
 ---
 
-## 7. Post-commit narration
+## 7. Post-commit narration · ⛔ deferred
 
-**Depends on:** 6 · *(parallel with 8)*
+Verifiability-side: a second enclave-signed call over `recommendationId‖prose`, run after a
+commit, verified off-chain. **Deferred with the commit path.** Spec retained.
 
-### Description
-The separate enclave-signed "here's why", bound to the recommendation but off the critical path.
-
-### Acceptance criteria
-- [ ] `narrate()` — a second call, enclave-signed over `recommendationId‖prose`, run **only after a
-  commit succeeds**.
-- [ ] Verifies off-chain: recovers to a registered signer **and** its embedded `recommendationId`
-  matches the on-chain commit.
-- [ ] A slow/failed narration never blocks or delays a recommendation (fire-after-commit).
+- [ ] ⛔ `narrate()` — second call, enclave-signed, run only after a commit succeeds.
+- [ ] ⛔ Verifies off-chain: recovers to a registered signer and its `recommendationId` matches the
+  on-chain commit.
 
 ---
 
-## 8. Encrypted memory — 0G Storage (`composer-sdk/src/memory.ts`)
+## 8. Encrypted memory — 0G Storage (`arbitration-sdk/src/memory.ts`) · ⛔ deferred
 
-**Depends on:** 6 · *(parallel with 7)* · **blocks on Open Q2 (key derivation)**
+The encrypted recommendation trace on 0G Storage. **Deferred** (the trace exists to make
+recommendations auditable/verifiable, which is the cut scope). Blocks on Open Q2 (key derivation)
+if resumed. Spec retained.
 
-### Description
-The encrypted recommendation trace + rolling priors on 0G Storage.
-
-### Acceptance criteria
-- [ ] `deriveKey` (**per-user** — each user signs to derive their own key, Open Q2; never a shared
-  maker key); AES-256-GCM; `putTrace`/`getTrace` with plaintext `index.json`; `download()`
-  server-side only.
-- [ ] `trace/{user}/{nonce}.json.enc` stores prompt, `signedText`, signature, narration, verdict,
-  **rejected attempts**, latencies, txHash, `payloadHash`, promptVersion.
-- [ ] **Auditability test:** `keccak256(storedText) == on-chain recommendationId`; decrypt with a
-  wrong key fails.
-
-### Technical notes
-Encryption exists because 0G Storage is public-by-hash. `weights.json` (per-template ship/decline
-priors) is a stretch — build only with spare time; do not claim it learns.
+- [ ] ⛔ `deriveKey` (per-user), AES-256-GCM, `putTrace`/`getTrace`, plaintext `index.json`.
+- [ ] ⛔ `trace/{user}/{nonce}.json.enc` stores prompt, `signedText`, signature, verdict, rejected
+  attempts, latencies, txHash, `payloadHash`, promptVersion.
+- [ ] ⛔ Auditability test: `keccak256(storedText) == on-chain recommendationId`.
 
 ---
 
-## 9. Trace decrypt view (app audit screen)
+## 9. Trace decrypt view (app audit screen) · ⛔ deferred
 
-**Depends on:** 8 · **overlaps** the app (Wiring §6)
+The judge-facing audit screen that decrypts a trace and shows the `payloadHash` match. **Deferred
+with the trace + registry** (nothing on-chain to check against under the current scope). Spec
+retained.
 
-### Description
-The most persuasive judge-facing screen — decrypting a trace server-side.
-
-### Acceptance criteria
-- [ ] A Next.js **server route** decrypts a trace by `(user, nonce)` (user key stays server-side,
-  never the browser).
-- [ ] Shows rationale, any rejected attempts + the invariant each violated, the signer, and
-  `ENCLAVE` vs `TEMPLATE_FALLBACK`.
-- [ ] A green check confirms the recomputed `payloadHash` equals the on-chain commitment.
+- [ ] ⛔ Next.js server route decrypts a trace by `(user, nonce)`.
+- [ ] ⛔ Shows rationale, rejected attempts + the invariant each violated, signer, `ENCLAVE` vs
+  `TEMPLATE_FALLBACK`.
+- [ ] ⛔ Green check: recomputed `payloadHash` == on-chain commitment.
 
 ---
 
-## 10. Reviewer — Gate 2 (`composer-sdk/src/review.ts`) · STRETCH
+## 10. Reviewer — Gate 2 (`arbitration-sdk/src/review.ts`) · ⛔ deferred
 
-**Depends on:** 6 (and ideally 8) · **first thing to drop**
+A second inference over an already-valid recommendation ("is this a good idea?"). Was a stretch
+even under the original scope; **deferred**. Spec retained.
 
-### Description
-A second inference over an *already-valid* recommendation that answers "is this a good idea?"
+- [ ] ⛔ `review()` produces a risk rating + intent-match verdict; flags, never vetoes.
+- [ ] ⛔ Verdict signed over `recommendationId‖verdict`, stored in the trace.
 
-### Acceptance criteria
-- [ ] `review()` produces a risk rating + intent-match verdict; **flags, never vetoes**.
-- [ ] Verdict signed over `recommendationId‖verdict`, stored in the trace, so "warned and the user
-  proceeded anyway" is on the record.
-- [ ] Built **only** once Issues 1–8 are green.
+---
+
+## What's actually left, under the current scope
+
+The recommendation path is working (composer, PR #10). The **in-scope, buildable** F2 remainder is
+small:
+
+- **Template fallback** (part of Issue 6) — labelled deterministic output after retries exhaust.
+- **The full validator** (Issue 5) — the moment **F1 Open Q2** settles the grammar, this unblocks
+  and the composer's output can become grammar-*correct*.
+- **Real F3 context** — swap the stub; F3 work, tracked there.
+
+Everything under ⛔ waits on a decision to reinstate on-chain verifiability.
