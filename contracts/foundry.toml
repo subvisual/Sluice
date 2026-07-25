@@ -1,0 +1,13 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+test = "test"
+solc = "0.8.30"
+evm_version = "cancun"
+# The address book is shared with the SDK and the subgraph, so it lives at the repo
+# root rather than being duplicated here. Read-only.
+fs_permissions = [{ access = "read", path = "../config" }]
+
+[fmt]
+line_length = 120
