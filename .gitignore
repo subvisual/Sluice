@@ -17,6 +17,9 @@ typechain-types/
 out/
 broadcast/
 lib/forge-std/
+contracts/lib/
+contracts/out/
+contracts/cache/
 
 # The Graph
 subgraph/build/
