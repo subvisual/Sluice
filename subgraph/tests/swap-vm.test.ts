@@ -6,7 +6,8 @@ import { strategyEntityId, eventId } from "../src/helpers"
 import { MAKER, TAKER, USDC, WETH, HASH_A, shippedEvent, swappedEvent } from "./utils"
 import { Fill } from "../generated/schema"
 
-// matchstick's default dataSource address — the "app" for linked fills
+// matchstick's default mock event address (set by newMockEvent()); handleSwapped reads
+// event.address, not dataSource.address(), as the "app" for linked fills
 const SWAPVM = Address.fromString("0xA16081F360e3847006dB660bae1c6d1b2e17eC2A")
 const IN = BigInt.fromI64(500_000_000)
 const OUT = BigInt.fromI64(250_000_000_000_000)

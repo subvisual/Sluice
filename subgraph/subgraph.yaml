@@ -1,6 +1,6 @@
 specVersion: 1.2.0
 description: Generic 1inch Aqua protocol subgraph — strategies, virtual balances, maker books, fills
-repository: https://github.com/josevazf/aqua-subgraph
+repository: https://github.com/subvisual/Sluice
 schema:
   file: ./schema.graphql
 indexerHints:

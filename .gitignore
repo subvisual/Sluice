@@ -21,6 +21,8 @@ lib/forge-std/
 # The Graph
 subgraph/build/
 subgraph/generated/
+subgraph/tests/.bin/
+subgraph/tests/.latest.json
 
 # Build output
 dist/

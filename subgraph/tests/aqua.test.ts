@@ -166,4 +166,15 @@ describe("handleDocked", () => {
     handleDocked(dockedEvent(MAKER, APP, HASH_B))
     assert.fieldEquals("AquaProtocol", "aqua", "liveStrategyCount", "1")
   })
+
+  test("a duplicate Docked is a no-op: counters don't go negative", () => {
+    const dock = dockedEvent(MAKER, APP, HASH_A)
+    handleDocked(dock)
+    handleDocked(dock) // reusing the same mock event is fine: handleDocked creates no BalanceEvent/Fill
+
+    const sid = strategyEntityId(MAKER, APP, HASH_A)
+    assert.fieldEquals("Strategy", sid.toHexString(), "status", "DOCKED")
+    assert.fieldEquals("Maker", MAKER.toHexString(), "liveStrategyCount", "0")
+    assert.fieldEquals("AquaProtocol", "aqua", "liveStrategyCount", "0")
+  })
 })

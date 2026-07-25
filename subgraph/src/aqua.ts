@@ -46,6 +46,7 @@ export function handleDocked(event: Docked): void {
   const strategyId = strategyEntityId(event.params.maker, event.params.app, event.params.strategyHash)
   const strategy = Strategy.load(strategyId)
   if (strategy == null) return
+  if (strategy.status == "DOCKED") return // already docked: balances are zero, avoid double-decrementing live counters
 
   const tokens = strategy.tokenAddresses
   for (let i = 0; i < tokens.length; i++) {
