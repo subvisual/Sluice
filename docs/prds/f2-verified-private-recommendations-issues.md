@@ -25,7 +25,7 @@ kept so the work is recoverable if that scope returns.
 0 Gate 0 (DONE) ──▶ 1 Binding (RESOLVED) ──▶ 2 Registry ⛔ ──┬─▶ 3 Codec 🟡 ───────┐
   (CLI, PR #6)        (c)+(a); ADR-0001       (deferred)     └─▶ 4 Sealed compose 🟡┤
                                                                                     ├─▶ 6 Loop+fallback+commit 🟡 ─┬─▶ 7 Narration ⛔ ─┐
-                                          5 Validator 🟡 (I1–I4,I12; I5–I11 F1 Q2) ─┘                             └─▶ 8 Enc. memory ⛔ ┴─▶ 9 Trace view ⛔ ─▶ 10 Reviewer ⛔
+                                          5 Validator ✅ (I1–I12 in scope; I13/I14 ⛔) ─┘                          └─▶ 8 Enc. memory ⛔ ┴─▶ 9 Trace view ⛔ ─▶ 10 Reviewer ⛔
 ```
 
 The composer (PR #10) delivers the recommendation spine that cuts across **3, 4, and the retry
@@ -120,29 +120,37 @@ checked** (⛔ verifiability). Context is the stub, not live F3.
 
 ---
 
-## 5. Request envelope + validator I1–I14 (`arbitration-sdk/src/validate.ts`) · 🟡 partially delivered
+## 5. Request envelope + validator (`arbitration-sdk/src/validate.ts`) · ✅ delivered
 
 The deterministic gate that **rejects** (never mutates) a non-compliant recommendation.
+`validate(r, q, s): Violation[]` in `src/validate.ts` is a pure, rejecting gate. It implements every
+invariant that is in scope for the recommendation path **and** meaningful on the deployed
+`AquaSwapVMRouter` (F1 grammar settled by PR #14 — `grammar.ts` is the router's complete menu):
 
-**Delivered — the grammar-independent slice (I1–I4, I12).** `validate(r, q, s): Violation[]` in
-`src/validate.ts` is a pure, rejecting gate for the invariants that do **not** depend on the F1
-grammar: I1 (token ∈ budget), I2 (per-token Σ virtualAmounts across **all** strategies ≤ budget —
-exact decimal-string maths, not floating point), I3 (`strategies.length ∈ [1, maxStrategies]`), I4
-(chain match), I12 (`observedBlock` within N blocks of head; future snapshots also rejected). 17
-property/example tests, incl. the `0.1+0.1+0.1 ≤ 0.3` exactness case and a "never mutates input"
-check. This upgrades the composer's soft budget *notes* into hard *rejections*.
+- **Budget & authority:** I1 (token ∈ budget), I2 (per-token Σ virtualAmounts across **all**
+  strategies ≤ budget — exact decimal-string maths, not floating point), I3
+  (`strategies.length ∈ [1, maxStrategies]`), I4 (chain match).
+- **Grammar (per strategy):** I5 (slots use only offered instructions — `curve ∈ CURVE_OPTIONS`,
+  `fee ∈ WRAPPER_OPTIONS` with `feeBps ∈ [0, 1e9)`, `guards ∈ GUARD_OPTIONS`), I7 (deadline within
+  `(now, now + maxDeadlineSec]`), I8 (known `templateId`), I10 (canonical ascending token order —
+  catches the token0/token1 inversion), I11 (each virtualAmount a decimal string, strictly > 0).
+- **Freshness:** I12 (`observedBlock` within N blocks of head; future snapshots also rejected).
 
-**Still blocked — the grammar invariants (I5–I11, I14).** F1 §5 is provisional and explicitly "the
-validator must not be built against it" until **F1 Open Q2** settles against the forked bytecode
-(e.g. `_xycConcentrateGrowLiquidityXD` is not a real opcode; "exactly one swap-logic instruction"
-is not a protocol rule). **I4's `r.user == q.user` half** and **I13 (nonce)** are deferred with the
-commit path (both committer-supplied); **I15** is parked (whole-balance mode).
+28 property/example tests, incl. the `0.1+0.1+0.1 ≤ 0.3` exactness case, a "never mutates input"
+check, and a coverage test asserting only in-scope codes ever fire.
+
+**N/A on this venue** (the opcodes do not exist on the deployed router, so these are documented, not
+emitted): **I6** (partial-fill ⇒ token-invalidation — no LimitSwap/invalidation opcode) and **I9**
+(oracle-adjuster ⇒ feed — no oracle opcode). **Deferred:** **I4's `r.user == q.user` half** and
+**I13 (nonce)** ride with the commit path (committer-supplied); **I14** (byte-for-byte
+recompile-equality) is a ship-path defence — I5 already guarantees every named instruction is
+dispatchable/compilable here; **I15** is parked (whole-balance mode).
 
 ### Acceptance criteria
-- [x] `validate(r, q, s): Violation[]` implements **I1–I4, I12** (rejects, never mutates); property
-  tests never return "valid" for a violating recommendation and never mutate input.
-- [ ] 🚧 I5–I11, I14 (grammar / recompile-equality) *(unblock when F1 Q2 lands)*.
-- [ ] ⛔ I4 user-equality + I13 nonce *(deferred with the commit path)*.
+- [x] `validate(r, q, s): Violation[]` implements **I1–I5, I7, I8, I10–I12** (rejects, never
+  mutates); property tests never return "valid" for a violating recommendation and never mutate.
+- [x] I6, I9 are N/A on the deployed venue (no opcode) — documented, never emitted.
+- [ ] ⛔ I4 user-equality, I13 nonce, I14 recompile-equality *(deferred with the commit/ship path)*.
 - [ ] ⬜ Wire the gate into the composer's reject-and-re-infer loop *(Issue 6)*.
 
 ---
@@ -216,12 +224,14 @@ even under the original scope; **deferred**. Spec retained.
 ## What's actually left, under the current scope
 
 The recommendation path is working (composer + the deterministic template fallback), and the
-**budget/authority validator** (Issue 5, I1–I4/I12) now hard-rejects out-of-budget, wrong-chain, or
-stale recommendations. The **in-scope, buildable** F2 remainder is now essentially just:
+**validator** (Issue 5) is complete for this scope — it hard-rejects out-of-budget, wrong-chain,
+stale, mis-ordered-token, bad-deadline, unknown-template, and off-menu-instruction recommendations
+(I1–I5, I7, I8, I10–I12; I6/I9 are N/A on the deployed venue). The **in-scope, buildable** F2
+remainder is now essentially just:
 
-- **The grammar half of the validator** (Issue 5, I5–I11/I14) — the moment **F1 Open Q2** settles
-  the grammar, this unblocks and the composer's output can become grammar-*correct*.
-- **Wire the validator into the compose loop** (Issue 6) — turn `validate()` into reject-and-re-infer.
-- **Real F3 context** — swap the stub; F3 work, tracked there.
+- **Wire the validator into the compose loop** (Issue 6) — turn `validate()` into reject-and-re-infer
+  so a violating model output is fed back and re-inferred, then falls through to `TEMPLATE_FALLBACK`.
+- **Real F3 context** — swap the market stub; F3 work, tracked there.
 
-Everything under ⛔ waits on a decision to reinstate on-chain verifiability.
+Everything under ⛔ (verifiability: registry, commit, trace, I13/I14) waits on a decision to reinstate
+on-chain verifiability.
