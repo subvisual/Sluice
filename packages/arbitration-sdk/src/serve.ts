@@ -12,14 +12,26 @@ import { ethers } from "ethers";
 import { loadConfig, type Config } from "./config.ts";
 import { initBroker, type ChatMessage, type ZGBroker } from "./inference.ts";
 import { chainStateFor, compose } from "./compose.ts";
+import { compileRecommendation, deriveSaltSeed } from "./compile.ts";
 import { liveContext, stubContext, type MarketContext } from "./context.ts";
-import { FALLBACK_SOURCE, templateFallback, type RecommendationSource } from "./fallback.ts";
+import {
+	FALLBACK_SOURCE,
+	templateFallback,
+	type RecommendationSource,
+} from "./fallback.ts";
 import type {
 	RecommendationRequest,
 	StrategyRecommendation,
 	TokenBudget,
 } from "./recommendation.ts";
 import { validate, type Violation } from "./validate.ts";
+
+export type WireShipInput = {
+	strategyHash: string;
+	strategy: string;
+	tokens: string[];
+	amounts: string[]; // decimal base-unit strings (bigint is not JSON-safe)
+};
 
 export type ServerBudgetEntry = {
 	address: string;
@@ -62,6 +74,7 @@ export type ServerComposeResult = {
 	} | null;
 	validation: { ok: boolean; violations: Violation[] };
 	attempts: number;
+	shipInputs: WireShipInput[];
 };
 
 export function budgetEntryToDecimal(e: ServerBudgetEntry): TokenBudget {
@@ -99,7 +112,27 @@ function verdict(
 	return { ok: violations.length === 0, violations };
 }
 
-function fallbackResult(req: RecommendationRequest, reason: string): ServerComposeResult {
+// Compiles a recommendation to wire-safe ship inputs: bigint amounts are not
+// JSON-safe, so this is the one place they become decimal strings.
+function shipInputsFor(
+	rec: StrategyRecommendation,
+	maker: string,
+	signedText: string | null,
+): WireShipInput[] {
+	const seed = deriveSaltSeed(rec, signedText);
+	return compileRecommendation(rec, maker, seed).map((s) => ({
+		strategyHash: s.strategyHash,
+		strategy: s.strategy,
+		tokens: s.tokens,
+		amounts: s.amounts.map((a) => a.toString()),
+	}));
+}
+
+function fallbackResult(
+	req: RecommendationRequest,
+	reason: string,
+	maker: string,
+): ServerComposeResult {
 	const ctx = nowContext();
 	const rec = templateFallback(req, ctx);
 	const violations = validate(rec, req, chainStateFor(ctx));
@@ -111,6 +144,7 @@ function fallbackResult(req: RecommendationRequest, reason: string): ServerCompo
 		proof: null,
 		validation: { ok: violations.length === 0, violations },
 		attempts: 0,
+		shipInputs: shipInputsFor(rec, maker, null),
 	};
 }
 
@@ -134,6 +168,7 @@ export async function composeForApp(
 		return fallbackResult(
 			req,
 			"ZG_PRIVATE_KEY is not configured — deterministic template seed; nothing was sent to 0G",
+			input.user,
 		);
 	}
 
@@ -183,10 +218,15 @@ export async function composeForApp(
 				: null,
 			validation,
 			attempts: result.attempts,
+			shipInputs: shipInputsFor(
+				rec,
+				input.user,
+				fromEnclave ? result.raw.signedText : null,
+			),
 		};
 	} catch (e) {
 		brokerPromise = null; // do not poison later requests
 		const msg = e instanceof Error ? e.message : String(e);
-		return fallbackResult(req, `inference failed: ${msg}`);
+		return fallbackResult(req, `inference failed: ${msg}`, input.user);
 	}
 }

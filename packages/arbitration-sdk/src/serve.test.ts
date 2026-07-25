@@ -46,7 +46,10 @@ test("composeForApp without ZG_PRIVATE_KEY returns a labelled, valid fallback", 
 	assert.equal(res.attempts, 0);
 	// The fallback draws strictly on the user's budget, and it passes the validator.
 	assert.equal(res.recommendation.strategies.length, 1);
-	assert.deepEqual(res.recommendation.strategies[0].tokens, [WETH.address, USDC.address]);
+	assert.deepEqual(res.recommendation.strategies[0].tokens, [
+		WETH.address,
+		USDC.address,
+	]);
 	assert.deepEqual(res.validation, { ok: true, violations: [] });
 });
 
@@ -54,7 +57,10 @@ test("composeForApp sorts the budget into canonical token order (I10)", async ()
 	delete process.env.ZG_PRIVATE_KEY;
 	// Reversed input must not produce an I10 violation in the fallback.
 	const res = await composeForApp({ ...INPUT, budget: [USDC, WETH] });
-	assert.deepEqual(res.recommendation.strategies[0].tokens, [WETH.address, USDC.address]);
+	assert.deepEqual(res.recommendation.strategies[0].tokens, [
+		WETH.address,
+		USDC.address,
+	]);
 	assert.equal(res.validation.ok, true);
 });
 
@@ -62,4 +68,18 @@ test("composeForApp result survives JSON round-tripping", async () => {
 	delete process.env.ZG_PRIVATE_KEY;
 	const res = await composeForApp(INPUT);
 	assert.deepEqual(JSON.parse(JSON.stringify(res)), res);
+});
+
+test("composeForApp returns compiled shipInputs, one per strategy", async () => {
+	delete process.env.ZG_PRIVATE_KEY;
+	const res = await composeForApp(INPUT);
+
+	assert.equal(res.shipInputs.length, res.recommendation.strategies.length);
+	for (const [i, shipInput] of res.shipInputs.entries()) {
+		const strategy = res.recommendation.strategies[i];
+		assert.match(shipInput.strategyHash, /^0x[0-9a-fA-F]{64}$/);
+		assert.equal(shipInput.strategyHash.length, 66);
+		assert.equal(shipInput.amounts.length, shipInput.tokens.length);
+		assert.equal(shipInput.tokens.length, strategy.tokens.length);
+	}
 });
