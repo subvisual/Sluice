@@ -19,9 +19,15 @@ addresses, config paths, commands.
 - Issues: `docs/prds/f1-aqua-strategy-vm-issues.md`
 - Feature-scoped ADRs: `docs/features/f1-aqua-strategy-vm/adr/`
 
-The venue is a **Base fork** — same chainId as Base mainnet, so a `chainId` guard cannot tell
-them apart. Guard with a **fork probe** (`eth_getCode` against pinned addresses) plus an explicit
-`SLUICE_ALLOW_MAINNET` opt-in. Addresses are pinned in `config/addresses.8453.json`; never
-hardcode the real Aqua addresses (identical across chains). Provenance is
-`strategyHash = keccak256(abi.encode(strategy))`, computed before signing and checked by
-recompile-equality. Exits are `dock()` and `_deadline`; there is no daemon stepping a book.
+Development and testing currently run against a **Base fork**, which shares Base's chainId — so a
+`chainId` guard cannot tell fork from mainnet. Guard signing with a fork probe using an anvil-only
+RPC method (`anvil_nodeInfo`, `hardhat_metadata`), **not `eth_getCode`**: the fork runs the same
+Aqua deployment, so that bytecode is identical either way and proves nothing. Pair it with an
+explicit `SLUICE_ALLOW_MAINNET` opt-in. Addresses are pinned in `config/addresses.8453.json`.
+
+Provenance is `strategyHash = keccak256(strategy)` — the raw bytes, **no `abi.encode`**
+(`Aqua.sol:41`) — computed before signing and checked by recompile-equality. The preimage
+contains no maker, so hashes collide across users; key on `(maker, app, strategyHash)`. Emit a
+`Salt` (`0x02`) in every strategy: a docked hash is burned permanently and amounts are not in the
+preimage, so a "resize" is a new strategy, never a re-ship. Exits are `dock()` and `_deadline`;
+there is no daemon stepping a book.

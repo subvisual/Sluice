@@ -67,6 +67,19 @@ lives on the Wiring page.
   `exposureHeadroom` vocabulary is **parked** — it belongs only to the future whole-balance mode.
   Reintroducing it unqualified is a known bug returning.
 
+## Protocol facts, read from source
+
+From [1inch/aqua](https://github.com/1inch/aqua). Each is easy to get wrong by inference; detail is
+on Notion F1.
+
+- **`strategyHash = keccak256(strategy)`** (`Aqua.sol:41`) — raw bytes, no `abi.encode`, no maker.
+  Computable before shipping, and it **collides across makers**: key on `(maker, app, strategyHash)`.
+- **Emit a `Salt` (`0x02`) in every strategy.** A docked hash is burned permanently and amounts are
+  not in the preimage, so a "resize" is a new strategy, never a re-ship.
+- **We deploy no Aqua app.** `ship()` keys the maker on `msg.sender`, so routing through a contract
+  of ours would make it the maker for every user.
+- **Virtual amounts are a ceiling, not a promise.** Never draw more than the user authorised.
+
 ## Stack & layout
 
 No code scaffolded yet beyond `packages/arbitration-sdk` (0G inference client + CLI); the toolchain
@@ -78,12 +91,13 @@ below is intended (from `.gitignore` + Notion Wiring §1). Planned monorepo:
 - **Subgraph** (F3) — The Graph, codegen into `subgraph/generated/`
 - **Agent / dashboard** — TypeScript/Node (dashboard is Next.js)
 
-The venue is a **Base mainnet fork** at a pinned block running the *real, already-deployed*
-Aqua/SwapVM — we self-deploy only **our own** contracts (taker, `RecommendationRegistry`). Because
-the fork shares Base's chainId, a `chainId` assert cannot distinguish fork from mainnet: guard with
-a **fork probe** (`eth_getCode` on pinned Aqua addresses) plus an explicit `SLUICE_ALLOW_MAINNET`
-opt-in, and pin addresses in `config/addresses.8453.json`. Never hardcode the real Aqua addresses
-(identical across chains). This repo signs transactions — keys live in `.env` (gitignored); never
+**For now, development and testing run against a Base mainnet fork** at a pinned block, so we build
+against the real deployed Aqua/SwapVM rather than a copy. We self-deploy only our own contracts
+(taker, `RecommendationRegistry`); addresses are pinned in `config/addresses.8453.json`. A fork
+shares Base's chainId, so guard signing with a fork probe (`anvil_nodeInfo` — **not `eth_getCode`**,
+which returns identical bytecode either way) plus an explicit `SLUICE_ALLOW_MAINNET` opt-in.
+
+This repo signs transactions — keys live in `.env` (gitignored); never
 commit one. Two keys: `SLUICE_COMMITTER_KEY` (commits recommendations) and `SLUICE_OWNER_KEY`
 (registry admin, cold). The user is the maker and signs the ship `Multicall` themselves.
 
