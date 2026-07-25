@@ -13,8 +13,10 @@ that ships them. Tokens never leave your wallet; you are the maker.
 
 Sluice acts **once, at creation time**. It is **not** in the per-swap path and **not** a daemon
 managing a book afterwards — there is no tick loop, no epoch, nothing watching your positions once
-you have signed. (Continuous, whole-balance management is parked future work, blocked on an
-authorization problem — session keys / smart accounts — not an agent problem.) Every recommendation
+you have signed. (Two extensions are parked, with *different* blockers: **whole-balance
+composition** waits on the sizing maths that keeps all-or-nothing legs coverable; **continuous
+management** waits on an authorization problem — session keys / smart accounts — not an agent
+problem.) Every recommendation
 is computed privately in a 0G TDX enclave and signed; the signature is verified on-chain to prove
 **provenance** (a real 0G TEE produced it, our committer authorised it), then a deterministic
 validator **rejects** non-compliant recommendations and re-infers — it never rewrites a signed one,

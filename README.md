@@ -26,8 +26,10 @@ Three integrations, each load-bearing:
   deterministically to SwapVM bytecode. A `SluiceTaker` produces the fills a fork otherwise lacks.
 - **0G** — private, verifiable recommendations. Composition runs inside an Intel TDX enclave and is
   signed; the chain verifies the signature to prove **provenance** (a real 0G TEE produced it, our
-  committer authorised it). A deterministic validator **rejects** non-compliant recommendations and
-  re-infers — it never rewrites a signed one. Traces live encrypted in 0G Storage for audit.
+  committer authorised it). Review splits by what has a right answer: a deterministic validator
+  **rejects** non-compliant recommendations and re-infers (never rewriting a signed one), while a
+  **reviewer agent** judges what does not — risk rating, intent match, band sensibility. Traces
+  live encrypted in 0G Storage for audit.
 - **The Graph** — market & book context. A net-new subgraph indexes the user's own Aqua book
   (`Position`/`Fill`); composed external subgraphs supply market data (depth, realised vol, fees).
   Together they form the `MarketContext` the recommendation is built from.
@@ -36,8 +38,10 @@ Three integrations, each load-bearing:
 
 Hackathon build, pre-alpha. Nothing here is audited; don't point it at real funds.
 
-Running so far: the **0G inference CLI** in `packages/arbitration-sdk` (`npm run infer -- "…"`),
-which runs a prompt on a live 0G provider and prints the answer plus a verifiable EIP-191 proof.
+Running so far: a **generic 1inch Aqua subgraph** — the first that exists — live on Ethereum
+mainnet and Base against real protocol activity (`subgraph/`); and the **0G inference CLI** in
+`packages/arbitration-sdk` (`npm run infer -- "…"`), which runs a prompt on a live 0G provider and
+prints the answer plus a verifiable EIP-191 proof.
 
 The venue is a **Base fork** sharing Base's chainId, so a wrong-network mistake looks perfectly
 correct — guarded by a fork probe plus an explicit `SLUICE_ALLOW_MAINNET` opt-in, with addresses

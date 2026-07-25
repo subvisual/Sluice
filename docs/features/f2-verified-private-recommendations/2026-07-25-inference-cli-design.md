@@ -7,7 +7,8 @@
 > spec describes the **inference CLI**, which is framing-agnostic and was built as designed; the
 > downstream references below (DecisionRegistry, "Issue 2", framing codec) belong to the old plan.
 > The live Gate 0 run also found the enclave signs an attestation record, not our text — see
-> ADR-0001's Gate 0 update. Both are recorded; this doc is kept as the CLI's build record.
+> ADR-0001's Gate 0 update — and ran model `qwen/qwen2.5-omni-7b`, not the drafted `qwen-2.5-7b`
+> in the config table below. Both are recorded; this doc is kept as the CLI's build record.
 
 The first runnable slice of the 0G integration: a one-shot CLI that takes a free-form prompt,
 runs it through a live 0G Compute provider, and prints the model's answer alongside a
@@ -139,5 +140,5 @@ acceptance:
 
 ## Follow-ups (out of scope here, noted for the plan)
 
-- Feed the recovered signer + latency into `docs/prds/f2-verified-private-decisions.md` and Notion.
+- Feed the recovered signer + latency into `docs/prds/f2-verified-private-recommendations.md` and Notion.
 - Issue 2 onward build the framing codec, `DecisionRegistry`, and on-chain commit atop this module.

@@ -14,7 +14,8 @@ addresses, config paths, commands.
 ## Local
 
 - Package: `packages/arbitration-sdk/` — 0G inference client + CLI (`npm run infer -- "…"`).
-- PRD: `docs/prds/f2-verified-private-recommendations.md` (**superseded** by the Notion pivot — see its banner).
+- PRD: `docs/prds/f2-verified-private-recommendations.md` — regenerated after the pivot; see its
+  **build-scope banner** (recommendation-only; verifiability deferred).
 - Feature-scoped ADRs: `docs/features/f2-verified-private-recommendations/adr/`
 
 **⚠️ Gate 0 finding (2026-07-25):** the 0G provider does **not** sign our response text. The

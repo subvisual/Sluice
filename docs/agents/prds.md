@@ -6,7 +6,8 @@ How the building skills should find and write PRDs and issue files.
 
 ## Feature slugs
 
-One PRD per feature, named with the slug of the Notion feature it implements:
+One PRD per feature, named with the slug of the Notion feature it implements (`wiring-delivery`
+is the shared-context area, not a fourth feature, but it carries a PRD like the others):
 
 | Slug | Notion page |
 | --- | --- |

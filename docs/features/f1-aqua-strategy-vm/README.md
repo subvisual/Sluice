@@ -3,10 +3,13 @@
 **Source of truth:** [F1 — Aqua & the Strategy VM (1inch Aqua + SwapVM)](https://app.notion.com/p/3a8caae5863181459491dcb6e7e25a1b)
 
 1inch Aqua + SwapVM. F1 owns **the venue, the strategy language, and what fills what we ship**:
-a **Base mainnet fork** at a pinned block running the *real, already-deployed* Aqua/SwapVM (we
-self-deploy only our own contracts), the six-slot **strategy grammar** an LLM can safely fill,
-the deterministic **compiler** (`SlotAssignment` → SwapVM bytecode), and `SluiceTaker.sol` — a
-taker we build ourselves because a fork has no organic takers.
+a **Base mainnet fork** at a pinned block running the *real, already-deployed* Aqua/SwapVM
+(`RecommendationRegistry` is the only contract we self-deploy, and it is not in the ship path),
+the six-slot **strategy grammar** an LLM can safely fill (provisional until F1 Open Q2 settles
+against the forked bytecode — do not pin a validator to a fixed slot table yet), the deterministic
+**compiler** (`SlotAssignment` → SwapVM bytecode), and the **taker** — a funded EOA with one
+approval to `AquaSwapVMRouter`, driven by a script (`packages/taker/src/drive.ts`), **not a
+contract**, because a fork has no organic takers.
 
 It does **not** own the recommendation itself (F2), the data behind it (F3), or the request flow.
 

@@ -6,6 +6,12 @@ truth** for the concept and schemas ([F2 page](https://app.notion.com/p/3a8caae5
 implementation-specific build-out (files, signatures, sequence, tests). Regenerated 2026-07-25
 after the pivot from the old daemon design; the previous version is in git history.
 
+> **Build scope (2026-07-25) — recommendation-only; verifiability deferred.** The honest loop
+> today is *prompt → validated recommendation*. **Deferred, not deleted** (mirrors the Notion F2
+> banner): §2 `RecommendationRegistry` + the on-chain commit (tx1), §3's `payloadHash` binding,
+> §4 Gate 2 reviewer, §8 encrypted trace, and signature verification. Everything below documents
+> the full design; the deferred pieces are in scope but not in the current build.
+
 **What F2 owns:** `RecommendationRegistry`, the recommendation codec, the request envelope and
 its invariants, sealed inference, the reviewer (stretch), and encrypted memory. **F2 does not
 own:** the strategy grammar/compiler being filled in (F1), the market/book data (F3), or the
@@ -51,7 +57,7 @@ question (§7). Tracked in ADR-0001.
 | # | Decision | Where |
 | --- | --- | --- |
 | Framing | Creation-time composer; **user signs and ships**; no daemon/tick loop. Flow: infer → validate → present → commit → ship. | Notion §2, Wiring §4 |
-| Registry | `RecommendationRegistry` with **per-user nonce** replay (not a global epoch). `commitRecommendation` is `onlyCommitter`; emits `RecommendationCommitted(user, nonce, recommendationId, signer, strategyHashes, templateIds)`. | Notion §2 |
+| Registry | `RecommendationRegistry` with **per-user nonce** replay (not a global epoch). `commitRecommendation` is `onlyCommitter`; emits `RecommendationCommitted(user, nonce, recommendationId, signer, payloadHash, strategyHashes, templateIds)`. | Notion §2 |
 | Not in ship path | The registry is **not** gated into `ship()`. Binding is a **derivation** (subgraph joins Aqua ship events to the recommendation's declared `strategyHash`es), not an on-chain enforcement. | Wiring §5 |
 | Two txs | tx1 = `commitRecommendation` (**ours**, committer key, our gas); tx2 = `Multicall[ship,…]` (**user's**). tx2 need not wait on tx1. | Wiring §5 |
 | Request envelope | Replaces the mandate; **built per request** from the user's own input (`prompt`, `budget`, `maxStrategies`, `maxDeadlineSec`, `maxInferenceRetries`). No stored `realBalance`. `allowPartial` gone (structural, per F1 §5). | Notion §5 |
@@ -64,14 +70,16 @@ question (§7). Tracked in ADR-0001.
 ## Cross-feature dependencies
 
 - **F1 — grammar & compiler:** the validator (I5–I11, I14) and the codec consume F1's slot grammar,
-  `StrategyTemplate.compile()`, `worstCaseDraw()`, and `strategyHash = keccak256(abi.encode(strategy))`.
+  `StrategyTemplate.compile()`, `worstCaseDraw()`, and `strategyHash = keccak256(strategy)` (raw
+  bytes, **no `abi.encode`**, `Aqua.sol:41` — see F1 §2; Notion Wiring §2 still shows the
+  `abi.encode` form and needs correcting).
   The registry emits `strategyHash`es F1's ship path produces. *F1 Open Q1 (partial-fill) / Q2
   (`_decayXD` slot) must settle on the fork first.*
 - **F3 — context:** COMPOSE/VALIDATE consume `MarketContext` (`PairContext` + `userBook`) from
   `context.ts`; `liveBalance` via `eth_call` at `observedBlock`, never the index.
 - **Wiring — flow/tx/config:** steps 3–5b, 8b, 9, 11 of the request flow are F2; `SLUICE_COMMITTER_KEY`
   / `SLUICE_OWNER_KEY`, `ZG_*`, `SLUICE_DRY_RUN` per Wiring §9. Repo layout: F2 code lives in
-  `packages/composer-sdk/src/{inference,validate,review,memory}.ts` + `contracts/src/RecommendationRegistry.sol`.
+  `packages/arbitration-sdk/src/{inference,validate,review,memory}.ts` + `contracts/src/RecommendationRegistry.sol`.
 
 ## Sub-components
 
@@ -94,14 +102,14 @@ strategyHashes, templateIds)`. **`user`/`nonce` are committer-supplied args, not
 signed bytes** (Decision A resolved — see ADR-0001). Deploy to the Base fork; register signer +
 committer.
 
-### 2. Recommendation codec (`packages/composer-sdk/src/recommendation.ts`)
+### 2. Recommendation codec (`packages/arbitration-sdk/src/recommendation.ts`)
 
 `StrategyRecommendation` (`schema: "sluice.recommendation/1"`), `frame()`/`parse()`,
 `validateSchema()` (ajv/zod, no fences), `toCommitArgs()`. Amounts are **decimal strings**. Carry
 the enclave's exact signed bytes end-to-end (no canonicalization). Frame shape (whether we still
 dictate fixed prefix lines) follows Issue 1.
 
-### 3. Sealed composition inference (`packages/composer-sdk/src/inference.ts`)
+### 3. Sealed composition inference (`packages/arbitration-sdk/src/inference.ts`)
 
 Extends the Gate-0 CLI client. `compose(broker, ctx, request)` builds the §9 prompt (grammar +
 schema + request + F3 context + templates + violation history), POSTs, reads `ZG-Res-Key`, fetches
@@ -109,13 +117,13 @@ the out-of-band signature, `verifyLocal()` (`verifyMessage === registered signer
 `processResponse`). Per-attempt latency logged. Reuses the CLI's ledger-funded broker,
 `createRequire` CJS interop, and provider-metadata model.
 
-### 4. Request envelope + validator (`packages/composer-sdk/src/validate.ts`)
+### 4. Request envelope + validator (`packages/arbitration-sdk/src/validate.ts`)
 
 `RecommendationRequest` type; `validate(r, q, s): Violation[]` I1–I14 (rejects, never mutates).
 I5–I11/I14 consume F1 grammar/compile; I12 freshness; I13 nonce; I2 budget; I15 **parked**
 (whole-balance only).
 
-### 5. Reject-and-re-infer + template fallback (`packages/composer-sdk/src/compose.ts`)
+### 5. Reject-and-re-infer + template fallback (`packages/arbitration-sdk/src/compose.ts`)
 
 Flow steps 2–5b: re-snapshot each attempt (only violation history carries forward), ≤
 `maxInferenceRetries`, then `TEMPLATE_FALLBACK`. Then COMPILE (I14) → PRESENT → 8b FRESHEN → COMMIT
@@ -126,14 +134,14 @@ Flow steps 2–5b: re-snapshot each attempt (only violation history carries forw
 Second enclave-signed call over `recommendationId‖prose`; verified off-chain; stored in the trace;
 never blocks the recommendation reaching the user.
 
-### 7. Encrypted memory (`packages/composer-sdk/src/memory.ts`, 0G Storage)
+### 7. Encrypted memory (`packages/arbitration-sdk/src/memory.ts`, 0G Storage)
 
 `trace/{user}/{nonce}.json.enc` (prompt, `signedText`, signature, narration, verdict, rejected
 attempts, latencies, txHash, `payloadHash`, promptVersion); `weights.json.enc` (per-template
 priors, stretch); plaintext `index.json`. AES-256-GCM; **per-user key derivation (Open Q2)** —
 default: each user signs to derive their own key; decrypt server-side (Next.js route).
 
-### 8. Reviewer — Gate 2 (`packages/composer-sdk/src/review.ts`) · STRETCH
+### 8. Reviewer — Gate 2 (`packages/arbitration-sdk/src/review.ts`) · STRETCH
 
 Second inference over an *already-valid* recommendation → risk rating + intent-match; **flags,
 never vetoes**; verdict signed over `recommendationId‖verdict`, stored in the trace. Build only
