@@ -1,8 +1,9 @@
 // Server-only facade for the app (design: docs/superpowers/specs/
 // 2026-07-25-app-server-compose-design.md). The app's ONE import from this
 // package on the server. Owns: env config, a broker singleton, live-book
-// context, and compose() — whose re-infer loop runs the deterministic gate;
-// this facade validates only the deterministic fallbacks it builds itself.
+// context, the request's wall clock, and compose() — whose re-infer loop runs
+// the deterministic gate on the clock this facade supplies; the facade itself
+// validates only the deterministic fallbacks it builds.
 // It NEVER funds the ledger — funding
 // is `npm run fund`, out-of-band — and every failure returns a labelled
 // TEMPLATE_FALLBACK instead of throwing, so a missing key or a 0G outage is
@@ -11,7 +12,7 @@
 import { ethers } from "ethers";
 import { loadConfig, type Config } from "./config.ts";
 import { initBroker, type ChatMessage, type ZGBroker } from "./inference.ts";
-import { chainStateFor, compose } from "./compose.ts";
+import { chainStateFor, compose, PROMPT_VERSION } from "./compose.ts";
 import { liveContext, stubContext, type MarketContext } from "./context.ts";
 import { FALLBACK_SOURCE, templateFallback, type RecommendationSource } from "./fallback.ts";
 import type {
@@ -19,7 +20,7 @@ import type {
 	StrategyRecommendation,
 	TokenBudget,
 } from "./recommendation.ts";
-import { validate, type Violation } from "./validate.ts";
+import { validate, type ChainState, type Violation } from "./validate.ts";
 
 export type ServerBudgetEntry = {
 	address: string;
@@ -62,6 +63,15 @@ export type ServerComposeResult = {
 	} | null;
 	validation: { ok: boolean; violations: Violation[] };
 	attempts: number;
+	/**
+	 * Where the BOOK context came from (F3 job 1): "subgraph" = the user's live
+	 * book; "stub" = the subgraph was unavailable, or nothing was fetched at all
+	 * (the no-key path). Surfaced so the UI can say so — F3's rule is
+	 * stub-labelled end-to-end, and this response is the end.
+	 */
+	contextSource: MarketContext["source"];
+	/** The prompt contract that produced this — F2 §9. */
+	promptVersion: string;
 };
 
 export function budgetEntryToDecimal(e: ServerBudgetEntry): TokenBudget {
@@ -85,32 +95,52 @@ function getBroker(cfg: Config): Promise<ZGBroker> {
 }
 
 // stubContext() is frozen in time for reproducible tests; a fallback deadline
-// computed from it would already be in the past. Re-key it to now.
-function nowContext(): MarketContext {
-	return { ...stubContext(), observedAt: Math.floor(Date.now() / 1000) };
+// computed from it would already be in the past. Re-key it to the request's
+// wall clock — the SAME `now` the validator uses, so the two can never drift
+// across the second boundary between two Date.now() calls.
+function nowContext(now: number): MarketContext {
+	return { ...stubContext(), observedAt: now };
+}
+
+// The validator clock. observedAt/observedBlock are SNAPSHOT facts the model
+// echoes; `now` is the server's wall clock, computed once per request.
+// Validating on the snapshot's own clock (chainStateFor's default) can never
+// catch a stale or degenerate snapshot — a lagging indexer, a null _meta
+// timestamp — because the bound and the value share a source. headBlock still
+// equals the snapshot block (a real head read needs a Base RPC this facade
+// does not hold), so I12 stays inert here; I7 is the guard that becomes real.
+function wallChainState(ctx: MarketContext, now: number): ChainState {
+	return { ...chainStateFor(ctx), now };
 }
 
 function verdict(
 	rec: StrategyRecommendation,
 	req: RecommendationRequest,
 	ctx: MarketContext,
+	now: number,
 ): { ok: boolean; violations: Violation[] } {
-	const violations = validate(rec, req, chainStateFor(ctx));
+	const violations = validate(rec, req, wallChainState(ctx, now));
 	return { ok: violations.length === 0, violations };
 }
 
-function fallbackResult(req: RecommendationRequest, reason: string): ServerComposeResult {
-	const ctx = nowContext();
+function fallbackResult(
+	req: RecommendationRequest,
+	reason: string,
+	now: number,
+): ServerComposeResult {
+	const ctx = nowContext(now);
 	const rec = templateFallback(req, ctx);
-	const violations = validate(rec, req, chainStateFor(ctx));
+	const { ok, violations } = verdict(rec, req, ctx, now);
 	return {
 		source: FALLBACK_SOURCE,
 		reason,
 		recommendation: rec,
 		messages: null,
 		proof: null,
-		validation: { ok: violations.length === 0, violations },
+		validation: { ok, violations },
 		attempts: 0,
+		contextSource: "stub",
+		promptVersion: PROMPT_VERSION,
 	};
 }
 
@@ -129,27 +159,39 @@ export async function composeForApp(
 		maxDeadlineSec: input.maxDeadlineSec,
 	};
 
+	// One wall clock per request: the prompt's snapshot may lag it slightly
+	// (that is what observedAt is for), but every VALIDATION bound in this
+	// request derives from this single number.
+	const now = Math.floor(Date.now() / 1000);
+
 	// No key: short-circuit BEFORE any network call so this path is offline.
 	if (!process.env.ZG_PRIVATE_KEY?.trim()) {
 		return fallbackResult(
 			req,
 			"ZG_PRIVATE_KEY is not configured — deterministic template seed; nothing was sent to 0G",
+			now,
 		);
 	}
 
 	// Live book (F3 job 1); the subgraph being down degrades the context, not
-	// the request — the prompt admits a stub book rather than inventing one.
+	// the request — the prompt admits a stub book rather than inventing one,
+	// and `contextSource` carries the degradation into the response.
 	let ctx: MarketContext;
 	try {
 		ctx = await liveContext(input.user);
 	} catch {
-		ctx = nowContext();
+		ctx = nowContext(now);
 	}
 
 	try {
 		const cfg = loadConfig();
 		const broker = await getBroker(cfg);
-		const result = await compose(broker, cfg, req, ctx);
+		const result = await compose(broker, cfg, req, ctx, {
+			// Override the loop's default snapshot clock with the wall clock, so
+			// the gate that ACCEPTS inside compose() is the same gate this facade
+			// answers for — one clock, no accept-then-reject drift.
+			chainState: wallChainState(ctx, now),
+		});
 		// compose() guarantees a well-formed parse (its own fallback re-parses).
 		const rec = result.parse.recommendation!;
 		const fromEnclave = result.source === "ENCLAVE";
@@ -161,7 +203,7 @@ export async function composeForApp(
 		// belong in `reason`, not in the verdict on what the user is shown.
 		const validation = fromEnclave
 			? { ok: true, violations: [] as Violation[] }
-			: verdict(rec, req, ctx);
+			: verdict(rec, req, ctx, now);
 		return {
 			source: result.source,
 			reason: fromEnclave
@@ -183,10 +225,12 @@ export async function composeForApp(
 				: null,
 			validation,
 			attempts: result.attempts,
+			contextSource: ctx.source,
+			promptVersion: PROMPT_VERSION,
 		};
 	} catch (e) {
 		brokerPromise = null; // do not poison later requests
 		const msg = e instanceof Error ? e.message : String(e);
-		return fallbackResult(req, `inference failed: ${msg}`);
+		return fallbackResult(req, `inference failed: ${msg}`, now);
 	}
 }

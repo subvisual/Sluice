@@ -57,3 +57,8 @@ deterministic validator — and returns the recommendation with its provenance.
 
 On Vercel: set the `ZG_*` vars as server env vars (never `NEXT_PUBLIC_`);
 `maxDuration: 60` needs a plan that allows it.
+
+The route is **unauthenticated**: anyone who can reach it spends the 0G compute
+ledger (and up to 60s of server time) per call. Fine locally; before sharing a
+deployed URL, put a same-origin check or a rate limit in front so the ledger
+cannot be drained from a link an hour before the demo.
