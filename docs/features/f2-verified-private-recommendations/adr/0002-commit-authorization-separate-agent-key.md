@@ -2,6 +2,13 @@
 
 **Status:** accepted · 2026-07-25
 
+> **⚠️ Vocabulary note (2026-07-25 Notion pivot):** F2 was reframed from "decisions" to
+> "recommendations": `DecisionRegistry`→`RecommendationRegistry`, `commitDecision`→
+> `commitRecommendation`, `BookDecision`→`StrategyRecommendation`, global epoch→per-user nonce,
+> owner-as-maker→**user-as-maker**. The decision this ADR records **still holds** — the committer
+> key stays separate from the shared enclave signer and from the owner; read it with the new nouns.
+> (Note also ADR-0001's Gate 0 update: the enclave signs an attestation record, not our text.)
+
 `DecisionRegistry.commitDecision` is restricted to a **registered committer (agent) key**
 (`onlyCommitter`), separate from the owner. The owner alone may `registerSigner`,
 `registerCommitter`, and `ownerFallbackDock`.

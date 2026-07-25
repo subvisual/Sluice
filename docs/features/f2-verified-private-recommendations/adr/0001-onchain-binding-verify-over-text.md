@@ -37,3 +37,36 @@ reuse OpenZeppelin for the crypto — ~5 lines, zero bespoke serialization.
   submitter-supplied field. The signed text carries the epoch as a **fixed-width prefix** so
   Solidity extracts it with a cheap slice + atoi (see follow-on decision on the exact wire
   shape). `payloadHash == keccak256(signedText) == decisionHash`.
+
+---
+
+## Update — Gate 0 live finding (2026-07-25): the "sign our exact bytes" premise does not hold
+
+Live validation against a Galileo provider (`0xa48f…7836`, model `qwen/qwen2.5-omni-7b`, TEE
+signer `0x83df4B8E…508cF`, chainId 16602) via the `packages/arbitration-sdk` inference CLI shows
+the enclave does **not** sign the response text — nor any bytes we control. The out-of-band
+`{ text, signature }` is EIP-191 `personal_sign` over a fixed 5-field **attestation record**:
+
+```
+reqHash(64hex) : respHash(64hex) : centralized : aliyun : certHash(64hex)
+```
+
+The model output appears only as `respHash`, and that hash is over a provider-internal
+representation — `sha256`/`keccak256` of the response text do not reproduce it. So the core
+premise of this ADR ("carry the enclave's exact signed bytes end-to-end; slice the epoch from a
+fixed-width prefix; `keccak256(signedText)` is our decision hash") is **not implementable against
+this provider** — we control neither the signed bytes nor their format.
+
+**What survives:** the signature still recovers to the registered signer, so on-chain
+`ecrecover ∈ isRegisteredSigner` proves TEE provenance — the load-bearing claim is intact.
+`keccak256(signedText)` is still a valid per-response anchor.
+
+**What must be redesigned before the registry is built:** binding *our* epoch/nonce + payload to
+the on-chain commit when the signed bytes are opaque and non-reproducible (candidate directions
+recorded in the Notion F2 page's "⚠️ Gate 0 update" block).
+
+**Note on drift:** the Notion F2 page (source of truth) has since **pivoted** from this daemon /
+`DecisionRegistry` / monotonic-epoch framing to a creation-time Strategy Composer /
+`RecommendationRegistry` / per-user-nonce framing. This local ADR retains the older vocabulary;
+the Gate 0 finding above applies identically to both, and the authoritative Gate 0 note lives on
+the Notion page. The local F2 docs need reconciling with the pivot — tracked separately.

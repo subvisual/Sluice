@@ -1,6 +1,13 @@
 # Design — 0G inference CLI (first F2 step)
 
-**Date:** 2026-07-25 · **Branch:** `pf/f2-inference-cli` · **Feature:** [F2 — Verified Private Decisions](./README.md)
+**Date:** 2026-07-25 · **Branch:** `pf/f2-inference-cli` · **Feature:** [F2 — Verified Private Recommendations](./README.md)
+
+> **Note (post-write):** F2's Notion page later pivoted (decisions→recommendations,
+> `DecisionRegistry`→`RecommendationRegistry`, epoch→per-user nonce, agent→user-as-maker). This
+> spec describes the **inference CLI**, which is framing-agnostic and was built as designed; the
+> downstream references below (DecisionRegistry, "Issue 2", framing codec) belong to the old plan.
+> The live Gate 0 run also found the enclave signs an attestation record, not our text — see
+> ADR-0001's Gate 0 update. Both are recorded; this doc is kept as the CLI's build record.
 
 The first runnable slice of the 0G integration: a one-shot CLI that takes a free-form prompt,
 runs it through a live 0G Compute provider, and prints the model's answer alongside a
