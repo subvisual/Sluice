@@ -9,17 +9,19 @@
 // This module's only jobs are to load that data, fail loudly if it is malformed,
 // and hand out named constants so a redeployment is a change to one JSON file
 // rather than a hunt through the templates.
+//
+// Loaded through a static JSON import rather than `node:fs` — `grammar.ts`
+// (which needs OP/FEE_BPS_ONE) is a real, non-type import of this module from
+// `from-server.ts`, and that mapper runs client-side in the compose screen, so
+// this module has to bundle for the browser too, not just for the CLIs.
 
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
-
-const HERE = dirname(fileURLToPath(import.meta.url));
+import table from "../../../config/opcodes.8453.json";
 
 // packages/arbitration-sdk/src -> repo root. The address book lives beside this
 // file and the subgraph reads both, so config/ is the shared home rather than
-// anything package-local.
-export const OPCODES_PATH = resolve(HERE, "../../../config/opcodes.8453.json");
+// anything package-local. A label for error messages only now — the table
+// itself comes in through the JSON import above, not a runtime file read.
+export const OPCODES_PATH = "config/opcodes.8453.json";
 
 type OpcodeTable = {
 	chainId: number;
@@ -33,7 +35,7 @@ type OpcodeTable = {
 };
 
 function load(): OpcodeTable {
-	const raw = JSON.parse(readFileSync(OPCODES_PATH, "utf8")) as OpcodeTable;
+	const raw = table as OpcodeTable;
 
 	// Validate on import rather than at the first bad emit. A malformed table is
 	// the one failure that can produce a program which runs and does nothing.

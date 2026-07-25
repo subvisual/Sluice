@@ -14,12 +14,13 @@ import {
 } from "@/lib/compose/request";
 import {
   COMPOSE_STEPS,
-  composeStub,
+  fromServer,
   toPositions,
-  type StubRecommendation,
-  type StubStrategy,
-} from "@/lib/compose/stub-composer";
+  type UiRecommendation,
+  type UiStrategy,
+} from "@/lib/compose/from-server";
 import type { TokenSelection } from "@/lib/compose/types";
+import type { ServerComposeResult } from "@sluice/arbitration-sdk/serve";
 import { TOKENS } from "@/lib/tokens";
 import { useTokenBalances } from "@/lib/use-token-balances";
 import { ProvenanceChip, RiskChip } from "./chips";
@@ -32,8 +33,9 @@ import { TokenPicker, type PickerRow } from "./token-picker";
  *
  * Validation is `buildRecommendationRequest()`, not re-derived here; the only
  * screen-level check is MALFORMED (an unparseable amount never becomes a
- * bigint, so the builder cannot see it). The composer round trip is stubbed —
- * see `stub-composer.ts` for exactly what is real and what is fixture.
+ * bigint, so the builder cannot see it). The composer round trip calls the
+ * real `POST /api/compose` route — see `from-server.ts` for how the response
+ * maps onto what this screen renders.
  */
 
 type Phase = "idle" | "composing" | "done";
@@ -48,7 +50,8 @@ export function ComposeScreen() {
   const [rows, setRows] = useState<Record<Address, PickerRow>>({});
   const [phase, setPhase] = useState<Phase>("idle");
   const [step, setStep] = useState(0);
-  const [rec, setRec] = useState<StubRecommendation | null>(null);
+  const [rec, setRec] = useState<UiRecommendation | null>(null);
+  const [composeError, setComposeError] = useState<string | null>(null);
   // Any edit invalidates an in-flight or finished run — the request changed.
   const runRef = useRef(0);
 
@@ -125,23 +128,50 @@ export function ComposeScreen() {
     setPhase("composing");
     setStep(0);
     setRec(null);
-    const result = await composeStub({
-      request: built.request,
-      tokens: TOKENS,
-      nonce,
-      onStep: (i) => {
-        if (runRef.current === run) setStep(i);
-      },
-    });
-    if (runRef.current !== run) return;
-    setRec(result);
-    setPhase("done");
+    setComposeError(null);
+
+    // Cosmetic pacing (design decision 4): the steps advance on a timer while
+    // the round trip is in flight and snap to done when the response lands —
+    // they are pacing, not claims about server state.
+    const timer = setInterval(() => {
+      if (runRef.current === run) {
+        setStep((s) => Math.min(s + 1, COMPOSE_STEPS.length - 1));
+      }
+    }, 1400);
+
+    try {
+      const res = await fetch("/api/compose", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          user: built.request.user,
+          prompt: built.request.prompt,
+          budget: Object.entries(built.request.budget).map(
+            ([address, amount]) => ({ address, amount: amount.toString() }),
+          ),
+        }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? `compose failed with status ${res.status}`);
+      }
+      const result = (await res.json()) as ServerComposeResult;
+      if (runRef.current !== run) return;
+      setRec(fromServer(result, nonce));
+      setPhase("done");
+    } catch (e) {
+      if (runRef.current !== run) return;
+      setComposeError(e instanceof Error ? e.message : String(e));
+      setPhase("idle");
+    } finally {
+      clearInterval(timer);
+    }
   };
 
   const shipSet = () => {
     if (!rec) return;
     // Real path: one wallet signature over the Multicall, then the book
-    // subgraph picks the positions up. Neither is wired — see stub-composer.
+    // subgraph picks the positions up. Neither is wired yet — see from-server.
     ship(toPositions(rec, TOKENS));
     router.push("/");
   };
@@ -201,6 +231,13 @@ export function ComposeScreen() {
           >
             {phase === "composing" ? "Composing…" : "Compose"}
           </button>
+
+          {composeError && (
+            <p className="mt-3 text-xs leading-normal text-muted">
+              <span className="mr-2 font-mono text-[10px] text-muted-3">FAILED</span>
+              {composeError} — nothing was composed.
+            </p>
+          )}
 
           {issues.length > 0 && (
             <ul className="mt-4 flex flex-col gap-[7px] border-t border-border pt-4">
@@ -298,7 +335,7 @@ function RecommendationSet({
   onDecline,
   onShip,
 }: {
-  rec: StubRecommendation;
+  rec: UiRecommendation;
   onDecline: () => void;
   onShip: () => void;
 }) {
@@ -314,7 +351,7 @@ function RecommendationSet({
           <p className="mt-[5px] text-[12.5px] text-muted">
             {rec.provenance === "ENCLAVE"
               ? "Signed in the enclave and validated. Accept the set and it ships as one signature."
-              : "Composed from a template seed — sealed inference is stubbed in this build. Accept the set and it ships as one signature."}
+              : `Composed from a template seed — ${rec.reason ?? "sealed inference did not produce this"}. Accept the set and it ships as one signature.`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -324,10 +361,26 @@ function RecommendationSet({
           </span>
         </div>
       </div>
+      {rec.proof && (
+        <p className="mt-2 font-mono text-[10.5px] text-muted-3">
+          signer {rec.proof.signer ?? "(recovery failed)"} ·{" "}
+          {rec.proof.verified ? "verified" : "unverified"} · {rec.proof.latencyMs}ms
+        </p>
+      )}
+      {!rec.validation.ok && (
+        <ul className="mt-2 flex flex-col gap-1">
+          {rec.validation.violations.map((v) => (
+            <li key={v.code + v.message} className="text-xs text-muted">
+              <span className="mr-2 font-mono text-[10px] text-muted-3">{v.code}</span>
+              {v.message}
+            </li>
+          ))}
+        </ul>
+      )}
 
       <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(400px,1fr))]">
-        {rec.strategies.map((s) => (
-          <RecommendationCard key={s.templateId} strategy={s} />
+        {rec.strategies.map((s, i) => (
+          <RecommendationCard key={`${s.templateId}-${i}`} strategy={s} />
         ))}
       </div>
 
@@ -343,6 +396,11 @@ function RecommendationSet({
           <p className="mt-[5px] text-xs text-muted-3">
             Declining is a normal outcome; nothing has been sent anywhere yet.
           </p>
+          {!rec.validation.ok && (
+            <p className="mt-[5px] text-xs text-danger">
+              The validator rejected this set — it cannot ship.
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2.5">
           <button
@@ -353,7 +411,8 @@ function RecommendationSet({
           </button>
           <button
             onClick={onShip}
-            className="rounded-[10px] bg-ink px-6 py-[13px] text-[15px] font-medium text-white shadow-[var(--shadow)] transition-colors hover:bg-ink-2"
+            disabled={!rec.validation.ok}
+            className="rounded-[10px] bg-ink px-6 py-[13px] text-[15px] font-medium text-white shadow-[var(--shadow)] transition-colors hover:bg-ink-2 disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted disabled:shadow-[inset_0_0_0_1px_var(--border)]"
           >
             Ship — 1 signature
           </button>
@@ -363,7 +422,7 @@ function RecommendationSet({
   );
 }
 
-function RecommendationCard({ strategy }: { strategy: StubStrategy }) {
+function RecommendationCard({ strategy }: { strategy: UiStrategy }) {
   const [expanded, setExpanded] = useState(false);
 
   return (

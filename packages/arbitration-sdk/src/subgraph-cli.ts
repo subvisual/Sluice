@@ -6,6 +6,7 @@
 // Defaults to the deployed Studio Base subgraph; SLUICE_SUBGRAPH_URL or --url
 // point it at the local fork graph-node instead.
 
+import "dotenv/config";
 import {
 	fetchMeta,
 	fetchUserBook,
