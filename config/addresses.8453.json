@@ -1,0 +1,21 @@
+{
+  "chainId": 8453,
+  "chainName": "base",
+  "forkBlock": 49100000,
+  "_forkBlock": "Pinned so the venue does not drift between rehearsal and demo. F1 §1.",
+
+  "aqua": "0x499943e74fb0ce105688beee8ef2abec5d936d31",
+  "_aqua": "AquaRouter = Aqua + Simulator + Multicall + Rescuable. Canonical across 12 chains. Source: 1inch/aqua README. There is no swap() on this — swaps go through the SwapVM router below. F1 §3.",
+
+  "swapVMRouter": "0x8fdd04dbf6111437b44bbca99c28882434e0958f",
+  "swapVMRouterVersion": "1.0.0",
+  "_swapVMRouter": "CONFIRMED AquaSwapVMRouter v1.0.0 via eip712Domain(), asserted in contracts/test/ForkVenue.t.sol. The deployed version is NOT the tip of 1inch/swap-vm master — the quote() ABI and the instruction set both differ. Its source IS published: verified on Sourcify (exact_match). Build against the Sourcify-verified deployed source, never against master.",
+  "_swapVMRouterCodeKeccak": "0x998aac8c122ead4dac6aed42a7c4ef77c1d7db4efa6e2fda82978759117727e8",
+  "_aquaCodeKeccak": "0xced66b74e01f418c698e6aca8560d33957fb2588ea120eadbde74960f138baa2",
+
+  "tokens": {
+    "WETH": "0x4200000000000000000000000000000000000006",
+    "USDC": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+  },
+  "_tokens": "Native USDC (6dp) and WETH (18dp) on Base. Sorted WETH < USDC, which is the tokenA/tokenB order MakerTraits requires."
+}
