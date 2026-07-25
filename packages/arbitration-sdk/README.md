@@ -1,7 +1,32 @@
 # @sluice/arbitration-sdk
 
-F2 (Verified Private Recommendations) SDK. Currently: a one-shot **0G Compute inference CLI** —
-the first runnable slice of the 0G integration — plus the Gate 0 spike.
+F2 (Verified Private Recommendations) SDK. Currently: a **strategy composer CLI** (prompt +
+budget → a grammar-shaped strategy recommendation from a live 0G enclave) and a one-shot **0G
+inference CLI** (the Gate 0 round-trip it is built on).
+
+## Strategy composer CLI
+
+Turns a plain-language intent and a token budget into a structured `StrategyRecommendation` — the
+six-slot SwapVM assignment (template + slots + tokens + virtual amounts) — composed by a live 0G
+Compute provider.
+
+    npm run compose -- "sell my ETH if it hits 3500, all at once" --budget WETH=2
+    npm run compose -- "earn fees on ETH/USDC, rangebound this week" --budget WETH=1,USDC=3000
+
+`--budget SYM=amt,SYM=amt` (WETH, USDC) is required; `--max-strategies N` and `--max-deadline SEC`
+are optional. Exit `0` when a well-formed recommendation parsed. One retry on malformed output.
+
+**Scope — read this.** The output is grammar-**shaped**, not grammar-**correct**: it follows the
+provisional F1 §5 menu (which has known opcode-name errors and is marked "do not build the
+validator against it"), so it is **not compiled and not shippable**. There is **no verification**:
+the enclave signature is received but not checked, nothing is committed on-chain, nothing is
+persisted. Verifiability (`RecommendationRegistry`, the trace, the I1–I14 validator) is
+deliberately out of scope for this path. Market/book context is a hardcoded stub, not live F3.
+
+Modules: `grammar.ts` (the slot menu + templates T1–T3), `context.ts` (the stub), `compose.ts`
+(prompt + round-trip), `recommendation.ts` (types + a light structural parse), `compose-cli.ts`.
+
+## 0G inference CLI
 
 ## 0G inference CLI
 

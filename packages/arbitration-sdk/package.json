@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "infer": "tsx src/cli.ts",
+    "compose": "tsx src/compose-cli.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/proof.test.ts"
+    "test": "tsx --test src/proof.test.ts src/recommendation.test.ts"
   },
   "dependencies": {
     "@0gfoundation/0g-compute-ts-sdk": "^0.9.0",
