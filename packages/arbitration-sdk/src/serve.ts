@@ -1,7 +1,9 @@
 // Server-only facade for the app (design: docs/superpowers/specs/
 // 2026-07-25-app-server-compose-design.md). The app's ONE import from this
 // package on the server. Owns: env config, a broker singleton, live-book
-// context, compose(), and the validator. It NEVER funds the ledger — funding
+// context, and compose() — whose re-infer loop runs the deterministic gate;
+// this facade validates only the deterministic fallbacks it builds itself.
+// It NEVER funds the ledger — funding
 // is `npm run fund`, out-of-band — and every failure returns a labelled
 // TEMPLATE_FALLBACK instead of throwing, so a missing key or a 0G outage is
 // a degraded answer, not a dead screen.
@@ -9,7 +11,7 @@
 import { ethers } from "ethers";
 import { loadConfig, type Config } from "./config.ts";
 import { initBroker, type ChatMessage, type ZGBroker } from "./inference.ts";
-import { compose } from "./compose.ts";
+import { chainStateFor, compose } from "./compose.ts";
 import { liveContext, stubContext, type MarketContext } from "./context.ts";
 import { FALLBACK_SOURCE, templateFallback, type RecommendationSource } from "./fallback.ts";
 import type {
@@ -17,12 +19,7 @@ import type {
 	StrategyRecommendation,
 	TokenBudget,
 } from "./recommendation.ts";
-import {
-	DEFAULT_MAX_BLOCK_LAG,
-	validate,
-	type ChainState,
-	type Violation,
-} from "./validate.ts";
+import { validate, type Violation } from "./validate.ts";
 
 export type ServerBudgetEntry = {
 	address: string;
@@ -93,19 +90,19 @@ function nowContext(): MarketContext {
 	return { ...stubContext(), observedAt: Math.floor(Date.now() / 1000) };
 }
 
-function chainState(ctx: MarketContext): ChainState {
-	return {
-		chainId: 8453,
-		headBlock: ctx.observedBlock,
-		now: Math.floor(Date.now() / 1000),
-		maxBlockLag: DEFAULT_MAX_BLOCK_LAG,
-	};
+function verdict(
+	rec: StrategyRecommendation,
+	req: RecommendationRequest,
+	ctx: MarketContext,
+): { ok: boolean; violations: Violation[] } {
+	const violations = validate(rec, req, chainStateFor(ctx));
+	return { ok: violations.length === 0, violations };
 }
 
 function fallbackResult(req: RecommendationRequest, reason: string): ServerComposeResult {
 	const ctx = nowContext();
 	const rec = templateFallback(req, ctx);
-	const violations = validate(rec, req, chainState(ctx));
+	const violations = validate(rec, req, chainStateFor(ctx));
 	return {
 		source: FALLBACK_SOURCE,
 		reason,
@@ -155,13 +152,23 @@ export async function composeForApp(
 		const result = await compose(broker, cfg, req, ctx);
 		// compose() guarantees a well-formed parse (its own fallback re-parses).
 		const rec = result.parse.recommendation!;
-		const violations = validate(rec, req, chainState(ctx));
 		const fromEnclave = result.source === "ENCLAVE";
+		// compose() runs the deterministic gate inside its re-infer loop: an
+		// ENCLAVE result is already gate-approved (empty violations), and
+		// result.violations records what the LAST rejected model attempt
+		// violated. The deterministic fallback rec compose() returns instead is
+		// validated on its own merits here — the model attempt's violations
+		// belong in `reason`, not in the verdict on what the user is shown.
+		const validation = fromEnclave
+			? { ok: true, violations: [] as Violation[] }
+			: verdict(rec, req, ctx);
 		return {
 			source: result.source,
 			reason: fromEnclave
 				? null
-				: `inference produced no well-formed recommendation after ${result.attempts} attempts`,
+				: result.violations.length > 0
+					? `the deterministic gate rejected the model output after ${result.attempts} attempts (${result.violations.map((v) => v.code).join(", ")})`
+					: `inference produced no well-formed recommendation after ${result.attempts} attempts`,
 			recommendation: rec,
 			messages: result.messages,
 			proof: fromEnclave
@@ -174,7 +181,7 @@ export async function composeForApp(
 						latencyMs: result.raw.latencyMs,
 					}
 				: null,
-			validation: { ok: violations.length === 0, violations },
+			validation,
 			attempts: result.attempts,
 		};
 	} catch (e) {
