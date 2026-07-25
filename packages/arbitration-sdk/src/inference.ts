@@ -46,6 +46,7 @@ export async function ensureLedgerFunded(
 		// extra round-trip (getLedger() above already fetched it), and we
 		// deliberately do NOT act on it — see the CONTRACT note above.
 		try {
+			// Note: ledger.availableBalance may be an ethers v5 BigNumber (not native bigint), so comparison is best-effort.
 			const minNeuron = ethers.parseEther(String(minZG));
 			if (ledger.availableBalance < minNeuron) {
 				console.warn(

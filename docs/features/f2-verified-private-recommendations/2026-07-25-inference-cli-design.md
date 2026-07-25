@@ -56,7 +56,7 @@ type InferResult = {
   resultText: string        // assistant content shown to the user
   signedText: string        // exact bytes the enclave signed (may differ from resultText)
   signature: string         // EIP-191 personal_sign, fetched out-of-band
-  signer: string            // ethers.verifyMessage(signedText, signature)
+  signer: string | null     // ethers.verifyMessage(signedText, signature)
   chatID: string            // from ZG-Res-Key header
   latencyMs: number
   processResponseOk: boolean // broker.inference.processResponse agrees

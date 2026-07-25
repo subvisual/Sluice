@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "infer": "tsx src/cli.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/proof.test.ts"
   },
   "dependencies": {
-    "@0gfoundation/0g-compute-ts-sdk": "*",
+    "@0gfoundation/0g-compute-ts-sdk": "^0.9.0",
     "dotenv": "^16",
     "ethers": "^6"
   },
