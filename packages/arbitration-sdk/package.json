@@ -7,6 +7,7 @@
     "infer": "tsx src/cli.ts",
     "compose": "tsx src/compose-cli.ts",
     "subgraph": "tsx src/subgraph-cli.ts",
+    "fund": "tsx src/fund-cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test src/proof.test.ts src/recommendation.test.ts src/fallback.test.ts src/swapvm.test.ts src/fixtures.test.ts src/grammar.test.ts src/validate.test.ts src/subgraph.test.ts src/context.test.ts",
     "fixtures": "tsx src/fixtures-cli.ts"
