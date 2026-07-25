@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildFixtures, readFixtures } from "./fixtures.ts";
-import { fullRange, aquaOrder, shipBytes, strategyHash, toHex, fromHex, decodeProgram } from "./swapvm.ts";
+import { fullRange, fullRangeWithFee, aquaOrder, shipBytes, strategyHash, toHex, fromHex, decodeProgram } from "./swapvm.ts";
 import { isRealOpcode, SWAPVM_ROUTER_VERSION } from "./opcodes.ts";
 
 // The contracts ship these exact bytes. If this file drifts from the generator,
@@ -21,10 +21,12 @@ test("fixtures were generated against the deployed router version we pinned", ()
 
 test("every fixture rebuilds byte-for-byte from its recorded inputs", () => {
 	for (const f of readFixtures().strategies) {
-		const order = aquaOrder(
-			f.inputs.maker,
-			fullRange({ salt: BigInt(f.inputs.salt), deadline: f.inputs.deadline }),
-		);
+		const base = { salt: BigInt(f.inputs.salt), deadline: f.inputs.deadline };
+		const program =
+			f.template === "full-range-fee"
+				? fullRangeWithFee({ ...base, feeBps: f.inputs.feeBps! })
+				: fullRange(base);
+		const order = aquaOrder(f.inputs.maker, program);
 		assert.equal(toHex(order.program), f.outputs.program, `${f.name}: program`);
 		assert.equal(toHex(shipBytes(order)), f.outputs.strategy, `${f.name}: strategy`);
 		assert.equal(strategyHash(order), f.outputs.strategyHash, `${f.name}: strategyHash`);

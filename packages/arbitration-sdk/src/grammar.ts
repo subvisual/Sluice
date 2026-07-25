@@ -3,97 +3,62 @@
 // Every instruction named here is looked up through opcodes.ts, which loads the
 // pinned table in config/opcodes.8453.json. An instruction that is not
 // dispatchable cannot appear in this file without throwing on import, so the
-// menu we show the model cannot drift from the venue we ship to. grammar.test.ts
-// asserts that property.
+// menu we show the model cannot drift from the venue we ship to.
 //
-// WHAT CHANGED, AND WHY IT MATTERED
-//
-// The previous version of this file described a six-slot grammar taken from
-// F1 §5 — balance setup, fees, swap logic, oracle adjust, invalidation,
-// deadline — and it was wrong in ways that made it unusable rather than merely
-// imprecise. Against the deployed AquaSwapVMRouter v1.0.0:
-//
-//   • `_limitSwap1D` / `_limitSwapOnlyFull1D` have NO OPCODE. There is no
-//     partial-vs-all-or-nothing choice to make, so the entire "partial fill
-//     requires token invalidation" rule is moot.
-//   • The three invalidators have NO OPCODE. Slot 5, marked required, could
-//     not be filled at all.
-//   • `_oraclePriceAdjuster1D` has no opcode on ANY router — the file exists in
-//     the 1inch source but is not in the opcode enum and is dispatched nowhere.
-//   • Balance setup is not an instruction. In Aqua mode balances come from
-//     `safeBalances`, i.e. from what `ship()` was called with. Slot 1 does not
-//     exist here; `_staticBalancesXD` / `_dynamicBalancesXD` belong to the
-//     signature-based mode and are not compiled into this router.
-//
-// So a model following the old menu produced well-formed JSON describing a
-// strategy that could never be built.
+// The menu is narrower still: an instruction is offered ONLY if swapvm.ts can
+// encode it AND a fixture has shipped and filled it on the fork. "The venue
+// dispatches it" is not enough — offering the model something our own compiler
+// cannot emit is the same bug as offering something the venue cannot run,
+// one layer down. grammar.test.ts compiles every template to enforce this.
 //
 // THE REAL SHAPE IS A NEST, NOT A LIST
 //
-// `_flatFeeAmountInXD` and `_decayXD` call `ctx.runLoop()` in their own bodies:
-// they execute everything after them as an inner loop and then post-process.
-// A strategy is therefore
+// `_flatFeeAmountInXD` (and `_decayXD`) call `ctx.runLoop()` in their own
+// bodies: they execute everything after them as an inner loop, then
+// post-process. A strategy is therefore fee(curve), emitted flat. Ordering is
+// enforced by the VM rather than by us — the wrappers open with
+// `require(amountIn == 0 || amountOut == 0)` and every curve has a recompute
+// guard, so a fee after the curve reverts and two curves revert. Our compiler
+// owns the order; the chain agrees with it.
 //
-//     fee( decay( curve ) )
-//
-// emitted as a flat byte sequence. Ordering is enforced by the VM rather than by
-// us — both wrappers open with `require(amountIn == 0 || amountOut == 0)` and
-// every curve opens with a recompute guard, so a fee after the curve reverts and
-// two curves revert. Our builder owns the order; the chain agrees with it.
+// (The six-slot grammar this file used to describe — balance setup, swap
+// logic, oracle adjust, invalidation — could not be built against this router
+// at all; see the PR #15 discussion. Do not reintroduce it.)
 
 import { OP, op, FEE_BPS_ONE } from "./opcodes.ts";
-
-/// Where an instruction sits in the program.
-///   guard   — prologue, pure/view, may appear before the wrappers
-///   wrapper — recursive; MUST precede the curve or the VM reverts
-///   curve   — terminal, computes the amounts. Exactly one.
-export type Role = "guard" | "wrapper" | "curve";
 
 export type InstructionSpec = {
 	name: string; // key in the pinned opcode table
 	opcode: number;
-	role: Role;
 	summary: string;
 	params?: string;
 };
 
-/// The instructions the composer may choose. This is a SUBSET of what the router
-/// dispatches, and deliberately so — see OMITTED below.
-export const INSTRUCTIONS: InstructionSpec[] = [
-	{
-		name: "DEADLINE",
-		opcode: op("DEADLINE"),
-		role: "guard",
-		summary: "Expiry. Always present — it is what unwinds an unattended position.",
-		params: "deadline: unix seconds (5 bytes)",
-	},
-	{
-		name: "ONLY_TAKER_TOKEN_BALANCE_NON_ZERO",
-		opcode: op("ONLY_TAKER_TOKEN_BALANCE_NON_ZERO"),
-		role: "guard",
-		summary: "Only takers holding any of a given token may fill.",
-		params: "token: address",
-	},
-	{
-		name: "ONLY_TAKER_TOKEN_BALANCE_GTE",
-		opcode: op("ONLY_TAKER_TOKEN_BALANCE_GTE"),
-		role: "guard",
-		summary: "Only takers holding at least minAmount of a token may fill.",
-		params: "token: address, minAmount: uint256",
-	},
+/// Required on every strategy. Not a model choice beyond the timestamp.
+export const DEADLINE: InstructionSpec = {
+	name: "DEADLINE",
+	opcode: op("DEADLINE"),
+	summary: "Expiry. Always present — it is what unwinds an unattended position.",
+	params: "deadline: unix seconds",
+};
+
+/// Optional wrappers. MUST precede the curve or the VM reverts.
+export const WRAPPERS: InstructionSpec[] = [
 	{
 		name: "FLAT_FEE_AMOUNT_IN_XD",
 		opcode: op("FLAT_FEE_AMOUNT_IN_XD"),
-		role: "wrapper",
 		summary:
 			"Maker fee charged on the input side. Pure arithmetic — no token movement, " +
 			"so unlike the protocol-fee variants it cannot make quote() and swap() disagree.",
 		params: `feeBps: integer in [0, ${FEE_BPS_ONE}) where ${FEE_BPS_ONE} = 100%`,
 	},
+];
+
+/// Exactly one, and it goes last. Terminal: it computes the amounts.
+export const CURVES: InstructionSpec[] = [
 	{
 		name: "XYC_SWAP_XD",
 		opcode: op("XYC_SWAP_XD"),
-		role: "curve",
 		summary:
 			"Constant product over the shipped virtual balances, for whichever pair the " +
 			"taker names. Takes NO arguments: the price is the ratio of the shipped " +
@@ -101,29 +66,25 @@ export const INSTRUCTIONS: InstructionSpec[] = [
 	},
 ];
 
-/// Deliberately NOT offered to the model, though the router dispatches them.
-/// Recorded so nobody re-adds one without reading why it was left out.
+/// Dispatchable on the router but deliberately not offered. Each entry records
+/// something that cost real time to learn; everything else the router
+/// dispatches (jumps, progressive/output-side fees, the supply-share gate) is
+/// simply unused — no entry needed until someone reaches for one.
 export const OMITTED: Record<string, string> = {
 	XYC_CONCENTRATE_GROW_LIQUIDITY_2D:
-		"Available, but parameterised by VIRTUAL BALANCE DELTAS on the deployed router, " +
-		"not the sqrtPriceMin/sqrtPriceMax bounds that 1inch master uses. Until the " +
-		"delta arithmetic is settled and fill-tested, offering it would put an " +
-		"unverified curve behind a user's signature.",
+		"Parameterised by VIRTUAL BALANCE DELTAS on the deployed router, not the " +
+		"sqrtPriceMin/sqrtPriceMax bounds 1inch master uses. Until that arithmetic is " +
+		"settled and fill-tested, offering it would put an unverified curve behind a " +
+		"user's signature.",
 	XYC_CONCENTRATE_GROW_LIQUIDITY_XD:
-		"Same delta parameterisation as the 2D variant, plus an N-token argument list. Same reason: unverified.",
+		"Same delta parameterisation as the 2D variant, plus an N-token argument list. Same reason.",
 	DECAY_XD:
-		"Works, but reads state in quote mode without writing it, so quote() can " +
-		"succeed where swap() reverts. Our driver records both, so this stays out " +
-		"until that divergence is measured.",
-	FLAT_FEE_AMOUNT_OUT_XD: "Output-side fee. No use case yet; adds a second fee axis to validate.",
-	PROGRESSIVE_FEE_IN_XD: "Size-dependent fee. Interesting, but unmeasured.",
-	PROGRESSIVE_FEE_OUT_XD: "Size-dependent fee on the output side. Same reason as the input-side variant.",
-	PROTOCOL_FEE_AMOUNT_OUT_XD: "Moves real tokens mid-program and needs maker allowance; quote/swap divergence.",
-	AQUA_PROTOCOL_FEE_AMOUNT_OUT_XD: "Pulls from the maker's Aqua balance mid-program; same divergence risk as the plain variant.",
-	JUMP: "Control flow. Needed only for branching templates; the compiler owns jump targets, never the model.",
-	JUMP_IF_TOKEN_IN: "Direction asymmetry within a pair. Needs a branching template and compiler-owned jump targets.",
-	JUMP_IF_TOKEN_OUT: "As JUMP_IF_TOKEN_IN — the other half of a direction branch.",
-	ONLY_TAKER_TOKEN_SUPPLY_SHARE_GTE: "Supply-share gate. Works, but no intent needs it yet.",
+		"Reads state in quote mode without writing it, so quote() can succeed where " +
+		"swap() reverts. Stays out until that divergence is measured.",
+	ONLY_TAKER_TOKEN_BALANCE_NON_ZERO:
+		"No encoder in swapvm.ts yet. Offering the model an instruction our own " +
+		"compiler cannot emit is the grammar-drift bug one layer down.",
+	ONLY_TAKER_TOKEN_BALANCE_GTE: "As above — no encoder yet, and no template or intent needs it.",
 };
 
 /// SALT is emitted by the compiler on every strategy and is NOT a model choice.
@@ -132,16 +93,18 @@ export const OMITTED: Record<string, string> = {
 /// position needs new bytes under a new salt. F1 §2.
 export const COMPILER_EMITTED = ["SALT"] as const;
 
-export const CURVE_OPTIONS = INSTRUCTIONS.filter((i) => i.role === "curve").map((i) => i.name);
-export const WRAPPER_OPTIONS = INSTRUCTIONS.filter((i) => i.role === "wrapper").map((i) => i.name);
-export const GUARD_OPTIONS = INSTRUCTIONS.filter((i) => i.role === "guard").map((i) => i.name);
+export const CURVE_OPTIONS = CURVES.map((i) => i.name);
+export const WRAPPER_OPTIONS = WRAPPERS.map((i) => i.name);
+/// Empty until a taker-gate encoder exists — see OMITTED. Kept because
+/// recommendation.ts notes any guard the model invents against this list.
+export const GUARD_OPTIONS: string[] = [];
 
 /// Enforced deterministically by the validator, and stated to the model so it
-/// complies on the first attempt more often — every retry is a round trip a user
-/// is waiting on.
+/// complies on the first attempt more often — every retry is a round trip a
+/// user is waiting on.
 export const COMPAT_RULES: string[] = [
 	"Exactly one curve instruction, and it is LAST. It is terminal: the VM reverts if amounts were already computed.",
-	"Fees and any balance-tuning instruction come BEFORE the curve. Placed after, the VM reverts.",
+	"The fee comes BEFORE the curve. Placed after, the VM reverts.",
 	"DEADLINE is always present, and within the request's maxDeadlineSec.",
 	"Amounts stay within the user's stated budget, PER TOKEN, summed across every strategy in the recommendation. Never a token the user did not select.",
 	"The virtual amounts set both the price (their ratio) and the depth (their size). For a pair that should trade near parity, ship equal nominal value on each side — mind that decimals differ, so 10000 USDC is 10000e6 and 10000 USDe is 10000e18.",
@@ -157,9 +120,9 @@ export type Template = {
 	shape: string;
 };
 
-/// Known-good seed shapes. Every template here compiles today — that is the
-/// point. A template naming an instruction we cannot build is the exact bug this
-/// file previously had.
+/// Known-good seed shapes. Membership requires a fixture that has shipped and
+/// filled on the fork — grammar.test.ts compiles each one, and fixtures.ts
+/// carries each one through the G3 test.
 export const TEMPLATES: Template[] = [
 	{
 		id: "full-range",
@@ -180,19 +143,17 @@ export const TEMPLATES: Template[] = [
 ];
 
 export function grammarPromptBlock(): string {
-	const byRole = (role: Role) =>
-		INSTRUCTIONS.filter((i) => i.role === role)
-			.map((i) => `    ${i.name} — ${i.summary}${i.params ? `\n        params: ${i.params}` : ""}`)
-			.join("\n");
+	const render = (list: InstructionSpec[]) =>
+		list.map((i) => `    ${i.name} — ${i.summary}${i.params ? `\n        params: ${i.params}` : ""}`).join("\n");
 
 	return [
 		"INSTRUCTION SET (this is the COMPLETE menu — nothing else exists on this venue):",
-		"  guards (optional, before everything):",
-		byRole("guard"),
-		"  wrappers (optional, MUST come before the curve):",
-		byRole("wrapper"),
+		"  required on every strategy:",
+		render([DEADLINE]),
+		"  optional wrappers (MUST come before the curve):",
+		render(WRAPPERS),
 		"  curve (EXACTLY ONE, and it goes LAST):",
-		byRole("curve"),
+		render(CURVES),
 		"",
 		"You do NOT choose a salt — the compiler emits one on every strategy.",
 		"",
@@ -208,10 +169,13 @@ export function grammarPromptBlock(): string {
 	].join("\n");
 }
 
-/// Every name this grammar offers must be dispatchable on the pinned venue.
-/// Called by the test; exported so a consumer can assert it at startup too.
+/// Every name this grammar mentions must be dispatchable on the pinned venue.
 export function unknownInstructions(): string[] {
-	return [...INSTRUCTIONS.map((i) => i.name), ...COMPILER_EMITTED, ...Object.keys(OMITTED)].filter(
-		(name) => OP[name] === undefined,
-	);
+	return [
+		DEADLINE.name,
+		...WRAPPERS.map((i) => i.name),
+		...CURVES.map((i) => i.name),
+		...COMPILER_EMITTED,
+		...Object.keys(OMITTED),
+	].filter((name) => OP[name] === undefined);
 }

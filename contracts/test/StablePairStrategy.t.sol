@@ -59,15 +59,12 @@ interface ISwapVM {
 ///               cd contracts && forge test --match-contract StablePairStrategy -vv
 contract StablePairStrategyTest is Test {
     string internal constant PUBLIC_BASE_RPC = "https://mainnet.base.org";
-    string internal constant FIXTURE = "usdc-usde-full-range";
 
     address internal aqua;
     address internal router;
     address internal usdc;
     address internal usde;
 
-    Fixtures.Strategy internal fixture;
-    address internal maker;
     address internal taker = makeAddr("taker");
 
     function setUp() public {
@@ -78,9 +75,6 @@ contract StablePairStrategyTest is Test {
         usde = vm.parseJsonAddress(cfg, ".tokens.USDe");
 
         vm.createSelectFork(vm.envOr("SLUICE_RPC_URL", PUBLIC_BASE_RPC), vm.parseJsonUint(cfg, ".forkBlock"));
-
-        fixture = Fixtures.load(FIXTURE);
-        maker = fixture.order.maker;
     }
 
     function test_usdeIsPresentWithExpectedDecimals() public view {
@@ -95,14 +89,22 @@ contract StablePairStrategyTest is Test {
     ///      balances key to a hash no swap can reach, and the only symptom is a fill that
     ///      reverts — so this is asserted before anything touches the chain.
     function test_fixtureEncodingAgreesWithSolidity() public view {
-        Fixtures.assertSelfConsistent(fixture);
-        console.log("strategyHash", vm.toString(fixture.strategyHash));
-        console.log("program     ", vm.toString(fixture.order.data));
+        Fixtures.Strategy memory plain = Fixtures.load("usdc-usde-full-range");
+        Fixtures.assertSelfConsistent(plain);
+        Fixtures.Strategy memory withFee = Fixtures.load("usdc-usde-full-range-fee");
+        Fixtures.assertSelfConsistent(withFee);
+        console.log("full-range     ", vm.toString(plain.strategyHash));
+        console.log("full-range-fee ", vm.toString(withFee.strategyHash));
     }
 
-    /// @notice Ship the composer's own bytes, then fill them from a funded taker EOA.
-    function test_G3_shipAndFill() public {
+    /// @notice Ship a fixture's bytes and fill them from a funded taker EOA.
+    /// @dev Shared by both template tests: every template in the grammar goes through
+    ///      this exact gate. A template that has not been shipped and filled here does
+    ///      not belong in TEMPLATES — that is the membership rule, enforced by usage.
+    function _shipAndFill(string memory name) internal returns (uint256 filledOut) {
+        Fixtures.Strategy memory fixture = Fixtures.load(name);
         Fixtures.assertSelfConsistent(fixture);
+        address maker = fixture.order.maker;
 
         // --- maker ships -----------------------------------------------------
         // Aqua pulls real ERC20 from the maker's wallet at fill time, so the maker must
@@ -136,11 +138,13 @@ contract StablePairStrategyTest is Test {
 
         // Quote immediately before the swap and record both. F1 §3 job 2.
         (, uint256 quotedOut,) = ISwapVM(router).quote(fixture.order, usdc, usde, amountIn, takerTraits);
-        (uint256 filledIn, uint256 filledOut,) = ISwapVM(router).swap(fixture.order, usdc, usde, amountIn, takerTraits);
+
+        uint256 filledIn;
+        (filledIn, filledOut,) = ISwapVM(router).swap(fixture.order, usdc, usde, amountIn, takerTraits);
         vm.stopPrank();
 
+        console.log("fixture    ", name);
         console.log("quoted out ", quotedOut);
-        console.log("filled in  ", filledIn);
         console.log("filled out ", filledOut);
 
         assertEq(filledIn, amountIn, "taker paid something other than the exact-in amount");
@@ -155,5 +159,20 @@ contract StablePairStrategyTest is Test {
         // The tokens really moved. This is what the bounty asks be shown on stage.
         assertEq(IERC20(usde).balanceOf(taker), filledOut, "taker did not receive USDe");
         assertEq(IERC20(usdc).balanceOf(maker), fixture.amounts[0] + filledIn, "maker did not receive USDC");
+    }
+
+    /// @notice The plain full-range template ships and fills. 100 USDC -> ~99.0099 USDe.
+    function test_G3_shipAndFill() public {
+        _shipAndFill("usdc-usde-full-range");
+    }
+
+    /// @notice The fee template ships and fills, and the fee demonstrably bites.
+    /// @dev 0.05% input-side fee: the curve prices on 99.95 USDC instead of 100, so the
+    ///      output must land strictly below the no-fee fill of the same size. This is the
+    ///      test the grammar's "proven to fill" claim for full-range-fee rests on.
+    function test_G3_shipAndFill_feeTemplate() public {
+        uint256 noFeeOut = 99009900990099009900; // the plain template's fill, asserted above
+        uint256 feeOut = _shipAndFill("usdc-usde-full-range-fee");
+        assertLt(feeOut, noFeeOut, "fee template returned no less than the no-fee fill - the fee did nothing");
     }
 }

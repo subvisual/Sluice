@@ -18,7 +18,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { fullRange, aquaOrder, shipBytes, strategyHash, toHex } from "./swapvm.ts";
+import { fullRange, fullRangeWithFee, aquaOrder, shipBytes, strategyHash, toHex } from "./swapvm.ts";
 import { SWAPVM_ROUTER_VERSION } from "./opcodes.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -32,7 +32,7 @@ export type StrategyFixture = {
 	name: string;
 	description: string;
 	template: string;
-	inputs: { maker: string; salt: string; deadline: number; tokens: string[]; amounts: string[] };
+	inputs: { maker: string; salt: string; deadline: number; feeBps?: number; tokens: string[]; amounts: string[] };
 	outputs: { traits: string; program: string; strategy: string; strategyHash: string };
 };
 
@@ -75,6 +75,38 @@ export function buildFixtures(): { routerVersion: string; strategies: StrategyFi
 				maker,
 				salt: salt.toString(),
 				deadline,
+				tokens: [usdc, usde],
+				amounts: ["10000000000", "10000000000000000000000"],
+			},
+			outputs: {
+				traits: `0x${order.traits.toString(16)}`,
+				program: toHex(program),
+				strategy: toHex(shipBytes(order)),
+				strategyHash: strategyHash(order),
+			},
+		});
+	}
+
+	{
+		const name = "usdc-usde-full-range-fee";
+		const salt = fixtureSalt(name);
+		// 0.05%. feeBps is out of 1e9, not 1e4 — see config/opcodes.8453.json.
+		const feeBps = 500_000;
+		const program = fullRangeWithFee({ salt, deadline, feeBps });
+		const order = aquaOrder(maker, program);
+
+		strategies.push({
+			name,
+			description:
+				"The full-range shape with a 0.05% input-side maker fee. Exists so the fee " +
+				"template's bytes are shipped and filled on the fork like the plain one — a " +
+				"template the G3 test has not exercised does not belong in the grammar.",
+			template: "full-range-fee",
+			inputs: {
+				maker,
+				salt: salt.toString(),
+				deadline,
+				feeBps,
 				tokens: [usdc, usde],
 				amounts: ["10000000000", "10000000000000000000000"],
 			},

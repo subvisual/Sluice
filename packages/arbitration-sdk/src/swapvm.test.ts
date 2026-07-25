@@ -11,6 +11,7 @@ import {
 	deadline,
 	xycSwap,
 	fullRange,
+	fullRangeWithFee,
 } from "./swapvm.ts";
 import { OP, isRealOpcode, FIRST_REAL_OPCODE, LAST_REAL_OPCODE } from "./opcodes.ts";
 
@@ -82,6 +83,25 @@ test("fullRange round-trips and is a pure function of its parameters", () => {
 		toHex(fullRange(params)),
 		"0x150800000000000000010d05006b49d2001100",
 	);
+});
+
+test("fullRangeWithFee inserts the fee before the curve — golden", () => {
+	// Byte-for-byte:
+	//   15 08 0000000000000001   SALT
+	//   0d 05 006b49d200         DEADLINE (1800000000)
+	//   16 04 0007a120           FLAT_FEE_AMOUNT_IN_XD (500000 = 0.05% of 1e9)
+	//   11 00                    XYC_SWAP_XD
+	// The fee MUST precede the curve: _flatFeeAmountInXD reverts if amounts were
+	// already computed, so this ordering is a chain-enforced property.
+	assert.equal(
+		toHex(fullRangeWithFee({ salt: 1n, deadline: 1800000000, feeBps: 500_000 })),
+		"0x150800000000000000010d05006b49d20016040007a1201100",
+	);
+});
+
+test("fullRangeWithFee refuses a fee at or past 100%", () => {
+	// BPS is 1e9, and _flatFeeAmountInXD divides by (BPS - feeBps).
+	assert.throws(() => fullRangeWithFee({ salt: 1n, deadline: 1, feeBps: 1_000_000_000 }), /feeBps/);
 });
 
 test("a different salt produces different bytes", () => {

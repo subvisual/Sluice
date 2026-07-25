@@ -1,18 +1,20 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-	INSTRUCTIONS,
+	DEADLINE,
+	WRAPPERS,
+	CURVES,
 	OMITTED,
 	COMPILER_EMITTED,
 	TEMPLATES,
 	CURVE_OPTIONS,
-	GUARD_OPTIONS,
-	WRAPPER_OPTIONS,
 	COMPAT_RULES,
 	grammarPromptBlock,
 	unknownInstructions,
+	type Template,
 } from "./grammar.ts";
 import { OP, isRealOpcode } from "./opcodes.ts";
+import { fullRange, fullRangeWithFee, decodeProgram } from "./swapvm.ts";
 
 // The property that makes this file trustworthy: the menu cannot name anything
 // the venue does not dispatch. The old grammar offered _limitSwap1D, three
@@ -23,7 +25,7 @@ test("every instruction named anywhere in the grammar exists in the pinned table
 });
 
 test("every offered instruction is dispatchable, not a silent no-op", () => {
-	for (const i of INSTRUCTIONS) {
+	for (const i of [DEADLINE, ...WRAPPERS, ...CURVES]) {
 		assert.equal(i.opcode, OP[i.name], `${i.name}: opcode does not match the pinned table`);
 		assert.ok(isRealOpcode(i.opcode), `${i.name}: 0x${i.opcode.toString(16)} is not dispatchable`);
 	}
@@ -41,7 +43,6 @@ test("the instructions that no longer exist are gone from the menu", () => {
 		"_oraclePriceAdjuster1D",
 		"_dynamicBalancesXD",
 		"_staticBalancesXD",
-		"_xycConcentrateGrowLiquidityXD",
 	];
 	const menu = grammarPromptBlock();
 	for (const name of removed) {
@@ -49,42 +50,71 @@ test("the instructions that no longer exist are gone from the menu", () => {
 	}
 });
 
-test("exactly one curve is offered, and the templates all use a real one", () => {
-	assert.ok(CURVE_OPTIONS.length >= 1);
+test("the taker gates are not offered while swapvm.ts has no encoder for them", () => {
+	// Offering the model an instruction our own compiler cannot emit is the
+	// grammar-drift bug one layer down: it passes every menu check and fails at
+	// compile time. They live in OMITTED until an encoder exists.
+	for (const name of ["ONLY_TAKER_TOKEN_BALANCE_NON_ZERO", "ONLY_TAKER_TOKEN_BALANCE_GTE"]) {
+		assert.ok(name in OMITTED, `${name}: not in OMITTED`);
+		assert.ok(!grammarPromptBlock().includes(name), `${name} is on the menu but has no encoder`);
+	}
+});
+
+// A template is IN the grammar only if these bytes can be produced today. This
+// mapping is the test's own — if a template is added without extending it, the
+// test throws, which is the point.
+function compileTemplate(t: Template): Uint8Array {
+	const base = { salt: 1n, deadline: 1_800_000_000 };
+	switch (t.id) {
+		case "full-range":
+			return fullRange(base);
+		case "full-range-fee":
+			return fullRangeWithFee({ ...base, feeBps: 500_000 });
+		default:
+			throw new Error(`template ${t.id} has no compile mapping — add one or remove the template`);
+	}
+}
+
+test("every template actually compiles, with exactly one curve, last", () => {
 	for (const t of TEMPLATES) {
-		assert.ok(CURVE_OPTIONS.includes(t.curve), `${t.id}: curve ${t.curve} is not on the menu`);
+		const program = compileTemplate(t);
+		const decoded = decodeProgram(program);
+
+		const curves = decoded.filter((i) => CURVES.some((c) => c.opcode === i.opcode));
+		assert.equal(curves.length, 1, `${t.id}: expected exactly one curve instruction`);
+		assert.equal(
+			decoded.at(-1)?.opcode,
+			OP[t.curve],
+			`${t.id}: the curve must be the LAST instruction — the VM reverts a wrapper placed after it`,
+		);
+		for (const ins of decoded) {
+			assert.ok(isRealOpcode(ins.opcode), `${t.id}: 0x${ins.opcode.toString(16)} is not dispatchable`);
+		}
+		// The declared wrappers are really in the bytes.
 		for (const w of t.wrappers) {
-			assert.ok(WRAPPER_OPTIONS.includes(w), `${t.id}: wrapper ${w} is not on the menu`);
+			assert.ok(
+				decoded.some((i) => i.opcode === OP[w]),
+				`${t.id}: declared wrapper ${w} is missing from the compiled program`,
+			);
 		}
 	}
 });
 
-test("every template is buildable today", () => {
-	// A template that names something we cannot compile is the exact bug this
-	// file used to have. If a template is added before its encoder exists, it
-	// belongs in OMITTED with a reason, not in TEMPLATES.
-	assert.ok(TEMPLATES.length > 0);
-	for (const t of TEMPLATES) {
-		assert.ok(t.id && t.describesIntent && t.shape, `${t.id}: incomplete template`);
-	}
-});
-
-test("omitted instructions each carry a reason", () => {
-	for (const [name, reason] of Object.entries(OMITTED)) {
+test("omitted instructions are real opcodes on this router", () => {
+	for (const name of Object.keys(OMITTED)) {
 		assert.ok(OP[name] !== undefined, `${name} is omitted but is not in the table at all`);
-		assert.ok(reason.length > 20, `${name}: give a real reason, not "${reason}"`);
 	}
 });
 
 test("the menu and the omitted list do not overlap", () => {
-	for (const i of INSTRUCTIONS) {
+	for (const i of [DEADLINE, ...WRAPPERS, ...CURVES]) {
 		assert.ok(!(i.name in OMITTED), `${i.name} is both offered and omitted`);
 	}
 });
 
 test("salt is compiler-emitted, never offered to the model", () => {
 	assert.ok(COMPILER_EMITTED.includes("SALT"));
-	assert.ok(!INSTRUCTIONS.some((i) => i.name === "SALT"), "SALT must not be a model choice");
+	assert.ok(![DEADLINE, ...WRAPPERS, ...CURVES].some((i) => i.name === "SALT"), "SALT must not be a model choice");
 	assert.match(grammarPromptBlock(), /do NOT choose a salt/);
 });
 
@@ -94,10 +124,11 @@ test("the prompt block states the ordering rules the VM actually enforces", () =
 	assert.match(rules, /BEFORE the curve/);
 	assert.match(rules, /PER TOKEN/);
 	// The fee basis is the single most likely silent error: 1e9, not 1e4.
-	assert.match(rules, /1000000000|not 10000/);
+	assert.match(rules, /1000000000/);
 });
 
-test("guards and wrappers are disjoint from curves", () => {
-	for (const g of GUARD_OPTIONS) assert.ok(!CURVE_OPTIONS.includes(g));
-	for (const w of WRAPPER_OPTIONS) assert.ok(!CURVE_OPTIONS.includes(w));
+test("every template's curve is on the menu", () => {
+	for (const t of TEMPLATES) {
+		assert.ok(CURVE_OPTIONS.includes(t.curve), `${t.id}: curve ${t.curve} is not on the menu`);
+	}
 });
