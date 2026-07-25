@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
 	DEADLINE,
+	BAND,
 	WRAPPERS,
 	CURVES,
 	OMITTED,
@@ -14,7 +15,7 @@ import {
 	type Template,
 } from "./grammar.ts";
 import { OP, isRealOpcode } from "./opcodes.ts";
-import { fullRange, fullRangeWithFee, decodeProgram } from "./swapvm.ts";
+import { fullRange, fullRangeWithFee, banded, bandedWithFee, decodeProgram } from "./swapvm.ts";
 
 // The property that makes this file trustworthy: the menu cannot name anything
 // the venue does not dispatch. The old grammar offered _limitSwap1D, three
@@ -25,7 +26,7 @@ test("every instruction named anywhere in the grammar exists in the pinned table
 });
 
 test("every offered instruction is dispatchable, not a silent no-op", () => {
-	for (const i of [DEADLINE, ...WRAPPERS, ...CURVES]) {
+	for (const i of [DEADLINE, BAND, ...WRAPPERS, ...CURVES]) {
 		assert.equal(i.opcode, OP[i.name], `${i.name}: opcode does not match the pinned table`);
 		assert.ok(isRealOpcode(i.opcode), `${i.name}: 0x${i.opcode.toString(16)} is not dispatchable`);
 	}
@@ -65,11 +66,25 @@ test("the taker gates are not offered while swapvm.ts has no encoder for them", 
 // test throws, which is the point.
 function compileTemplate(t: Template): Uint8Array {
 	const base = { salt: 1n, deadline: 1_800_000_000 };
+	// The banded templates need tokens and amounts — the deltas derive from them.
+	const bandedBase = {
+		...base,
+		bandBps: 10_000_000,
+		tokens: [
+			"0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+			"0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34",
+		] as [string, string],
+		amounts: [10_000_000_000n, 10_000_000_000_000_000_000_000n] as [bigint, bigint],
+	};
 	switch (t.id) {
 		case "full-range":
 			return fullRange(base);
 		case "full-range-fee":
 			return fullRangeWithFee({ ...base, feeBps: 500_000 });
+		case "banded":
+			return banded(bandedBase);
+		case "banded-fee":
+			return bandedWithFee({ ...bandedBase, feeBps: 500_000 });
 		default:
 			throw new Error(`template ${t.id} has no compile mapping — add one or remove the template`);
 	}
@@ -107,15 +122,26 @@ test("omitted instructions are real opcodes on this router", () => {
 });
 
 test("the menu and the omitted list do not overlap", () => {
-	for (const i of [DEADLINE, ...WRAPPERS, ...CURVES]) {
+	for (const i of [DEADLINE, BAND, ...WRAPPERS, ...CURVES]) {
 		assert.ok(!(i.name in OMITTED), `${i.name} is both offered and omitted`);
 	}
 });
 
 test("salt is compiler-emitted, never offered to the model", () => {
 	assert.ok(COMPILER_EMITTED.includes("SALT"));
-	assert.ok(![DEADLINE, ...WRAPPERS, ...CURVES].some((i) => i.name === "SALT"), "SALT must not be a model choice");
+	assert.ok(
+		![DEADLINE, BAND, ...WRAPPERS, ...CURVES].some((i) => i.name === "SALT"),
+		"SALT must not be a model choice",
+	);
 	assert.match(grammarPromptBlock(), /do NOT choose a salt/);
+});
+
+test("the band is on the menu and the model chooses bandBps, never deltas", () => {
+	const menu = grammarPromptBlock();
+	assert.ok(menu.includes("XYC_CONCENTRATE_GROW_LIQUIDITY_2D"), "band missing from the menu");
+	assert.match(COMPAT_RULES.join(" "), /never emit deltas/);
+	// The one silent error the band shares with the fee: the 1e9 base.
+	assert.match(BAND.params ?? "", /1000000000/);
 });
 
 test("the prompt block states the ordering rules the VM actually enforces", () => {

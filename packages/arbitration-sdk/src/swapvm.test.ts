@@ -10,8 +10,13 @@ import {
 	salt,
 	deadline,
 	xycSwap,
+	xycConcentrateGrowLiquidity2D,
+	bandDeltas,
 	fullRange,
 	fullRangeWithFee,
+	banded,
+	bandedWithFee,
+	type BandedParams,
 } from "./swapvm.ts";
 import { OP, isRealOpcode, FIRST_REAL_OPCODE, LAST_REAL_OPCODE } from "./opcodes.ts";
 
@@ -102,6 +107,90 @@ test("fullRangeWithFee inserts the fee before the curve — golden", () => {
 test("fullRangeWithFee refuses a fee at or past 100%", () => {
 	// BPS is 1e9, and _flatFeeAmountInXD divides by (BPS - feeBps).
 	assert.throws(() => fullRangeWithFee({ salt: 1n, deadline: 1, feeBps: 1_000_000_000 }), /feeBps/);
+});
+
+// The fixture pair: USDe sorts BELOW USDC by address, so passing [USDC, USDe]
+// exercises the sort in the encoder rather than agreeing with it by accident.
+const USDC = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
+const USDE = "0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34";
+const BANDED_PARAMS: BandedParams = {
+	salt: 1n,
+	deadline: 1800000000,
+	bandBps: 10_000_000, // 1% of 1e9
+	tokens: [USDC, USDE],
+	amounts: [10_000_000_000n, 10_000_000_000_000_000_000_000n], // 10_000e6, 10_000e18
+};
+
+test("bandDeltas grows both sides by the same multiple — the price is preserved", () => {
+	// A 1% GEOMETRIC band: priceMax/price = price/priceMin = 1.01. Independently:
+	// sqrt(1.01e18) floors to 1004987562e9, denom = 4987562e9, multiplier
+	// 1e18/denom ≈ 200.4988. An arithmetic ±1% band would give the two sides
+	// different multipliers and shift the quoted price off the shipped ratio.
+	const { deltaA, deltaB } = bandDeltas(10_000_000_000n, 10_000_000_000_000_000_000_000n, 10_000_000);
+	assert.equal(deltaA, 2004987607171n);
+	assert.equal(deltaB, 2004987607171600072339952n);
+	// Same multiplier on both sides, to within the flooring of each division.
+	assert.equal(deltaA, deltaB / 1_000_000_000_000n);
+});
+
+test("bandDeltas refuses out-of-range and degenerate bands", () => {
+	const a = 10_000_000_000n;
+	const b = 10_000_000_000_000_000_000_000n;
+	assert.throws(() => bandDeltas(a, b, 0), /bandBps/);
+	assert.throws(() => bandDeltas(a, b, 1_000_000_000), /bandBps/);
+	assert.throws(() => bandDeltas(a, b, 1.5), /bandBps/);
+	assert.throws(() => bandDeltas(0n, b, 10_000_000), /positive/);
+	// bandBps 1 survives the range check but floors to nothing in the VM's
+	// fixed point — it must throw, not emit zero deltas that no-op the band.
+	assert.throws(() => bandDeltas(a, b, 1), /too narrow/);
+});
+
+test("concentrate2D args are keyed by token sort order, not argument order", () => {
+	// The deployed parse2D maps deltaLt/deltaGt back by comparing addresses at
+	// swap time, so the encoder must sort the same way. USDe < USDC, so USDe's
+	// delta lands first whichever way the tokens are passed.
+	const ins = xycConcentrateGrowLiquidity2D(USDC, USDE, 7n, 9n);
+	const flipped = xycConcentrateGrowLiquidity2D(USDE, USDC, 9n, 7n);
+	assert.equal(toHex(ins.args), toHex(flipped.args));
+	assert.equal(ins.args.length, 64);
+	assert.equal(toHex(ins.args.slice(0, 32)), toHex(uintBytes(9n, 32))); // USDe's delta
+	assert.equal(toHex(ins.args.slice(32)), toHex(uintBytes(7n, 32))); // USDC's delta
+	assert.throws(() => xycConcentrateGrowLiquidity2D(USDC, USDC, 1n, 2n), /distinct/);
+});
+
+test("banded emits salt, deadline, concentrate, then the curve — golden", () => {
+	// Byte-for-byte:
+	//   15 08 0000000000000001   SALT
+	//   0d 05 006b49d200         DEADLINE (1800000000)
+	//   13 40 <deltaLt(32)><deltaGt(32)>  XYC_CONCENTRATE_GROW_LIQUIDITY_2D
+	//        deltaLt = USDe's 2004987607171600072339952, deltaGt = USDC's 2004987607171
+	//   11 00                    XYC_SWAP_XD
+	assert.equal(
+		toHex(banded(BANDED_PARAMS)),
+		"0x150800000000000000010d05006b49d20013400000000000000000000000000000000000" +
+			"0000000001a8929891d2f38f1071f000000000000000000000000000000000000000000000" +
+			"0000000001d2d292f8831100",
+	);
+});
+
+test("bandedWithFee inserts the fee between the concentrate and the curve — golden", () => {
+	// The band wraps the fee wraps the curve: both are runLoop wrappers, and the
+	// VM reverts any of them placed after amounts are computed. This matches the
+	// filled shape observed on real Base (concentrate before fee before curve).
+	assert.equal(
+		toHex(bandedWithFee({ ...BANDED_PARAMS, feeBps: 500_000 })),
+		"0x150800000000000000010d05006b49d20013400000000000000000000000000000000000" +
+			"0000000001a8929891d2f38f1071f000000000000000000000000000000000000000000000" +
+			"0000000001d2d292f88316040007a1201100",
+	);
+});
+
+test("the banded program depends on the ship amounts", () => {
+	// Unlike full-range, the deltas are computed FROM the amounts — shipping
+	// different amounts under the same program would put the band around the
+	// wrong price, so distinct amounts must yield distinct bytes.
+	const other = banded({ ...BANDED_PARAMS, amounts: [20_000_000_000n, 20_000_000_000_000_000_000_000n] });
+	assert.notEqual(toHex(other), toHex(banded(BANDED_PARAMS)));
 });
 
 test("a different salt produces different bytes", () => {

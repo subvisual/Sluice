@@ -41,6 +41,12 @@ interface ISwapVM {
     ) external returns (uint256 amountIn, uint256 amountOut, bytes32 orderHash);
 }
 
+interface IXYCConcentrate {
+    /// @dev Per-orderHash scale the deployed XYCConcentrate persists on the router.
+    ///      0 until the first non-static fill touches a concentrate instruction.
+    function deltaScales(bytes32 orderHash) external view returns (uint256);
+}
+
 /// @title A composed strategy ships and actually fills — G3
 /// @notice F1 §7 item 2, the hard gate: if a fill never lands the project pivots.
 ///
@@ -93,8 +99,14 @@ contract StablePairStrategyTest is Test {
         Fixtures.assertSelfConsistent(plain);
         Fixtures.Strategy memory withFee = Fixtures.load("usdc-usde-full-range-fee");
         Fixtures.assertSelfConsistent(withFee);
+        Fixtures.Strategy memory bandedS = Fixtures.load("usdc-usde-banded");
+        Fixtures.assertSelfConsistent(bandedS);
+        Fixtures.Strategy memory bandedFee = Fixtures.load("usdc-usde-banded-fee");
+        Fixtures.assertSelfConsistent(bandedFee);
         console.log("full-range     ", vm.toString(plain.strategyHash));
         console.log("full-range-fee ", vm.toString(withFee.strategyHash));
+        console.log("banded         ", vm.toString(bandedS.strategyHash));
+        console.log("banded-fee     ", vm.toString(bandedFee.strategyHash));
     }
 
     /// @notice Ship a fixture's bytes and fill them from a funded taker EOA.
@@ -174,5 +186,70 @@ contract StablePairStrategyTest is Test {
         uint256 noFeeOut = 99009900990099009900; // the plain template's fill, asserted above
         uint256 feeOut = _shipAndFill("usdc-usde-full-range-fee");
         assertLt(feeOut, noFeeOut, "fee template returned no less than the no-fee fill - the fee did nothing");
+    }
+
+    /// @notice The banded template ships and fills, and the concentration bites.
+    /// @dev Same commitment as full-range, concentrated into a 1% geometric band: the
+    ///      quoted depth is ~200x, so a 100 USDC fill slips ~0.005% instead of ~1%. The
+    ///      exact value cross-checks bandDeltas in swapvm.ts against the deployed
+    ///      concentratedBalance arithmetic — if the two ever disagree, this is where it
+    ///      shows. This is the test the grammar's "proven to fill" claim for banded
+    ///      rests on.
+    function test_G3_shipAndFill_bandedTemplate() public {
+        uint256 fullRangeOut = 99009900990099009900; // the full-range fill, asserted above
+        uint256 bandedOut = _shipAndFill("usdc-usde-banded");
+        assertGt(bandedOut, fullRangeOut, "banded returned no more than full-range - the band did nothing");
+        assertEq(bandedOut, 99995037436633322430, "fill disagrees with the off-chain band arithmetic");
+    }
+
+    /// @notice The band+fee composition ships and fills, and both pieces bite.
+    /// @dev The band wraps the fee wraps the curve. The output must land strictly below
+    ///      the plain banded fill (the fee bites) and strictly above the full-range fill
+    ///      (the band still bites through the fee).
+    function test_G3_shipAndFill_bandedFeeTemplate() public {
+        uint256 bandedOut = 99995037436633322430; // the plain banded fill, asserted above
+        uint256 fullRangeOut = 99009900990099009900;
+        uint256 feeOut = _shipAndFill("usdc-usde-banded-fee");
+        assertLt(feeOut, bandedOut, "banded-fee returned no less than banded - the fee did nothing");
+        assertGt(feeOut, fullRangeOut, "banded-fee under full-range - the band+fee nesting is broken");
+    }
+
+    /// @notice A fill really executes the concentrate instruction: the router persists a
+    ///         per-orderHash scale, 0 before the first swap and ~1e18 after.
+    /// @dev This state is also why every strategy carries a salt: identical bytes reuse
+    ///      the orderHash and would inherit a stale scale from a previous life.
+    function test_bandedSwapUpdatesConcentrateScale() public {
+        Fixtures.Strategy memory fixture = Fixtures.load("usdc-usde-banded");
+        assertEq(IXYCConcentrate(router).deltaScales(fixture.strategyHash), 0, "scale set before any fill");
+
+        _shipAndFill("usdc-usde-banded");
+
+        uint256 scale = IXYCConcentrate(router).deltaScales(fixture.strategyHash);
+        assertGt(scale, 0, "swap did not write the concentrate scale - the band never executed");
+        // newInv/inv only deviates from 1 by the curve's flooring, so the scale stays
+        // pinned to ~1e18 after one small fill.
+        assertGe(scale, 1e18, "scale shrank on a fill - concentrate arithmetic misread");
+        assertLt(scale, 1.000001e18, "scale jumped - concentrate arithmetic misread");
+    }
+
+    /// @notice A draw past the band edge reverts: virtual amounts are a ceiling, and the
+    ///         band's real inventory is exactly drained at the edge.
+    /// @dev The grown curve happily QUOTES the oversized fill; what stops it is Aqua's
+    ///      pull exceeding the shipped virtual amount. This is the discontinuity the
+    ///      composer must size for, demonstrated rather than asserted in prose.
+    function test_bandedDrawPastTheBandEdgeReverts() public {
+        Fixtures.Strategy memory fixture = Fixtures.load("usdc-usde-banded");
+        _shipAndFill("usdc-usde-banded");
+
+        // ~10_050 USDC drains the whole USDe side of a 1% band; ask for double.
+        uint256 amountIn = 20_000e6;
+        deal(usdc, taker, amountIn);
+        vm.startPrank(taker);
+        IERC20(usdc).approve(router, type(uint256).max);
+        vm.expectRevert();
+        ISwapVM(router).swap(
+            fixture.order, usdc, usde, amountIn, abi.encodePacked(SluiceStrategy.TAKER_EOA_EXACT_IN)
+        );
+        vm.stopPrank();
     }
 }

@@ -41,9 +41,10 @@
     "DEADLINE": 5,
     "SALT": 8,
     "XYC_SWAP_XD": 0,
-    "FLAT_FEE_AMOUNT_IN_XD": 4
+    "FLAT_FEE_AMOUNT_IN_XD": 4,
+    "XYC_CONCENTRATE_GROW_LIQUIDITY_2D": 64
   },
-  "_argWidths": "Bytes of arguments, from each instruction's natspec in the deployed source. Only the ones we emit are listed. The VM slices by offset, so a wrong width silently misreads every later field. JUMP_IF_TOKEN_IN/OUT are 22 (20-byte token + 2-byte target); the concentrate variants are variable. argsLength is a single byte, so 255 is the hard ceiling for any instruction.",
+  "_argWidths": "Bytes of arguments, from each instruction's natspec in the deployed source. Only the ones we emit are listed. The VM slices by offset, so a wrong width silently misreads every later field. JUMP_IF_TOKEN_IN/OUT are 22 (20-byte token + 2-byte target); the XD concentrate variant is variable (2-byte count + 20-byte token and 32-byte delta per entry) while 2D is fixed 64 (deltaLt || deltaGt, keyed by token sort order — XYCConcentrateArgsBuilder.build2D/parse2D). argsLength is a single byte, so 255 is the hard ceiling for any instruction.",
 
   "feeBpsOne": 1000000000,
   "_feeBpsOne": "1e9 = 100%, NOT 1e4. The parameter is named feeBps but 0.3% is 3_000_000. _flatFeeAmountInXD divides by (BPS - feeBps), so the value must be strictly less than 1e9."

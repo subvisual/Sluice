@@ -25,6 +25,9 @@ import {
 	type RecommendationSource,
 } from "./fallback.ts";
 
+// Matches SlotAssignment in recommendation.ts — the slots that exist on the
+// deployed router, nothing else. (An earlier draft described the old six-slot
+// grammar here; the model dutifully produced unparseable output shaped like it.)
 const OUTPUT_SCHEMA = `Return ONLY a JSON object (no markdown fences, no prose), shaped exactly:
 {
   "schema": "sluice.recommendation/1",
@@ -33,14 +36,12 @@ const OUTPUT_SCHEMA = `Return ONLY a JSON object (no markdown fences, no prose),
   "observedBlock": <number>,
   "strategies": [
     {
-      "templateId": "<T1|T2|T3>",
+      "templateId": "<a seed template id>",
       "slots": {
-        "balances":     { "instruction": "perTokenSetup", "params": { ... } },
-        "fees":         { "instruction": "feeConfig", "params": { ... } },        // optional
-        "swapLogic":    { "instruction": "<one swap-logic option>", "params": { ... } },
-        "oracleAdjust": { "instruction": "_oraclePriceAdjuster1D", "params": { ... } }, // optional
-        "invalidation": { "instruction": "<one invalidation option>", "params": { ... } },
-        "deadline":     { "deadline": <unix seconds> }
+        "band":     { "instruction": "XYC_CONCENTRATE_GROW_LIQUIDITY_2D", "params": { "bandBps": <integer> } }, // optional
+        "fee":      { "instruction": "FLAT_FEE_AMOUNT_IN_XD", "params": { "feeBps": <integer> } },              // optional
+        "curve":    { "instruction": "XYC_SWAP_XD" },
+        "deadline": { "deadline": <unix seconds> }
       },
       "tokens": ["<token address>", ...],          // canonical order
       "virtualAmounts": ["<decimal string>", ...]  // aligned with tokens; NEVER a number
