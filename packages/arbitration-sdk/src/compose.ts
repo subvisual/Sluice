@@ -119,6 +119,13 @@ export type ComposeResult = {
 	// output; TEMPLATE_FALLBACK = the deterministic seed used because inference
 	// never produced a well-formed, valid one. Never blurred — see fallback.ts.
 	source: RecommendationSource;
+	// The messages actually used for the LAST inference attempt (the retry's,
+	// if there was one) — never rebuilt after the fact, so a caller cannot
+	// present a first-attempt reconstruction as "what was sent" when the real
+	// last attempt carried the rejection-feedback suffix. Something was always
+	// sent by the time this is populated, including on the internal
+	// TEMPLATE_FALLBACK below (the retries were exhausted, not skipped).
+	messages: ChatMessage[];
 };
 
 // The venue we ship to. The recommendation targets Base regardless of the 0G
@@ -161,12 +168,14 @@ export async function compose(
 
 	let raw!: InferResult;
 	let parse!: ParseResult;
+	let messages!: ChatMessage[];
 	let violations: Violation[] = [];
 	let feedback: string | undefined; // rejection notes handed to the next attempt
 	let attempts = 0;
 
 	while (attempts < MAX_COMPOSE_ATTEMPTS) {
-		raw = await infer(broker, cfg, buildComposeMessages(req, ctx, feedback));
+		messages = buildComposeMessages(req, ctx, feedback);
+		raw = await infer(broker, cfg, messages);
 		parse = parseRecommendation(raw.resultText, req);
 		attempts += 1;
 
@@ -180,7 +189,7 @@ export async function compose(
 		// Well-formed: the deterministic gate decides. No violations → accept.
 		violations = validate(parse.recommendation, req, chainState);
 		if (violations.length === 0) {
-			return { parse, raw, attempts, violations, source: "ENCLAVE" };
+			return { parse, raw, attempts, violations, source: "ENCLAVE", messages };
 		}
 		// Rejected, never rewritten (F2 §4): feed the invariants back and re-infer.
 		feedback = violations.map((v) => `${v.code}: ${v.message}`).join("; ");
@@ -188,8 +197,9 @@ export async function compose(
 
 	// Attempts spent and the last model output was still malformed or violating:
 	// deterministic template fallback, clearly labelled — never a model output.
-	// `raw` and `violations` keep the last rejected attempt for the trace.
+	// `raw`, `violations` and `messages` keep the last rejected attempt for
+	// the trace.
 	const rec = templateFallback(req, ctx);
 	parse = parseRecommendation(JSON.stringify(rec), req);
-	return { parse, raw, attempts, violations, source: FALLBACK_SOURCE };
+	return { parse, raw, attempts, violations, source: FALLBACK_SOURCE, messages };
 }

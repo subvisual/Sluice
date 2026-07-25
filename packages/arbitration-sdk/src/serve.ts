@@ -9,7 +9,7 @@
 import { ethers } from "ethers";
 import { loadConfig, type Config } from "./config.ts";
 import { initBroker, type ChatMessage, type ZGBroker } from "./inference.ts";
-import { buildComposeMessages, compose } from "./compose.ts";
+import { compose } from "./compose.ts";
 import { liveContext, stubContext, type MarketContext } from "./context.ts";
 import { FALLBACK_SOURCE, templateFallback, type RecommendationSource } from "./fallback.ts";
 import type {
@@ -45,7 +45,14 @@ export type ServerComposeResult = {
 	/** Non-null exactly when source is TEMPLATE_FALLBACK — the honest why. */
 	reason: string | null;
 	recommendation: StrategyRecommendation;
-	/** The exact messages sent to the enclave; null when nothing was sent. */
+	/**
+	 * The exact messages used for the LAST inference attempt (the retry's, if
+	 * there was one) — never a reconstruction. Non-null whenever something was
+	 * actually sent to the enclave, including the SDK-internal
+	 * TEMPLATE_FALLBACK (inference was attempted and rejected — something WAS
+	 * sent). Null only when nothing was ever sent: no `ZG_PRIVATE_KEY`, or the
+	 * request failed before any call went out.
+	 */
 	messages: ChatMessage[] | null;
 	/** Enclave proof material; null unless source is ENCLAVE. */
 	proof: {
@@ -156,7 +163,7 @@ export async function composeForApp(
 				? null
 				: `inference produced no well-formed recommendation after ${result.attempts} attempts`,
 			recommendation: rec,
-			messages: buildComposeMessages(req, ctx),
+			messages: result.messages,
 			proof: fromEnclave
 				? {
 						signedText: result.raw.signedText,
