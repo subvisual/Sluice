@@ -1,17 +1,3 @@
-/**
- * `promptVersion` goes into every trace — F2 §9.
- *
- * When the composer behaves differently at hour 30 than at hour 14, "we edited
- * the prompt" is the most likely answer, and without this recorded that is
- * unanswerable. Bump it whenever anything in `prompt.ts` or the SDK grammar
- * (`arbitration-sdk/src/grammar.ts`) changes.
- *
- * /2: the provisional six-slot grammar and T1–T3 templates were replaced by
- * the SDK grammar — the deployed router's real menu and the settled template
- * set (full-range, full-range-fee, banded, banded-fee).
- */
-export const PROMPT_VERSION = "sluice.compose/2";
-
 /** Wire schema of the recommendation the enclave returns — F2 §3. */
 export const RECOMMENDATION_SCHEMA = "sluice.recommendation/1";
 

@@ -1,5 +1,3 @@
-import "dotenv/config";
-
 export type Config = {
 	rpc: string;
 	provider: string;

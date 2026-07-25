@@ -74,6 +74,17 @@ signature, and an independent proof URL).
 Exit code is `0` only when the proof verifies. Design notes:
 `../../docs/features/f2-verified-private-recommendations/2026-07-25-inference-cli-design.md`.
 
+### Funding the compute ledger
+
+Inference bills against a prepaid on-chain ledger, not the wallet balance directly. Fund it
+without burning an inference:
+
+    npm run fund              # ensure the ledger exists (seeds ZG_DEPOSIT on first run; idempotent)
+    npm run fund -- 5         # explicit top-up: deposit 5 more OG into the ledger
+
+Both print wallet + ledger balances before and after. The wallet itself is funded from
+[faucet.0g.ai](https://faucet.0g.ai).
+
 ### Config (env; defaults in `.env.example`)
 
 `ZG_PRIVATE_KEY` (required, funded Galileo key) · `ZG_RPC` · `ZG_PROVIDER` · `ZG_MODEL` ·

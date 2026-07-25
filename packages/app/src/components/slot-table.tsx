@@ -51,8 +51,8 @@ export function SlotTable({
       ))}
       {sheet && (
         <p className="border-t border-border px-4 py-3 text-[11px] leading-relaxed text-muted-3">
-          Filled by selection from the venue&apos;s instruction menu — never
-          free-form bytecode. Ordering, and the salt, belong to the compiler,
+          Slots filled by selection within the deployed router&apos;s instruction
+          set — never free-form bytecode. Ordering belongs to the compiler,
           not to the model.
         </p>
       )}

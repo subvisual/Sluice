@@ -9,14 +9,18 @@
 // This module's only jobs are to load that data, fail loudly if it is malformed,
 // and hand out named constants so a redeployment is a change to one JSON file
 // rather than a hunt through the templates.
+//
+// Loaded through a static JSON import rather than `node:fs` — `grammar.ts`
+// (which needs OP/FEE_BPS_ONE) is a real, non-type import of this module from
+// `from-server.ts`, and that mapper runs client-side in the compose screen, so
+// this module has to bundle for the browser too, not just for the CLIs.
 
-// A static import rather than an fs read: this module sits under grammar.ts,
-// which the app bundles into the browser, and a bundler can carry a JSON module
-// where it cannot carry node:fs. config/ at the repo root stays the shared home
-// — the address book lives beside this file and the subgraph reads both.
-import table from "../../../config/opcodes.8453.json" with { type: "json" };
+import table from "../../../config/opcodes.8453.json";
 
-/// Repo-relative, for error messages.
+// packages/arbitration-sdk/src -> repo root. The address book lives beside this
+// file and the subgraph reads both, so config/ is the shared home rather than
+// anything package-local. A label for error messages only now — the table
+// itself comes in through the JSON import above, not a runtime file read.
 export const OPCODES_PATH = "config/opcodes.8453.json";
 
 type OpcodeTable = {

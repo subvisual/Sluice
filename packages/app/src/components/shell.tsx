@@ -106,10 +106,11 @@ function Rail() {
           <span className="h-1.5 w-1.5 rounded-full bg-aqua" />
           <span>{networkLabel}</span>
         </div>
-        {/* Honest not-wired line — keep while F2/F3 are stubs. */}
+        {/* Honest state line — market/pair context (F3) is still a stub. */}
         <p className="mt-2 text-[11px] leading-normal text-muted-2">
-          Sealed inference and market context are stubbed in this build.
-          Nothing here is signed.
+          Market pair context is stubbed. Sealed inference is live when the
+          server holds an enclave key; anything else is labelled
+          TEMPLATE_FALLBACK.
         </p>
       </div>
     </aside>

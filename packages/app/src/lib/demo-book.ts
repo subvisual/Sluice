@@ -1,5 +1,5 @@
 import type { Hex } from "viem";
-import { TEMPLATES } from "../../../arbitration-sdk/src/grammar.ts";
+import { TEMPLATES } from "@sluice/arbitration-sdk/grammar";
 import type { Position } from "./book";
 import { TOKENS } from "./tokens";
 import { formatDayShort, formatDeadlineAbs } from "./time";
@@ -16,7 +16,9 @@ import { formatDayShort, formatDeadlineAbs } from "./time";
  * state whenever it is loaded. Nothing here is, or claims to be, on-chain.
  *
  * Shapes follow the settled SDK grammar (the four seed templates over the
- * deployed router); prices, band widths, fees and fills are demo values.
+ * deployed router), and labels/slot rows mirror how `from-server.ts` renders a
+ * real recommendation — so a demo card and a shipped card read identically.
+ * Prices, band widths, fees and fills are demo values.
  */
 /**
  * Demo-only tokens, deliberately NOT in `config/addresses.8453.json` — that
@@ -38,8 +40,14 @@ type DemoToken = {
   decimals: number;
 };
 
-/** SDK label for a seed template id — fixtures never carry their own copy. */
-const label = (id: string) => TEMPLATES.find((t) => t.id === id)!.label;
+/**
+ * Same short label a real position gets (`shortLabel` in from-server.ts): the
+ * human half after the "·" of the SDK label, or the whole label without one.
+ */
+const label = (id: string) => {
+  const full = TEMPLATES.find((t) => t.id === id)!.label;
+  return full.split("·")[1]?.trim() || full;
+};
 
 export function demoBook(): Position[] {
   const now = Math.floor(Date.now() / 1000);
@@ -72,7 +80,7 @@ export function demoBook(): Position[] {
         "Concentrates both sides into a ±1% band around 2 460 USDC per ETH and takes a 0.05% maker fee on the flow that crosses it. Quotes deep inside the band; the inventory drains exactly at its edges.",
       bandKind: "band",
       band: "2 435 – 2 485",
-      bandNote: "USDC per ETH · ±1% band, fee on every fill",
+      bandNote: "USDC per ETH · ±1.00% band, fee on every fill",
       legs: [
         leg(usdc, 12_000_000_000n, 4_380_150_000n),
         leg(weth, 4_000000000000000000n, 1_241000000000000000n),
@@ -86,12 +94,7 @@ export function demoBook(): Position[] {
       dockedAt: null,
       risk: "low",
       provenance: "ENCLAVE",
-      slots: [
-        bandSlot(10_000_000, "±1%"),
-        feeSlot(500_000, "0.05%"),
-        curveSlot(),
-        deadlineSlot(now + 5 * D + 12 * H),
-      ],
+      slots: slotRows({ bandBps: 10_000_000, feeBps: 500_000, deadline: now + 5 * D + 12 * H }),
     },
     {
       id: "demo-2",
@@ -113,12 +116,7 @@ export function demoBook(): Position[] {
       dockedAt: null,
       risk: "medium",
       provenance: "ENCLAVE",
-      slots: [
-        noBandSlot(),
-        feeSlot(500_000, "0.05%"),
-        curveSlot(),
-        deadlineSlot(now + 18 * H),
-      ],
+      slots: slotRows({ feeBps: 500_000, deadline: now + 18 * H }),
     },
     {
       id: "demo-3",
@@ -130,7 +128,7 @@ export function demoBook(): Position[] {
         "Held a wide ±15% band around 2 500 USDC per ETH, waiting for the price to come to it. It expired with most of its commitment untouched and has unwound automatically.",
       bandKind: "band",
       band: "2 125 – 2 875",
-      bandNote: "USDC per ETH · ±15% band, patient",
+      bandNote: "USDC per ETH · ±15.00% band, patient",
       legs: [
         leg(usdc, 8_000_000_000n, 1_210_400_000n),
         leg(weth, 3_200000000000000000n, 482000000000000000n),
@@ -141,12 +139,7 @@ export function demoBook(): Position[] {
       // Absent on purpose: the card must say "risk rating unavailable".
       risk: null,
       provenance: "ENCLAVE",
-      slots: [
-        bandSlot(150_000_000, "±15%"),
-        noFeeSlot(),
-        curveSlot(),
-        deadlineSlot(now - 2 * D),
-      ],
+      slots: slotRows({ bandBps: 150_000_000, deadline: now - 2 * D }),
     },
     {
       id: "demo-4",
@@ -158,7 +151,7 @@ export function demoBook(): Position[] {
         "A tight ±0.5% banded quote around 2 500 USDC per ETH you closed manually. It filled almost all of its commitment before being docked.",
       bandKind: "band",
       band: "2 487 – 2 513",
-      bandNote: "USDC per ETH · ±0.5% band, fee on every fill",
+      bandNote: "USDC per ETH · ±0.50% band, fee on every fill",
       legs: [
         leg(usdc, 5_000_000_000n, 5_000_000_000n),
         leg(weth, 2_000000000000000000n, 1_982000000000000000n),
@@ -172,12 +165,7 @@ export function demoBook(): Position[] {
       risk: "low",
       // The fallback variant, so the sheet's provenance strip shows both.
       provenance: "TEMPLATE_FALLBACK",
-      slots: [
-        bandSlot(5_000_000, "±0.5%"),
-        feeSlot(500_000, "0.05%"),
-        curveSlot(),
-        deadlineSlot(now + 4 * D),
-      ],
+      slots: slotRows({ bandBps: 5_000_000, feeBps: 500_000, deadline: now + 4 * D }),
     },
     {
       id: "demo-5",
@@ -202,12 +190,7 @@ export function demoBook(): Position[] {
       dockedAt: null,
       risk: "low",
       provenance: "ENCLAVE",
-      slots: [
-        bandSlot(500_000, "±0.05%"),
-        feeSlot(100_000, "0.01%"),
-        curveSlot(),
-        deadlineSlot(now + 3 * D + 6 * H),
-      ],
+      slots: slotRows({ bandBps: 500_000, feeBps: 100_000, deadline: now + 3 * D + 6 * H }),
     },
     {
       id: "demo-6",
@@ -219,7 +202,7 @@ export function demoBook(): Position[] {
         "Holds a wide ±22% band on AAVE against WETH, waiting for volatility to come to it. Fills rarely and holds a large commitment while it waits.",
       bandKind: "band",
       band: "0.052 – 0.081",
-      bandNote: "WETH per AAVE · ±22% band, patient",
+      bandNote: "WETH per AAVE · ±22.00% band, patient",
       legs: [
         leg(AAVE, 150_000000000000000000n, 12_400000000000000000n),
         leg(weth, 6_000000000000000000n, 0n),
@@ -229,12 +212,7 @@ export function demoBook(): Position[] {
       dockedAt: null,
       risk: "medium",
       provenance: "ENCLAVE",
-      slots: [
-        bandSlot(220_000_000, "±22%"),
-        noFeeSlot(),
-        curveSlot(),
-        deadlineSlot(now + 6 * D),
-      ],
+      slots: slotRows({ bandBps: 220_000_000, deadline: now + 6 * D }),
     },
     {
       id: "demo-7",
@@ -246,7 +224,7 @@ export function demoBook(): Position[] {
         "Quoted the USDT/USDC parity band and was closed manually after a depeg scare. Most of its commitment was still unconsumed when it was docked.",
       bandKind: "band",
       band: "0.9990 – 1.0010",
-      bandNote: "USDC per USDT · ±0.1% band, stable pair",
+      bandNote: "USDC per USDT · ±0.10% band, stable pair",
       legs: [
         leg(USDT, 15_000_000_000n, 2_104_330_000n),
         leg(usdc, 15_000_000_000n, 1_998_010_000n),
@@ -256,12 +234,7 @@ export function demoBook(): Position[] {
       dockedAt: now - 5 * D,
       risk: "low",
       provenance: "ENCLAVE",
-      slots: [
-        bandSlot(1_000_000, "±0.1%"),
-        feeSlot(100_000, "0.01%"),
-        curveSlot(),
-        deadlineSlot(now + 2 * D),
-      ],
+      slots: slotRows({ bandBps: 1_000_000, feeBps: 100_000, deadline: now + 2 * D }),
     },
     {
       id: "demo-8",
@@ -283,48 +256,52 @@ export function demoBook(): Position[] {
       dockedAt: null,
       risk: "high",
       provenance: "ENCLAVE",
-      slots: [
-        noBandSlot(),
-        noFeeSlot(),
-        curveSlot(),
-        deadlineSlot(now + 4 * D + 8 * H),
-      ],
+      slots: slotRows({ deadline: now + 4 * D + 8 * H }),
     },
   ];
 }
 
-const slot = (
-  index: number,
-  name: string,
-  instruction: string,
-  params: string,
-) => ({ index, name, instruction, params });
+// bandBps/feeBps are out of 1e9 (FEE_BPS_ONE) — see config/opcodes.8453.json.
+const BPS_ONE = 1_000_000_000;
+const pct = (bps: number) => `${((bps / BPS_ONE) * 100).toFixed(2)}%`;
 
-/** feeBps/bandBps are out of 1e9 (see config/opcodes.8453.json), not 1e4. */
-const groupDigits = (n: number) =>
-  String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-
-const bandSlot = (bandBps: number, pct: string) =>
-  slot(1, "band", "XYC_CONCENTRATE_GROW_LIQUIDITY_2D", `bandBps ${groupDigits(bandBps)} · ${pct}`);
-
-const noBandSlot = () =>
-  slot(1, "band", "— not used", "full range — no concentration");
-
-const feeSlot = (feeBps: number, pct: string) =>
-  slot(2, "fee", "FLAT_FEE_AMOUNT_IN_XD", `feeBps ${groupDigits(feeBps)} · ${pct} on amountIn`);
-
-const noFeeSlot = () => slot(2, "fee", "— not used", "no maker fee");
-
-const curveSlot = () =>
-  slot(3, "curve", "XYC_SWAP_XD", "no args · price = shipped ratio, depth = shipped size");
-
-const deadlineSlot = (unix: number) =>
-  slot(
-    4,
-    "deadline",
-    "DEADLINE",
-    `${unix} · ${formatDeadlineAbs(unix).replace(" · ", " ").replace(" UTC", "Z")}`,
-  );
+/**
+ * The same four rows, in the same order and wording, that `from-server.ts`
+ * builds for a real recommendation — a demo sheet must not render a slot
+ * assignment the real path never would.
+ */
+function slotRows(opts: { bandBps?: number; feeBps?: number; deadline: number }) {
+  return [
+    {
+      index: 1,
+      name: "curve",
+      instruction: "XYC_SWAP_XD",
+      params: "constant-product amount computation",
+    },
+    {
+      index: 2,
+      name: "band",
+      instruction: opts.bandBps !== undefined ? "XYC_CONCENTRATE_GROW_LIQUIDITY_2D" : "— not used",
+      params:
+        opts.bandBps !== undefined
+          ? `±${pct(opts.bandBps)} around mid at observation`
+          : "full range",
+    },
+    {
+      index: 3,
+      name: "fee",
+      instruction: opts.feeBps !== undefined ? "FLAT_FEE_AMOUNT_IN_XD" : "— not used",
+      params:
+        opts.feeBps !== undefined ? `${pct(opts.feeBps)} on amount in` : "no maker fee",
+    },
+    {
+      index: 4,
+      name: "deadline",
+      instruction: "DEADLINE",
+      params: `${opts.deadline} · ${formatDeadlineAbs(opts.deadline).replace(" · ", " ").replace(" UTC", "Z")}`,
+    },
+  ];
+}
 
 /** "Jul 25 · 09:12" — same shape the subgraph's fills will render as. */
 function fill(unix: number, flow: string) {

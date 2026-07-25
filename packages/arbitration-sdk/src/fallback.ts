@@ -23,11 +23,10 @@ import type {
 // downstream mistakes it for a model output. See Wiring §6 (ENCLAVE vs
 // TEMPLATE_FALLBACK) and F2 §8.
 /// 0.05%. feeBps is out of 1e9, not 1e4 — see config/opcodes.8453.json.
-/// Exported so the app's stub renders the same defaults this fallback ships.
-export const DEFAULT_FEE_BPS = 500_000;
+const DEFAULT_FEE_BPS = 500_000;
 /// 1%. Same 1e9 base. Wide enough that a stable or slow pair stays inside it
 /// for a while, tight enough that the concentration visibly bites.
-export const DEFAULT_BAND_BPS = 10_000_000;
+const DEFAULT_BAND_BPS = 10_000_000;
 
 export const FALLBACK_SOURCE = "TEMPLATE_FALLBACK" as const;
 export type RecommendationSource = "ENCLAVE" | typeof FALLBACK_SOURCE;

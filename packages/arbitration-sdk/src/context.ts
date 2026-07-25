@@ -131,7 +131,11 @@ export async function liveContext(
 		fetchUserBook(maker, url),
 	]);
 	return {
-		observedAt: meta.timestamp ?? 0,
+		// A _meta without a timestamp must not anchor time at 0: the prompt
+		// derives "now" and the deadline window from observedAt, so a zero here
+		// asks the model for deadlines in 1970. Wall clock is the honest
+		// fallback — this function is already a live network read.
+		observedAt: meta.timestamp ?? Math.floor(Date.now() / 1000),
 		observedBlock: meta.block,
 		source: "subgraph",
 		pair: opts.pair ?? STUB_PAIR,

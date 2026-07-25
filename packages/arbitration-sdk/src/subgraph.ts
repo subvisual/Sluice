@@ -15,8 +15,6 @@
 // deployed Studio Base subgraph and swaps to the local fork graph-node via
 // SLUICE_SUBGRAPH_URL. No fork-only behaviour may leak in here.
 
-import "dotenv/config";
-
 // Deployed Graph Studio endpoint for the generic Aqua subgraph on Base
 // (subgraph/README.md §7, v0.1.2). Real protocol data, no local stack needed.
 export const DEFAULT_BASE_SUBGRAPH =

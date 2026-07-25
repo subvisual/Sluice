@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { ethers } from "ethers";
 import { loadConfig } from "./config.ts";
 import { initBroker, ensureLedgerFunded } from "./inference.ts";
@@ -90,7 +91,12 @@ async function main() {
 
 	const ctx = parsed.maker ? await liveContext(parsed.maker) : stubContext();
 
-	const { parse, raw, attempts, source } = await compose(broker, cfg, req, ctx);
+	const { parse, raw, attempts, source, violations } = await compose(
+		broker,
+		cfg,
+		req,
+		ctx,
+	);
 
 	console.log(`prompt:  ${req.prompt}`);
 	console.log(
@@ -105,8 +111,13 @@ async function main() {
 	console.log(`source:  ${source}`);
 	if (source === "TEMPLATE_FALLBACK") {
 		console.log(
-			"         ⚠ inference did not yield a well-formed recommendation; this is a DETERMINISTIC template, NOT a model output.",
+			"         ⚠ inference did not yield a valid recommendation; this is a DETERMINISTIC template, NOT a model output.",
 		);
+		if (violations.length) {
+			console.log("         last model attempt was rejected by the validator:");
+			for (const v of violations)
+				console.log(`           ✗ ${v.code}: ${v.message}`);
+		}
 	}
 	console.log("");
 
