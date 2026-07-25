@@ -107,6 +107,8 @@ Addresses are identical on 12 mainnet chains. `networks.json` currently carries 
 3. Build with: `graph build --network <network-name>` — note this rewrites `subgraph.yaml` in place; restore it to mainnet (`git checkout subgraph.yaml`) after deploying.
 4. Deploy as above, to a per-network Studio subgraph (e.g. `graph deploy aqua-base`).
 
+Base is already wired up: `npm run deploy:base` builds and deploys `aqua-base` with the `base` entry from `networks.json` in one step. It still rewrites `subgraph.yaml` in place — restore it afterwards (`git checkout -- subgraph.yaml`).
+
 ### Local fork (anvil)
 
 Studio can't index a local fork, so `local/` carries a self-hosted stack (graph-node + IPFS + Postgres) pointed at an anvil fork of Base. Requires Docker and Foundry.

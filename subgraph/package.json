@@ -7,7 +7,8 @@
     "codegen": "graph codegen",
     "build": "graph build",
     "test": "graph test",
-    "deploy": "graph deploy aqua-mainnet"
+    "deploy": "graph deploy aqua-mainnet",
+    "deploy:base": "graph deploy aqua-base --network base"
   },
   "dependencies": {
     "@graphprotocol/graph-cli": "^0.97.1",
