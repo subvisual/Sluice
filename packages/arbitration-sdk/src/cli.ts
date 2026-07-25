@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { ethers } from "ethers";
 import { loadConfig } from "./config.ts";
 import { initBroker, ensureLedgerFunded, infer } from "./inference.ts";
