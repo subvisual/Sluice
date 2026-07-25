@@ -85,7 +85,7 @@ npm run build
 npm test
 ```
 
-All 22 tests must pass. The continuity test verifies the invariant: `MakerTokenBook.committedVirtual == Σ(virtualBalance)` over LIVE strategies throughout a full lifecycle (ship, fill, ship again, dock).
+All 23 tests must pass. The continuity test verifies the invariant: `MakerTokenBook.committedVirtual == Σ(virtualBalance)` over LIVE strategies throughout a full lifecycle (ship, fill, ship again, dock).
 
 ## 6. Deploying / Other Networks
 

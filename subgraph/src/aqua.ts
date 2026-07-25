@@ -13,9 +13,8 @@ export function handleShipped(event: Shipped): void {
   // (the new tokens' funding still lands via handlePushed's SHIP_FUND path)
   if (Strategy.load(strategyId) != null) return
 
-  getOrCreateProtocol(event.block) // ensure the singleton exists before getOrCreateApp bumps appCount
   const maker = getOrCreateMaker(event.params.maker, event.block)
-  const app = getOrCreateApp(event.params.app)
+  const app = getOrCreateApp(event.params.app, event.block)
 
   const strategy = new Strategy(strategyId)
   strategy.strategyHash = event.params.strategyHash
@@ -79,7 +78,7 @@ export function handleDocked(event: Docked): void {
   maker.liveStrategyCount -= 1
   maker.save()
 
-  const app = getOrCreateApp(event.params.app)
+  const app = getOrCreateApp(event.params.app, event.block)
   app.liveStrategyCount -= 1
   app.save()
 

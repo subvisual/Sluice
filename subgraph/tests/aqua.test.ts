@@ -1,7 +1,7 @@
-import { assert, describe, test, beforeEach, clearStore, createMockedFunction } from "matchstick-as/assembly/index"
+import { assert, describe, test, beforeEach, clearStore, createMockedFunction, newMockEvent } from "matchstick-as/assembly/index"
 import { Bytes, BigInt, Address, ethereum } from "@graphprotocol/graph-ts"
 import { handleShipped, handlePushed, handlePulled, handleDocked } from "../src/aqua"
-import { strategyEntityId, balanceId, bookId } from "../src/helpers"
+import { strategyEntityId, balanceId, bookId, getOrCreateApp } from "../src/helpers"
 import { MAKER, APP, HASH_A, HASH_B, USDC, WETH, TX_2, shippedEvent, pushedEvent, pulledEvent, dockedEvent } from "./utils"
 
 const STRATEGY_DATA = Bytes.fromHexString("0xdeadbeef")
@@ -63,6 +63,19 @@ describe("handleShipped", () => {
     assert.fieldEquals("Maker", MAKER.toHexString(), "strategyCount", "1")
     assert.fieldEquals("AquaProtocol", "aqua", "strategyCount", "1")
     assert.fieldEquals("AquaProtocol", "aqua", "liveStrategyCount", "1")
+  })
+})
+
+describe("getOrCreateApp", () => {
+  beforeEach(() => {
+    clearStore()
+  })
+
+  test("counts the app even when nothing created the protocol singleton first", () => {
+    getOrCreateApp(APP, newMockEvent().block)
+
+    assert.entityCount("App", 1)
+    assert.fieldEquals("AquaProtocol", "aqua", "appCount", "1")
   })
 })
 

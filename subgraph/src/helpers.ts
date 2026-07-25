@@ -51,18 +51,16 @@ export function getOrCreateMaker(address: Address, block: ethereum.Block): Maker
   return maker
 }
 
-export function getOrCreateApp(address: Address): App {
+export function getOrCreateApp(address: Address, block: ethereum.Block): App {
   let app = App.load(address)
   if (app == null) {
     app = new App(address)
     app.strategyCount = 0
     app.liveStrategyCount = 0
     app.save()
-    const protocol = AquaProtocol.load(PROTOCOL_ID)
-    if (protocol != null) {
-      protocol.appCount += 1
-      protocol.save()
-    }
+    const protocol = getOrCreateProtocol(block)
+    protocol.appCount += 1
+    protocol.save()
   }
   return app
 }
