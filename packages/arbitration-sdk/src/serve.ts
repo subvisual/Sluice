@@ -136,6 +136,16 @@ function fallbackResult(
 	const ctx = nowContext();
 	const rec = templateFallback(req, ctx);
 	const violations = validate(rec, req, chainStateFor(ctx));
+	// compileRecommendation throws on a token outside the SDK's hardcoded
+	// TOKENS map (compile.ts's decimalsOf) — a budget token we can't compile
+	// still degrades to a labelled fallback, never a throw; shipInputs is
+	// just empty rather than the request failing outright.
+	let shipInputs: WireShipInput[];
+	try {
+		shipInputs = shipInputsFor(rec, maker, null);
+	} catch {
+		shipInputs = [];
+	}
 	return {
 		source: FALLBACK_SOURCE,
 		reason,
@@ -144,7 +154,7 @@ function fallbackResult(
 		proof: null,
 		validation: { ok: violations.length === 0, violations },
 		attempts: 0,
-		shipInputs: shipInputsFor(rec, maker, null),
+		shipInputs,
 	};
 }
 

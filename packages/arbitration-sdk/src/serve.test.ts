@@ -83,3 +83,19 @@ test("composeForApp returns compiled shipInputs, one per strategy", async () => 
 		assert.equal(shipInput.tokens.length, strategy.tokens.length);
 	}
 });
+
+test("composeForApp degrades to shipInputs: [] instead of throwing when a budget token is unknown to the SDK", async () => {
+	delete process.env.ZG_PRIVATE_KEY;
+	// Not in context.ts's hardcoded TOKENS map (only WETH/USDC) — compileRecommendation's
+	// decimalsOf() throws on this, and fallbackResult must not let that escape.
+	const UNKNOWN = {
+		address: "0x1111111111111111111111111111111111111111",
+		symbol: "UNKNOWN",
+		decimals: 18,
+		amount: "1000000000000000000",
+	};
+	const res = await composeForApp({ ...INPUT, budget: [UNKNOWN] });
+
+	assert.equal(res.source, "TEMPLATE_FALLBACK");
+	assert.deepEqual(res.shipInputs, []);
+});
