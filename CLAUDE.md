@@ -67,6 +67,32 @@ lives on the Wiring page.
   `exposureHeadroom` vocabulary is **parked** — it belongs only to the future whole-balance mode.
   Reintroducing it unqualified is a known bug returning.
 
+## Protocol facts, read from source
+
+Verified against [1inch/aqua](https://github.com/1inch/aqua) and
+[1inch/swap-vm](https://github.com/1inch/swap-vm). Each is cheap to state, expensive to get wrong,
+and reachable by plausible-but-false inference — so they live here rather than only on Notion.
+
+- **`strategyHash = keccak256(strategy)`** (`Aqua.sol:41`) — the raw strategy bytes, no
+  `abi.encode`, no maker, no nonce. Two consequences: it is computable *before* shipping, and it
+  **collides across makers**. Key anything of ours on `(maker, app, strategyHash)`.
+- **Emit a `Salt` (opcode `0x02`) in every compiled strategy.** It is what makes otherwise-identical
+  strategies distinct. `AquaApp` expects one — its `InvalidAquaStrategy` error carries it.
+- **A docked strategy can never be re-shipped.** `dock()` writes `tokensCount = 0xff`; `ship()`
+  requires `0`. That hash is burned for that maker, permanently.
+- **Amounts are not in the hash** — they are separate `ship()` parameters. So "re-ship it smaller"
+  does not exist: identical bytes give an identical, now-dead hash. A resize is a **new strategy**
+  under a new salt, and the old position cannot be revived.
+- **We deploy no Aqua app.** Strategies ship against the official `AquaSwapVMRouter`. `ship()` keys
+  the maker on `msg.sender`, so routing through a contract of ours would make *it* the maker for
+  every user and break self-custody — and `AquaApp` has no ship-time hook to emit from anyway.
+- **Virtual amounts are a ceiling, not a promise.** Authorising 1000 while holding 500 is a valid
+  strategy; it simply cannot fill past 500. The ceiling is enforced by underflow in `pull()`; a real
+  shortfall reverts later at `safeTransferFrom`. The invariant to enforce is the *upper* bound —
+  never draw more than the user authorised.
+- **No Aqua event has `indexed` fields.** Harmless for a subgraph, which reads every event from its
+  data source — but an `eth_getLogs` fallback cannot filter by maker at the node.
+
 ## Stack & layout
 
 No code scaffolded yet beyond `packages/arbitration-sdk` (0G inference client + CLI); the toolchain
@@ -80,10 +106,18 @@ below is intended (from `.gitignore` + Notion Wiring §1). Planned monorepo:
 
 The venue is a **Base mainnet fork** at a pinned block running the *real, already-deployed*
 Aqua/SwapVM — we self-deploy only **our own** contracts (taker, `RecommendationRegistry`). Because
-the fork shares Base's chainId, a `chainId` assert cannot distinguish fork from mainnet: guard with
-a **fork probe** (`eth_getCode` on pinned Aqua addresses) plus an explicit `SLUICE_ALLOW_MAINNET`
-opt-in, and pin addresses in `config/addresses.8453.json`. Never hardcode the real Aqua addresses
-(identical across chains). This repo signs transactions — keys live in `.env` (gitignored); never
+the fork shares Base's chainId, a `chainId` assert cannot distinguish fork from mainnet.
+
+> **The probe must be an anvil-only RPC method** — `anvil_nodeInfo` or `hardhat_metadata`. A node
+> that answers is a fork; a node that doesn't is mainnet. **`eth_getCode` cannot work here:** the
+> fork runs the *same* Aqua deployment as mainnet, so the bytecode at those addresses is byte-identical
+> on both. Pair the probe with an explicit `SLUICE_ALLOW_MAINNET` opt-in (absent by default, never in
+> a committed file) and **hard-abort before building any transaction** when the two disagree. This is
+> the only check between rehearsing and signing a real mainnet position.
+
+Addresses are pinned in `config/addresses.8453.json` — on Base the canonical Aqua addresses are
+simply the correct configuration, and the probe, not address hygiene, is what answers *which chain
+am I about to sign on*. This repo signs transactions — keys live in `.env` (gitignored); never
 commit one. Two keys: `SLUICE_COMMITTER_KEY` (commits recommendations) and `SLUICE_OWNER_KEY`
 (registry admin, cold). The user is the maker and signs the ship `Multicall` themselves.
 
