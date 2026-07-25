@@ -114,9 +114,10 @@ Before querying a subgraph deployment:
 1. Verify it is active: `get_deployment_30day_query_counts` with the subgraph's IPFS hash.
 2. Query via `execute_query_by_subgraph_id` or `execute_query_by_ipfs_hash`.
 
-**This subgraph's deployment IDs** (fill in after first Graph Studio deploy):
-- Subgraph ID: `[pending first deploy]`
-- IPFS Hash: `[pending first deploy]`
+**This subgraph's deployment IDs** (Graph Studio, v0.1.0):
+- Query endpoint: `https://api.studio.thegraph.com/query/1756952/aqua-mainnet/version/latest`
+- Deployment ID / IPFS hash: `QmSbwxzvYVagQnB5PMgQaNT8tPs7VjFSxkG81vcWqRU6Ku`
+- Network Subgraph ID: pending publish to the decentralized network (Studio-only for now)
 
 ## 8. References
 
