@@ -1,0 +1,40 @@
+# PRDs and Issues
+
+How the building skills should find and write PRDs and issue files.
+
+**Location:** `docs/prds/`
+
+## Feature slugs
+
+One PRD per feature, named with the slug of the Notion feature it implements:
+
+| Slug | Notion page |
+| --- | --- |
+| `f1-over-committed-book` | F1 — The Over-Committed Book (1inch Aqua + SwapVM) |
+| `f2-verified-private-decisions` | F2 — Verified Private Decisions (0G) |
+| `f3-agents-eyes` | F3 — The Agent's Eyes (The Graph) |
+| `wiring-delivery` | Wiring & Delivery |
+
+URLs are in `CLAUDE.md` and in each `docs/features/<slug>/README.md`.
+
+Work that doesn't fit one of these four is a signal to check Notion — either it belongs to a
+feature under a name you haven't read yet, or the feature split needs updating there first.
+
+## How each skill uses this
+
+- **`/write-a-prd`** writes its output to `docs/prds/<slug>.md`. Read the feature's Notion
+  page first — the PRD refines it for implementation, it does not restate it.
+- **`/prd-to-issues`** writes its output to `docs/prds/<slug>-issues.md`. If multiple PRDs
+  exist, ask the user which one.
+- **`/issue-worker`** reads the issues file from `docs/prds/*-issues.md`. If multiple issues
+  files exist, ask the user which one. Determines the next issue by checking git log for
+  commits referencing previous issue titles — the next issue is the first one in dependency
+  order whose title doesn't appear in a commit message.
+
+## Conventions
+
+- One PRD per feature, using the slugs above
+- The issues file lives alongside its parent PRD, with the suffix `-issues.md`
+- Issues are committed one at a time by `/issue-worker`; the commit message must reference
+  the issue title so subsequent runs know where to pick up
+- Cross-feature dependencies belong in `wiring-delivery`, not duplicated into F1–F3
