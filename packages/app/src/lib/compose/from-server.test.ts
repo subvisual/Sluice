@@ -64,6 +64,28 @@ test("fromServer maps a recommendation into the UI shapes", () => {
   assert.ok(s.facts.some((f) => f.value.includes("0.05%")));
 });
 
+test("fromServer truncates a virtualAmount with more fraction digits than the token has", () => {
+  const overPrecise = {
+    ...SERVER_RESULT,
+    recommendation: {
+      ...SERVER_RESULT.recommendation,
+      strategies: [
+        {
+          ...SERVER_RESULT.recommendation.strategies[0],
+          tokens: [WETH, USDC],
+          // USDC has 6 decimals; the model emitted 7 fraction digits.
+          virtualAmounts: ["2.0", "1000.3333333"],
+        },
+      ],
+    },
+  };
+  const ui = fromServer(overPrecise, 1);
+  // The leg survives — truncated to 6 dp, never dropped and never rounded up.
+  assert.equal(ui.strategies[0].legs.length, 2);
+  assert.equal(ui.strategies[0].legs[1].token.symbol, "USDC");
+  assert.equal(ui.strategies[0].legs[1].virtual, 1000333333n);
+});
+
 test("fromServer drops legs for tokens outside the app token list", () => {
   const alien = {
     ...SERVER_RESULT,

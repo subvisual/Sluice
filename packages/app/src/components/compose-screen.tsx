@@ -379,8 +379,8 @@ function RecommendationSet({
       )}
 
       <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(400px,1fr))]">
-        {rec.strategies.map((s) => (
-          <RecommendationCard key={s.templateId} strategy={s} />
+        {rec.strategies.map((s, i) => (
+          <RecommendationCard key={`${s.templateId}-${i}`} strategy={s} />
         ))}
       </div>
 
@@ -396,6 +396,11 @@ function RecommendationSet({
           <p className="mt-[5px] text-xs text-muted-3">
             Declining is a normal outcome; nothing has been sent anywhere yet.
           </p>
+          {!rec.validation.ok && (
+            <p className="mt-[5px] text-xs text-danger">
+              The validator rejected this set — it cannot ship.
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2.5">
           <button
@@ -406,7 +411,8 @@ function RecommendationSet({
           </button>
           <button
             onClick={onShip}
-            className="rounded-[10px] bg-ink px-6 py-[13px] text-[15px] font-medium text-white shadow-[var(--shadow)] transition-colors hover:bg-ink-2"
+            disabled={!rec.validation.ok}
+            className="rounded-[10px] bg-ink px-6 py-[13px] text-[15px] font-medium text-white shadow-[var(--shadow)] transition-colors hover:bg-ink-2 disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted disabled:shadow-[inset_0_0_0_1px_var(--border)]"
           >
             Ship — 1 signature
           </button>
