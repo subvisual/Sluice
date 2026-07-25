@@ -70,9 +70,10 @@ question (§7). Tracked in ADR-0001.
 ## Cross-feature dependencies
 
 - **F1 — grammar & compiler:** the validator (I5–I11, I14) and the codec consume F1's slot grammar,
-  `StrategyTemplate.compile()`, `worstCaseDraw()`, and `strategyHash = keccak256(strategy)` (raw
-  bytes, **no `abi.encode`**, `Aqua.sol:41` — see F1 §2; Notion Wiring §2 still shows the
-  `abi.encode` form and needs correcting).
+  `StrategyTemplate.compile()`, `worstCaseDraw()`, and `strategyHash = keccak256(strategy)` where
+  the shipped `strategy` bytes **are `abi.encode(order)`** (`order = maker, traits, program`), so
+  effectively `keccak256(abi.encode(order))` — the bare program is never hashed directly (verified
+  on the fork, PR #14; see F1 §2).
   The registry emits `strategyHash`es F1's ship path produces. *F1 Open Q1 (partial-fill) / Q2
   (`_decayXD` slot) must settle on the fork first.*
 - **F3 — context:** COMPOSE/VALIDATE consume `MarketContext` (`PairContext` + `userBook`) from

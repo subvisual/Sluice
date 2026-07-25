@@ -74,10 +74,18 @@ lives on the Wiring page.
 From [1inch/aqua](https://github.com/1inch/aqua). Each is easy to get wrong by inference; detail is
 on Notion F1.
 
-- **`strategyHash = keccak256(strategy)`** (`Aqua.sol:41`) — raw bytes, no `abi.encode`, no maker.
-  Computable before shipping, and it **collides across makers**: key on `(maker, app, strategyHash)`.
-- **Emit a `Salt` (`0x02`) in every strategy.** A docked hash is burned permanently and amounts are
-  not in the preimage, so a "resize" is a new strategy, never a re-ship.
+- **`strategyHash = keccak256(strategy)`** (`Aqua.sol:41`), but the `strategy` bytes we ship **are
+  `abi.encode(order)`** (`order = maker, traits, program`), so in practice
+  `strategyHash = keccak256(abi.encode(order))` — the bare SwapVM program is never hashed directly
+  (verified by a real fork fill, PR #14). Computable before shipping; key balances on
+  `(maker, app, strategyHash)` as Aqua does. *(Under review: whether it also collides across makers.
+  The shipped `abi.encode(order)` includes the maker, which would prevent collision — but Aqua
+  namespaces balances by maker anyway; confirm against the deployed source before relying on either.)*
+- **Emit a `SALT` instruction in every strategy** for uniqueness. Opcode numbers are **data**, not
+  prose: the deployed Base router numbers differ from the 1inch master source (deployed `SALT` is
+  `0x15`, not the master's `0x02`), so read them from `config/opcodes.8453.json` (pinned +
+  fork-verified, PR #14), never from the master table. A docked hash is burned permanently and
+  amounts are not in the preimage, so a "resize" is a new strategy, never a re-ship.
 - **We deploy no Aqua app.** `ship()` keys the maker on `msg.sender`, so routing through a contract
   of ours would make it the maker for every user.
 - **Virtual amounts are a ceiling, not a promise.** Never draw more than the user authorised.
