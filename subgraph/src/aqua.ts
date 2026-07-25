@@ -1,6 +1,10 @@
 import { Shipped, Docked, Pulled, Pushed } from "../generated/AquaRouter/Aqua"
-import { Strategy } from "../generated/schema"
-import { strategyEntityId, getOrCreateProtocol, getOrCreateMaker, getOrCreateApp } from "./helpers"
+import { Strategy, StrategyBalance, BalanceEvent } from "../generated/schema"
+import { Address } from "@graphprotocol/graph-ts"
+import {
+  strategyEntityId, balanceId, eventId, ZERO,
+  getOrCreateProtocol, getOrCreateMaker, getOrCreateApp, getOrCreateToken, getOrCreateBook,
+} from "./helpers"
 
 export function handleShipped(event: Shipped): void {
   const protocol = getOrCreateProtocol(event.block)
@@ -40,4 +44,55 @@ export function handleShipped(event: Shipped): void {
 
 export function handleDocked(event: Docked): void {}
 export function handlePulled(event: Pulled): void {}
-export function handlePushed(event: Pushed): void {}
+
+export function handlePushed(event: Pushed): void {
+  const strategyId = strategyEntityId(event.params.maker, event.params.app, event.params.strategyHash)
+  const strategy = Strategy.load(strategyId)
+  if (strategy == null) return // strategy predates indexing or was never shipped; nothing to account
+
+  const token = getOrCreateToken(event.params.token)
+  const book = getOrCreateBook(event.params.maker, event.params.token, event.block)
+  const bid = balanceId(strategyId, event.params.token)
+  let balance = StrategyBalance.load(bid)
+  let kind: string
+
+  if (balance == null) {
+    if (strategy.shippedTx != event.transaction.hash) return // push to a token the ship never funded: contract prevents this
+    kind = "SHIP_FUND"
+    balance = new StrategyBalance(bid)
+    balance.strategy = strategy.id
+    balance.token = token.id
+    balance.virtualBalance = event.params.amount
+    balance.initialVirtual = event.params.amount
+    balance.totalPulled = ZERO
+    balance.totalPushed = ZERO
+    const tokens = strategy.tokenAddresses
+    tokens.push(event.params.token)
+    strategy.tokenAddresses = tokens
+    book.liveStrategyCount += 1
+  } else {
+    kind = "PUSH"
+    balance.virtualBalance = balance.virtualBalance.plus(event.params.amount)
+    balance.totalPushed = balance.totalPushed.plus(event.params.amount)
+    strategy.pushCount += 1
+  }
+
+  balance.updatedAt = event.block.timestamp
+  balance.save()
+  strategy.save()
+
+  book.committedVirtual = book.committedVirtual.plus(event.params.amount)
+  book.updatedAt = event.block.timestamp
+  book.save()
+
+  const be = new BalanceEvent(eventId(event))
+  be.strategy = strategy.id
+  be.token = token.id
+  be.kind = kind
+  be.amount = event.params.amount
+  be.balanceAfter = balance.virtualBalance
+  be.ts = event.block.timestamp
+  be.block = event.block.number
+  be.tx = event.transaction.hash
+  be.save()
+}
