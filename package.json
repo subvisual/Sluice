@@ -1,0 +1,13 @@
+{
+  "name": "sluice",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @sluice/app",
+    "build": "npm run build --workspace @sluice/app",
+    "typecheck": "npm run typecheck --workspace @sluice/app",
+    "lint": "npm run lint --workspace @sluice/app"
+  }
+}
