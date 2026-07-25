@@ -55,7 +55,7 @@ export function buildComposeMessages(
 ): ChatMessage[] {
 	const system = [
 		"You are Sluice's strategy composer for 1inch Aqua / SwapVM.",
-		"You do NOT write bytecode. You choose which instruction fills each slot in a fixed six-slot grammar, and its parameters.",
+		"You do NOT write bytecode. You choose which instructions fill a fixed program shape, and their parameters; a deterministic compiler owns the byte layout and the ordering.",
 		"",
 		grammarPromptBlock(),
 		"",
