@@ -54,6 +54,14 @@ const OUTPUT_SCHEMA = `Return ONLY a JSON object (no markdown fences, no prose),
   ]
 }`;
 
+// F2 §9: promptVersion goes into every trace. When the composer behaves
+// differently at hour 30 than at hour 14, "we edited the prompt" is the most
+// likely answer — unanswerable unless the version is recorded. Version 1 was
+// the app-side six-section contract deleted in PR #30; this builder succeeds
+// it. Bump on ANY change to the framing below, grammarPromptBlock() or
+// contextPromptBlock().
+export const PROMPT_VERSION = "sluice.compose/2";
+
 export function buildComposeMessages(
 	req: RecommendationRequest,
 	ctx: MarketContext,

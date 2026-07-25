@@ -49,6 +49,8 @@ export type UiRecommendation = {
   nonce: number;
   provenance: Provenance;
   reason: string | null;
+  /** Book provenance (F3 job 1): the user's live subgraph book, or a stub. */
+  contextSource: ServerComposeResult["contextSource"];
   proof: {
     signer: string | null;
     verified: boolean;
@@ -71,6 +73,7 @@ export function fromServer(
     nonce,
     provenance: res.source,
     reason: res.reason,
+    contextSource: res.contextSource,
     proof: res.proof
       ? {
           signer: res.proof.signer,
