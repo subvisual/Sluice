@@ -47,6 +47,23 @@ describe("handleShipped", () => {
     assert.fieldEquals("AquaProtocol", "aqua", "liveStrategyCount", "1")
     assert.fieldEquals("AquaProtocol", "aqua", "makerCount", "1")
   })
+
+  test("a spurious re-Shipped for an existing hash is a no-op (empty-token ship bypass)", () => {
+    handleShipped(shippedEvent(MAKER, APP, HASH_A, STRATEGY_DATA))
+    handlePushed(pushedEvent(MAKER, APP, HASH_A, USDC, N_10K))
+
+    // ship(app, strategy, [], []) re-emits Shipped without any immutability check
+    const reShip = shippedEvent(MAKER, APP, HASH_A, STRATEGY_DATA)
+    reShip.transaction.hash = TX_2
+    handleShipped(reShip)
+
+    const id = strategyEntityId(MAKER, APP, HASH_A).toHexString()
+    assert.entityCount("Strategy", 1)
+    assert.fieldEquals("Strategy", id, "tokenAddresses", "[" + USDC.toHexString() + "]")
+    assert.fieldEquals("Maker", MAKER.toHexString(), "strategyCount", "1")
+    assert.fieldEquals("AquaProtocol", "aqua", "strategyCount", "1")
+    assert.fieldEquals("AquaProtocol", "aqua", "liveStrategyCount", "1")
+  })
 })
 
 describe("handlePushed", () => {
@@ -90,6 +107,27 @@ describe("handlePushed", () => {
     handlePushed(pushedEvent(MAKER, APP, HASH_B, USDC, N_1K))
     assert.entityCount("StrategyBalance", 0)
     assert.entityCount("BalanceEvent", 0)
+  })
+
+  test("a re-ship with a disjoint token set funds the new token as SHIP_FUND", () => {
+    handlePushed(pushedEvent(MAKER, APP, HASH_A, USDC, N_10K))
+
+    // observed on Base: same hash re-shipped later with different tokens (per-token immutability)
+    const reShip = shippedEvent(MAKER, APP, HASH_A, STRATEGY_DATA)
+    reShip.transaction.hash = TX_2
+    handleShipped(reShip)
+    const fund = pushedEvent(MAKER, APP, HASH_A, WETH, N_1K)
+    fund.transaction.hash = TX_2
+    handlePushed(fund)
+
+    const sid = strategyEntityId(MAKER, APP, HASH_A)
+    const bid = balanceId(sid, WETH).toHexString()
+    assert.fieldEquals("StrategyBalance", bid, "virtualBalance", N_1K.toString())
+    assert.fieldEquals("StrategyBalance", bid, "initialVirtual", N_1K.toString())
+    assert.fieldEquals("Strategy", sid.toHexString(), "tokenAddresses",
+      "[" + USDC.toHexString() + ", " + WETH.toHexString() + "]")
+    assert.fieldEquals("Strategy", sid.toHexString(), "pushCount", "0") // funding, not a top-up
+    assert.fieldEquals("MakerTokenBook", bookId(MAKER, WETH).toHexString(), "committedVirtual", N_1K.toString())
   })
 
   test("two SHIP_FUND pushes record both tokens on the strategy", () => {

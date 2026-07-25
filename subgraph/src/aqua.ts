@@ -7,11 +7,17 @@ import {
 } from "./helpers"
 
 export function handleShipped(event: Shipped): void {
-  const protocol = getOrCreateProtocol(event.block)
+  const strategyId = strategyEntityId(event.params.maker, event.params.app, event.params.strategyHash)
+  // ship()'s immutability check is per-token, so re-shipping an existing hash with an
+  // empty or disjoint token set re-emits Shipped; don't let it overwrite the entity
+  // (the new tokens' funding still lands via handlePushed's SHIP_FUND path)
+  if (Strategy.load(strategyId) != null) return
+
+  getOrCreateProtocol(event.block) // ensure the singleton exists before getOrCreateApp bumps appCount
   const maker = getOrCreateMaker(event.params.maker, event.block)
   const app = getOrCreateApp(event.params.app)
 
-  const strategy = new Strategy(strategyEntityId(event.params.maker, event.params.app, event.params.strategyHash))
+  const strategy = new Strategy(strategyId)
   strategy.strategyHash = event.params.strategyHash
   strategy.maker = maker.id
   strategy.app = app.id
@@ -129,7 +135,9 @@ export function handlePushed(event: Pushed): void {
   let kind: string
 
   if (balance == null) {
-    if (strategy.shippedTx != event.transaction.hash) return // push to a token the ship never funded: contract prevents this
+    // push() to a never-funded token reverts (PushToNonActiveStrategyPrevented), so a
+    // Pushed with no prior balance can only be ship() funding — including a re-ship of
+    // the same hash with a disjoint token set (the immutability check is per-token)
     kind = "SHIP_FUND"
     balance = new StrategyBalance(bid)
     balance.strategy = strategy.id
