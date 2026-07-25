@@ -140,16 +140,18 @@ not a real opcode; "exactly one swap-logic instruction" is not a protocol rule).
 
 ## 6. Reject-and-re-infer loop + template fallback + commit (`arbitration-sdk/src/compose.ts`) · 🟡 partially delivered
 
-**Delivered (PR #10):** a **one-retry** loop — malformed output re-infers once with the errors fed
-back.
+**Delivered:** the **one-retry** loop (PR #10) **and** the deterministic **TEMPLATE_FALLBACK** —
+after retries exhaust, `compose()` returns a labelled template recommendation built by `fallback.ts`,
+never a model output. `ComposeResult.source` is `ENCLAVE` | `TEMPLATE_FALLBACK`; the CLI surfaces it.
 
-**Not delivered:** the full reject-and-re-infer against the validator (⬜, waits on Issue 5), the
-labelled **TEMPLATE_FALLBACK** (⬜, in scope), and the **commit (tx1)** + freshen steps
-(⛔ verifiability).
+**Not delivered:** the validator-driven reject-and-re-infer (⬜, waits on Issue 5) and the
+**commit (tx1)** + freshen steps (⛔ verifiability).
 
 ### Acceptance criteria
 - [x] Malformed output triggers a bounded re-infer.
-- [ ] ⬜ `TEMPLATE_FALLBACK` after `maxInferenceRetries` (labelled, never a model output).
+- [x] `TEMPLATE_FALLBACK` after retries (labelled, never a model output). `fallback.ts` +
+  `selectTemplate` (deterministic intent heuristic); output is budget-bounded and within
+  `maxDeadlineSec`; 8 unit tests.
 - [ ] ⬜ Validator-driven reject-and-re-infer *(needs Issue 5)*.
 - [ ] ⛔ FRESHEN + COMMIT (tx1, committer key) *(deferred with the registry)*.
 
@@ -204,10 +206,9 @@ even under the original scope; **deferred**. Spec retained.
 
 ## What's actually left, under the current scope
 
-The recommendation path is working (composer, PR #10). The **in-scope, buildable** F2 remainder is
-small:
+The recommendation path is working (composer + the deterministic template fallback). The
+**in-scope, buildable** F2 remainder is now essentially just:
 
-- **Template fallback** (part of Issue 6) — labelled deterministic output after retries exhaust.
 - **The full validator** (Issue 5) — the moment **F1 Open Q2** settles the grammar, this unblocks
   and the composer's output can become grammar-*correct*.
 - **Real F3 context** — swap the stub; F3 work, tracked there.
