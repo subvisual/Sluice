@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# Secrets — never commit a key, this repo signs transactions
+.env
+.env.*
+!.env.example
+
+# Hardhat
+artifacts/
+cache/
+typechain-types/
+# ignition/deployments/ is deliberately NOT ignored — the whole team needs our
+# self-deployed Aqua addresses, and they are the hour-0 gate.
+
+# Foundry
+out/
+broadcast/
+lib/forge-std/
+
+# The Graph
+subgraph/build/
+subgraph/generated/
+
+# Build output
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+!.vscode/extensions.json
+
+# Local agent scratch — decision traces, fixtures, throwaway scripts
+.scratch/
