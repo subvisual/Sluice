@@ -91,13 +91,13 @@ below is intended (from `.gitignore` + Notion Wiring §1). Planned monorepo:
 - **Subgraph** (F3) — The Graph, codegen into `subgraph/generated/`
 - **Agent / dashboard** — TypeScript/Node (dashboard is Next.js)
 
-The venue is a **Base mainnet fork** at a pinned block running the *real, already-deployed*
-Aqua/SwapVM — we self-deploy only **our own** contracts (taker, `RecommendationRegistry`). Because
-the fork shares Base's chainId, a `chainId` assert cannot distinguish fork from mainnet: guard with
-a **fork probe using an anvil-only RPC method** (`anvil_nodeInfo`) — **not `eth_getCode`**, which
-returns identical bytecode on fork and mainnet since it is the same deployment — plus an explicit
-`SLUICE_ALLOW_MAINNET` opt-in, and hard-abort when the two disagree. Addresses are pinned in
-`config/addresses.8453.json`. This repo signs transactions — keys live in `.env` (gitignored); never
+**For now, development and testing run against a Base mainnet fork** at a pinned block, so we build
+against the real deployed Aqua/SwapVM rather than a copy. We self-deploy only our own contracts
+(taker, `RecommendationRegistry`); addresses are pinned in `config/addresses.8453.json`. A fork
+shares Base's chainId, so guard signing with a fork probe (`anvil_nodeInfo` — **not `eth_getCode`**,
+which returns identical bytecode either way) plus an explicit `SLUICE_ALLOW_MAINNET` opt-in.
+
+This repo signs transactions — keys live in `.env` (gitignored); never
 commit one. Two keys: `SLUICE_COMMITTER_KEY` (commits recommendations) and `SLUICE_OWNER_KEY`
 (registry admin, cold). The user is the maker and signs the ship `Multicall` themselves.
 

@@ -19,12 +19,11 @@ addresses, config paths, commands.
 - Issues: `docs/prds/f1-aqua-strategy-vm-issues.md`
 - Feature-scoped ADRs: `docs/features/f1-aqua-strategy-vm/adr/`
 
-The venue is a **Base fork** — same chainId as Base mainnet, so a `chainId` guard cannot tell
-them apart. Guard with a **fork probe using an anvil-only RPC method** (`anvil_nodeInfo`,
-`hardhat_metadata`) plus an explicit `SLUICE_ALLOW_MAINNET` opt-in, and hard-abort when they
-disagree. **Not `eth_getCode`** — the fork runs the same Aqua deployment as mainnet, so the
-bytecode at those addresses is identical on both and proves nothing. Addresses are pinned in
-`config/addresses.8453.json`.
+Development and testing currently run against a **Base fork**, which shares Base's chainId — so a
+`chainId` guard cannot tell fork from mainnet. Guard signing with a fork probe using an anvil-only
+RPC method (`anvil_nodeInfo`, `hardhat_metadata`), **not `eth_getCode`**: the fork runs the same
+Aqua deployment, so that bytecode is identical either way and proves nothing. Pair it with an
+explicit `SLUICE_ALLOW_MAINNET` opt-in. Addresses are pinned in `config/addresses.8453.json`.
 
 Provenance is `strategyHash = keccak256(strategy)` — the raw bytes, **no `abi.encode`**
 (`Aqua.sol:41`) — computed before signing and checked by recompile-equality. The preimage
