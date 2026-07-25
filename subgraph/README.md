@@ -136,12 +136,12 @@ Before querying a subgraph deployment:
 1. Verify it is active: `get_deployment_30day_query_counts` with the subgraph's IPFS hash.
 2. Query via `execute_query_by_subgraph_id` or `execute_query_by_ipfs_hash`.
 
-**This subgraph's deployment IDs** (Graph Studio, v0.1.1):
+**This subgraph's deployment IDs** (Graph Studio, v0.1.2):
 
 | Network | Query endpoint | Deployment ID / IPFS hash |
 |---|---|---|
-| Ethereum mainnet | `https://api.studio.thegraph.com/query/1756952/aqua-mainnet/version/latest` | `QmR8hiuvthA7tRN5ViT9yLudKXZK83W8KUrD3NWeNWtGJi` |
-| Base | `https://api.studio.thegraph.com/query/1756952/aqua-base/version/latest` | `QmbyrUSrTKpMLQbuxS63gF3RCRkvp4ghaGhkdM3NuGuhix` |
+| Ethereum mainnet | `https://api.studio.thegraph.com/query/1756952/aqua-mainnet/version/latest` | `Qmc7RGie3A5v35fgdCJZRGrdtd4N8pUzgGH2hMn2FFNYhU` |
+| Base | `https://api.studio.thegraph.com/query/1756952/aqua-base/version/latest` | `QmavuVjf3VdGf54n67EKeaQ7hUWqx13KWjh9qFoyFXZk5p` |
 
 Network Subgraph IDs: pending publish to the decentralized network (Studio-only for now).
 
