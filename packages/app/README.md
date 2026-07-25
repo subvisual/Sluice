@@ -37,3 +37,20 @@ shared by the fork and by mainnet (F1 §1). Adding a token is a JSON edit.
 Sealed inference (F2), the deterministic gate I1–I14 (F2 §6), market context and the
 user's book (F3), and both transactions. `nonce` is a stand-in until
 `RecommendationRegistry` is deployed, and is labelled as one on screen.
+
+## /api/compose — the server-side enclave path
+
+The compose screen posts `{ user, prompt, budget }` to `POST /api/compose`
+(Node runtime, `maxDuration: 60`). The route runs the arbitration-sdk facade:
+live book context from the subgraph, sealed 0G inference with one retry, the
+deterministic validator — and returns the recommendation with its provenance.
+
+- With `ZG_PRIVATE_KEY` set (see `.env.example`): real, signed `ENCLAVE`
+  recommendations. Fund the wallet at faucet.0g.ai and the compute ledger via
+  `npm run fund` in `packages/arbitration-sdk` (once, out-of-band — the route
+  never funds).
+- Without it: the deterministic template seed, always labelled
+  `TEMPLATE_FALLBACK` with the reason. The demo never dies on a missing key.
+
+On Vercel: set the `ZG_*` vars as server env vars (never `NEXT_PUBLIC_`);
+`maxDuration: 60` needs a plan that allows it.
