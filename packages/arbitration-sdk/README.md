@@ -20,11 +20,21 @@ Studio **Base** subgraph (real Aqua data, no local stack) and swaps to the local
 (`subgraph/local`, `make fork-up`) via `SLUICE_SUBGRAPH_URL` or `--url <endpoint>`. Only the local
 fork node sees positions **we** ship on the fork.
 
-**Scope:** read-only, job 1 only. The `Recommendation`/`Template` join (Notion F3 §3) is not in the
-deployed schema yet — it needs `RecommendationRegistry`, deferred with F2 verifiability. Not yet
-wired into `context.ts`/`compose` (the composer still uses the stub `MarketContext`).
+**Wired into the composer.** `context.ts` builds a `MarketContext` whose **book (job 1) is real** —
+`liveContext(maker)` reads it from the subgraph and `contextPromptBlock` renders it into the prompt
+the enclave signs. Run it end-to-end with `--maker`:
 
-Modules: `subgraph.ts` (client + pure shaping), `subgraph-cli.ts`.
+    npm run compose -- "add a rangebound ETH/USDC position" --budget WETH=2,USDC=3000 --maker 0x471e8aad77a1a29335081850b4e34fa7863f762a
+
+Without `--maker` the composer uses the stub context, exactly as before.
+
+**Scope:** read-only, job 1 only. The market half of the context (pool depth / realised vol) is
+**still a labelled stub** — job 2, F3 Open Q2 (which price subgraph). The `Recommendation`/`Template`
+join (Notion F3 §3) is not in the deployed schema yet — it needs `RecommendationRegistry`, deferred
+with F2 verifiability.
+
+Modules: `subgraph.ts` (client + pure shaping), `subgraph-cli.ts`, `context.ts` (`liveContext` /
+`bookToContext`).
 
 ## Strategy composer CLI
 
