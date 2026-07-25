@@ -25,7 +25,7 @@ kept so the work is recoverable if that scope returns.
 0 Gate 0 (DONE) ──▶ 1 Binding (RESOLVED) ──▶ 2 Registry ⛔ ──┬─▶ 3 Codec 🟡 ───────┐
   (CLI, PR #6)        (c)+(a); ADR-0001       (deferred)     └─▶ 4 Sealed compose 🟡┤
                                                                                     ├─▶ 6 Loop+fallback+commit 🟡 ─┬─▶ 7 Narration ⛔ ─┐
-                                          5 Validator 🚧 (F1 Q2) ───────────────────┘                             └─▶ 8 Enc. memory ⛔ ┴─▶ 9 Trace view ⛔ ─▶ 10 Reviewer ⛔
+                                          5 Validator 🟡 (I1–I4,I12; I5–I11 F1 Q2) ─┘                             └─▶ 8 Enc. memory ⛔ ┴─▶ 9 Trace view ⛔ ─▶ 10 Reviewer ⛔
 ```
 
 The composer (PR #10) delivers the recommendation spine that cuts across **3, 4, and the retry
@@ -120,21 +120,30 @@ checked** (⛔ verifiability). Context is the stub, not live F3.
 
 ---
 
-## 5. Request envelope + validator I1–I14 (`arbitration-sdk/src/validate.ts`) · 🚧 blocked
+## 5. Request envelope + validator I1–I14 (`arbitration-sdk/src/validate.ts`) · 🟡 partially delivered
 
-The deterministic gate that **rejects** (never mutates) a non-compliant recommendation. A
-`RecommendationRequest` type and a **light** budget/shape check already exist in the composer, but
-the full I1–I14 validator is **blocked**: F1 §5 grammar is provisional and explicitly "the
-validator must not be built against it" until **F1 Open Q2** settles against the forked bytecode.
-Building it now would encode a grammar known to be wrong (e.g. `_xycConcentrateGrowLiquidityXD` is
-not a real opcode; "exactly one swap-logic instruction" is not a protocol rule).
+The deterministic gate that **rejects** (never mutates) a non-compliant recommendation.
+
+**Delivered — the grammar-independent slice (I1–I4, I12).** `validate(r, q, s): Violation[]` in
+`src/validate.ts` is a pure, rejecting gate for the invariants that do **not** depend on the F1
+grammar: I1 (token ∈ budget), I2 (per-token Σ virtualAmounts across **all** strategies ≤ budget —
+exact decimal-string maths, not floating point), I3 (`strategies.length ∈ [1, maxStrategies]`), I4
+(chain match), I12 (`observedBlock` within N blocks of head; future snapshots also rejected). 17
+property/example tests, incl. the `0.1+0.1+0.1 ≤ 0.3` exactness case and a "never mutates input"
+check. This upgrades the composer's soft budget *notes* into hard *rejections*.
+
+**Still blocked — the grammar invariants (I5–I11, I14).** F1 §5 is provisional and explicitly "the
+validator must not be built against it" until **F1 Open Q2** settles against the forked bytecode
+(e.g. `_xycConcentrateGrowLiquidityXD` is not a real opcode; "exactly one swap-logic instruction"
+is not a protocol rule). **I4's `r.user == q.user` half** and **I13 (nonce)** are deferred with the
+commit path (both committer-supplied); **I15** is parked (whole-balance mode).
 
 ### Acceptance criteria
-- [ ] 🚧 `validate(r, q, s): Violation[]` implements **I1–I14** (rejects, never mutates) *(unblock
-  when F1 Q2 lands)*.
-- [ ] Property tests: never returns "valid" for a violating recommendation; never mutates input.
-- Note: budget/authority checks (I1–I4) do not depend on the grammar and are partly covered by the
-  composer's light parse; the grammar-dependent invariants (I5–I11, I14) are what's blocked.
+- [x] `validate(r, q, s): Violation[]` implements **I1–I4, I12** (rejects, never mutates); property
+  tests never return "valid" for a violating recommendation and never mutate input.
+- [ ] 🚧 I5–I11, I14 (grammar / recompile-equality) *(unblock when F1 Q2 lands)*.
+- [ ] ⛔ I4 user-equality + I13 nonce *(deferred with the commit path)*.
+- [ ] ⬜ Wire the gate into the composer's reject-and-re-infer loop *(Issue 6)*.
 
 ---
 
@@ -206,11 +215,13 @@ even under the original scope; **deferred**. Spec retained.
 
 ## What's actually left, under the current scope
 
-The recommendation path is working (composer + the deterministic template fallback). The
-**in-scope, buildable** F2 remainder is now essentially just:
+The recommendation path is working (composer + the deterministic template fallback), and the
+**budget/authority validator** (Issue 5, I1–I4/I12) now hard-rejects out-of-budget, wrong-chain, or
+stale recommendations. The **in-scope, buildable** F2 remainder is now essentially just:
 
-- **The full validator** (Issue 5) — the moment **F1 Open Q2** settles the grammar, this unblocks
-  and the composer's output can become grammar-*correct*.
+- **The grammar half of the validator** (Issue 5, I5–I11/I14) — the moment **F1 Open Q2** settles
+  the grammar, this unblocks and the composer's output can become grammar-*correct*.
+- **Wire the validator into the compose loop** (Issue 6) — turn `validate()` into reject-and-re-infer.
 - **Real F3 context** — swap the stub; F3 work, tracked there.
 
 Everything under ⛔ waits on a decision to reinstate on-chain verifiability.
