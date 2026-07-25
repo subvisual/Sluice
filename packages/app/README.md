@@ -23,9 +23,9 @@ Balances read through that RPC, so without a fork running the picker shows
 
 | Path | Owns |
 | --- | --- |
-| `src/lib/compose/` | The request envelope and prompt assembly. **No React** — this lifts into `packages/composer-sdk/` unchanged when that package exists. |
-| `src/lib/compose/prompt.ts` | The six-section prompt contract, [F2 §9](https://app.notion.com/p/3a8caae5863181609acbcfd69a5db06b). |
-| `src/lib/compose/grammar.ts` | The slot table, [F1 §5](https://app.notion.com/p/3a8caae5863181459491dcb6e7e25a1b). **Provisional** — F1 Q2 is open, so it is injected as data, not hardcoded. |
+| `src/lib/compose/` | The request envelope: building it from user input, the client-side checks that run before it, and mapping the server's response onto what the screen renders. **No React**. Prompt assembly itself lives server-side, in the SDK's `buildComposeMessages` behind `/api/compose` (below) — not here. |
+| `src/lib/compose/request.ts` | `buildRecommendationRequest` — the request envelope and the checks the client can honestly make before spending a round trip. |
+| `src/lib/compose/from-server.ts` | Maps `ServerComposeResult` onto the UI shapes. Labels resolve through the SDK's own `TEMPLATES` so the two sides cannot drift. |
 | `src/lib/compose/types.ts` | `RecommendationRequest`, F2 §5. |
 | `src/components/` | The screen. |
 
