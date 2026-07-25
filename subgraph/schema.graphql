@@ -1,0 +1,103 @@
+enum StrategyStatus { LIVE DOCKED }
+enum BalanceEventKind { SHIP_FUND PULL PUSH }
+
+type AquaProtocol @entity(immutable: false) {          # singleton, id = "aqua"
+  id: ID!
+  strategyCount: Int!
+  liveStrategyCount: Int!
+  makerCount: Int!
+  appCount: Int!
+  fillCount: Int!
+  lastUpdatedBlock: BigInt!
+}
+
+type Maker @entity(immutable: false) {                 # id = maker address
+  id: Bytes!
+  strategyCount: Int!
+  liveStrategyCount: Int!
+  strategies: [Strategy!]! @derivedFrom(field: "maker")
+  books: [MakerTokenBook!]! @derivedFrom(field: "maker")
+  firstSeenAt: BigInt!
+}
+
+type App @entity(immutable: false) {                   # id = app address
+  id: Bytes!
+  strategyCount: Int!
+  liveStrategyCount: Int!
+  strategies: [Strategy!]! @derivedFrom(field: "app")
+}
+
+type Token @entity(immutable: false) {                 # id = token address
+  id: Bytes!
+  symbol: String                     # try_-calls; null if non-standard
+  name: String
+  decimals: Int
+}
+
+type Strategy @entity(immutable: false) {              # id = maker-app-strategyHash (hex concat)
+  id: Bytes!
+  strategyHash: Bytes!
+  maker: Maker!
+  app: App!
+  strategyData: Bytes!               # raw bytes from Shipped
+  status: StrategyStatus!
+  tokenAddresses: [Bytes!]!          # populated by SHIP_FUND events
+  balances: [StrategyBalance!]! @derivedFrom(field: "strategy")
+  fills: [Fill!]! @derivedFrom(field: "strategy")
+  fillCount: Int!
+  pullCount: Int!
+  pushCount: Int!
+  shippedAt: BigInt!
+  shippedAtBlock: BigInt!
+  shippedTx: Bytes!
+  dockedAt: BigInt
+  dockedAtBlock: BigInt
+  dockedTx: Bytes
+}
+
+type StrategyBalance @entity(immutable: false) {       # id = strategyId-token
+  id: Bytes!
+  strategy: Strategy!
+  token: Token!
+  virtualBalance: BigInt!            # current; 0 after dock
+  initialVirtual: BigInt!            # from ship-funding Pushed
+  totalPulled: BigInt!
+  totalPushed: BigInt!               # excludes ship funding
+  updatedAt: BigInt!
+}
+
+type MakerTokenBook @entity(immutable: false) {        # id = maker-token
+  id: Bytes!
+  maker: Maker!
+  token: Token!
+  committedVirtual: BigInt!          # Σ virtualBalance over LIVE strategies
+  liveStrategyCount: Int!
+  updatedAt: BigInt!
+}
+
+type Fill @entity(immutable: true) { # id = txHash-logIndex
+  id: Bytes!
+  orderHash: Bytes!
+  strategy: Strategy                 # null when order is not an Aqua strategy
+  maker: Bytes!
+  taker: Bytes!
+  tokenIn: Token!
+  tokenOut: Token!
+  amountIn: BigInt!
+  amountOut: BigInt!
+  ts: BigInt!
+  block: BigInt!
+  tx: Bytes!
+}
+
+type BalanceEvent @entity(immutable: true) {  # id = txHash-logIndex
+  id: Bytes!
+  strategy: Strategy!
+  token: Token!
+  kind: BalanceEventKind!
+  amount: BigInt!
+  balanceAfter: BigInt!
+  ts: BigInt!
+  block: BigInt!
+  tx: Bytes!
+}
