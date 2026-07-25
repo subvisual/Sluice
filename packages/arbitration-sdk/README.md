@@ -1,8 +1,30 @@
 # @sluice/arbitration-sdk
 
 F2 (Verified Private Recommendations) SDK. Currently: a **strategy composer CLI** (prompt +
-budget → a grammar-shaped strategy recommendation from a live 0G enclave) and a one-shot **0G
-inference CLI** (the Gate 0 round-trip it is built on).
+budget → a grammar-shaped strategy recommendation from a live 0G enclave), a one-shot **0G
+inference CLI** (the Gate 0 round-trip it is built on), and an **F3 subgraph book reader** (a
+maker's own Aqua book, read from The Graph).
+
+## Subgraph book reader (F3, job 1)
+
+Reads a maker's own book — committed per-token balances, live strategies, recent fills — from the
+Aqua subgraph, and shapes it (exact decimal amounts) into what the composer's `MarketContext`
+consumes. This is F3 **job 1** (the user's own book); job 2 (market depth / realised vol) comes
+from composed hosted DEX/price subgraphs and is not built here.
+
+    npm run subgraph -- meta
+    npm run subgraph -- book 0x471e8aad77a1a29335081850b4e34fa7863f762a
+
+The endpoint is a **config value, never a code assumption** (F3 §2): it defaults to the deployed
+Studio **Base** subgraph (real Aqua data, no local stack) and swaps to the local fork `graph-node`
+(`subgraph/local`, `make fork-up`) via `SLUICE_SUBGRAPH_URL` or `--url <endpoint>`. Only the local
+fork node sees positions **we** ship on the fork.
+
+**Scope:** read-only, job 1 only. The `Recommendation`/`Template` join (Notion F3 §3) is not in the
+deployed schema yet — it needs `RecommendationRegistry`, deferred with F2 verifiability. Not yet
+wired into `context.ts`/`compose` (the composer still uses the stub `MarketContext`).
+
+Modules: `subgraph.ts` (client + pure shaping), `subgraph-cli.ts`.
 
 ## Strategy composer CLI
 
