@@ -7,10 +7,14 @@ implementation-specific build-out (files, signatures, sequence, tests). Regenera
 after the pivot from the old daemon design; the previous version is in git history.
 
 > **Build scope (2026-07-25) — recommendation-only; verifiability deferred.** The honest loop
-> today is *prompt → validated recommendation*. **Deferred, not deleted** (mirrors the Notion F2
-> banner): §2 `RecommendationRegistry` + the on-chain commit (tx1), §3's `payloadHash` binding,
-> §4 Gate 2 reviewer, §8 encrypted trace, and signature verification. Everything below documents
-> the full design; the deferred pieces are in scope but not in the current build.
+> today is *prompt → validated recommendation*. **Built** (merged): the strategy composer
+> (`packages/arbitration-sdk`, `compose` CLI) — a live 0G call over the settled grammar, the §6
+> validator (I1–I12) wired as the reject → re-snapshot → re-infer loop with the labelled
+> `TEMPLATE_FALLBACK`, and the user's own book feeding the prompt (F3 via `--maker`). **Deferred, not
+> deleted** (mirrors the Notion F2 banner): §2 `RecommendationRegistry` + the on-chain commit (tx1),
+> §3's `payloadHash` binding, per-response signature verification (received but **not checked**),
+> I13–I14, §4 Gate 2 reviewer, and §8 encrypted trace. Everything below documents the full design;
+> the deferred pieces are in scope but not in the current build.
 
 **What F2 owns:** `RecommendationRegistry`, the recommendation codec, the request envelope and
 its invariants, sealed inference, the reviewer (stretch), and encrypted memory. **F2 does not
@@ -26,6 +30,9 @@ request flow that runs it (Wiring §4).
 - **Load-bearing Gate 0 finding — see "Decision A" below (RESOLVED).** The signed bytes are **not**
   our text; they are a provider attestation record. The binding redesign this forced is settled:
   (c) provenance-oracle + (a) trace-side hash. The registry is unblocked.
+- **Since merged:** the composer + validator (I1–I12) + reject/re-infer loop + `TEMPLATE_FALLBACK`
+  (#13, #20) and F3 book context via `--maker` (#17) are in. Registry, on-chain commit, signature
+  verification, encrypted trace, and the reviewer remain deferred — see the build-scope banner above.
 
 ## Decision A — the on-chain binding · **RESOLVED (2026-07-25): (c) + trace-side (a)**
 
@@ -70,9 +77,13 @@ question (§7). Tracked in ADR-0001.
 ## Cross-feature dependencies
 
 - **F1 — grammar & compiler:** the validator (I5–I11, I14) and the codec consume F1's slot grammar,
-  `StrategyTemplate.compile()`, `worstCaseDraw()`, and `strategyHash = keccak256(strategy)` (raw
-  bytes, **no `abi.encode`**, `Aqua.sol:41` — see F1 §2; Notion Wiring §2 still shows the
-  `abi.encode` form and needs correcting).
+  `StrategyTemplate.compile()`, `worstCaseDraw()`, and `strategyHash`. The shipped `strategy` bytes
+  **are `abi.encode(Order{maker, traits, program})`**, so `strategyHash = keccak256(abi.encode(order))`;
+  the bare program is never hashed. Fork-verified — PR #14 / `StrategyHashSemantics.t.sol`. Two layers,
+  both true: at the Aqua layer `keccak256(strategy)` has no maker in the preimage, so identical
+  **bytes** collide across makers (F3 keys on `(maker, app, strategyHash)`, which is required); at the
+  order layer the maker is embedded in the bytes, so identical **programs** from different makers do
+  not. See F1 §2.
   The registry emits `strategyHash`es F1's ship path produces. *F1 Open Q1 (partial-fill) / Q2
   (`_decayXD` slot) must settle on the fork first.*
 - **F3 — context:** COMPOSE/VALIDATE consume `MarketContext` (`PairContext` + `userBook`) from
