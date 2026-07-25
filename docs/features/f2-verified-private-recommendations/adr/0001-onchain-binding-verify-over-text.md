@@ -70,3 +70,83 @@ recorded in the Notion F2 page's "⚠️ Gate 0 update" block).
 `RecommendationRegistry` / per-user-nonce framing. This local ADR retains the older vocabulary;
 the Gate 0 finding above applies identically to both, and the authoritative Gate 0 note lives on
 the Notion page. The local F2 docs need reconciling with the pivot — tracked separately.
+
+---
+
+## Resolution — binding chosen (2026-07-25): **(c) provenance-oracle + (a) trace-side hash**
+
+**Status:** accepted · supersedes the "verify-over-text with a fixed-width epoch/nonce prefix"
+mechanism above. Decided in F2 Issue 1 (the binding redesign that the Gate 0 finding forced).
+
+Of the three candidates in the Gate 0 block, we take **(c)** as the on-chain mechanism and layer
+**(a)** as an off-chain auditability anchor. **(b)** is rejected: it depends on 0G exposing a
+request preimage we could not confirm, and even if it did the binding would still not be
+on-chain-reproducible — no advantage over (c) at more risk.
+
+### The security claim, stated precisely
+
+`commitRecommendation` guarantees exactly three things on-chain, and explicitly **not** a fourth:
+
+1. **TEE provenance (trustless).** `ECDSA.recover(toEthSignedMessageHash(signedText), sig) ∈
+   isRegisteredSigner` proves `signedText` was signed by a registered 0G enclave signer. It does
+   **not** prove `signedText` contains *our* recommendation — the signed attestation record is
+   opaque and `respHash` is non-reproducible from content.
+2. **Committer authorisation (trust our key).** `onlyCommitter` proves the holder of
+   `SLUICE_COMMITTER_KEY` chose to commit this record and vouches for the
+   `(user, nonce, payloadHash, strategyHashes, templateIds)` association. **These are
+   committer-supplied arguments, not parsed from the signed bytes.**
+3. **Per-user replay protection (contract-enforced).** `nonceOf[user]` monotonic check rejects a
+   stale or replayed `nonce`. Keyed on the committer-supplied `user`+`nonce`, **not** bound into
+   the enclave signature.
+
+**Not guaranteed on-chain:** that the committed `recommendationId` corresponds to our canonical
+recommendation. That link is **auditable off-chain** (this is the (a) layer): the trace stores
+`payloadHash = keccak256(canonicalRecommendation)`, and anyone holding the decrypted trace can
+recompute it, check it equals the committed `payloadHash`, and check the stored `signedText`
+recovers to a registered signer and hashes to `recommendationId`. *Auditable, not
+signature-bound,* for the payload↔signature link.
+
+One-line trust model: **provenance is trustless on-chain; the binding of that provenance to our
+specific recommendation and to this user's nonce rests on the committer's honesty plus the public
+trace, not on cryptography.** This is the honest claim the concept page already makes — the
+operator "cannot fabricate an enclave-signed recommendation it did not produce, nor replay an old
+one" survives verbatim; what changes is only *how* user/nonce reach the contract.
+
+### The pinned `commitRecommendation` shape
+
+```solidity
+function commitRecommendation(
+    bytes calldata signedText,          // 0G enclave attestation record — opaque
+    bytes calldata sig,                 // EIP-191; must recover to a registered signer
+    address user,                       // committer-supplied
+    uint64  nonce,                      // committer-supplied; monotonic per user
+    bytes32 payloadHash,                // keccak256(canonicalRecommendation) — trace anchor (a)
+    bytes32[] calldata strategyHashes,
+    bytes32[] calldata templateIds
+) external onlyCommitter returns (bytes32 recommendationId);
+```
+
+- `recommendationId = keccak256(signedText)` — the per-response anchor (still valid).
+- Checks: recovered signer ∈ `isRegisteredSigner`; `nonce == nonceOf[user] + 1`; then
+  `nonceOf[user] = nonce`.
+- Reverts: `UnregisteredSigner`, `UnauthorizedCommitter`, `StaleNonce`.
+- Emits `RecommendationCommitted(user, nonce, recommendationId, signer, payloadHash,
+  strategyHashes, templateIds)` — `payloadHash` added versus the pre-Gate-0 event.
+
+### What this changes downstream
+
+- **No `_prefixOf`, no fixed-width header/user+nonce lines.** The signed text is 0G's opaque
+  `hash:hash:centralized:aliyun:hash` record; the model returns only the schema-valid JSON body.
+- **`recommendationId ≠ payloadHash` now.** They were equal under the old "sign our exact bytes"
+  premise; they are two distinct hashes here (`keccak256(signedText)` vs
+  `keccak256(canonicalRecommendation)`), both stored in the trace.
+- **The codec (Issue 3)** carries the enclave's exact `signedText` *and* computes a canonical
+  recommendation string to hash into `payloadHash`; framing no longer dictates prefix lines.
+
+### Still open (not closeable from this repo)
+
+**0G-booth sanity-check** — confirm whether a request-hash or content-hash *preimage* is
+retrievable from the provider. It does not change this decision (we chose (c), which needs no
+preimage), but a "yes" would let (a)'s audit anchor also lean on `reqHash`, and it settles whether
+the provider is a true model-weight TEE or a `centralized:aliyun` broker signer (§7 /
+`targetTeeAddress`). Ask at the 0G booth; record the answer back here and on Notion.

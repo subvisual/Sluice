@@ -8,10 +8,10 @@ order. **Notion wins** on any disagreement. Regenerated 2026-07-25 for the Compo
 ## Dependency graph
 
 ```
-0 Gate 0 (DONE) ──▶ 1 Binding decision ──▶ 2 Registry ──┬─▶ 3 Codec ─────────┐
-  (CLI, PR #6)        (design; a/b/c)       (Base fork)  └─▶ 4 Sealed compose ┤
-                                                                              ├─▶ 6 Loop + fallback + commit ─┬─▶ 7 Narration ─┐
-                                          5 Validator I1–I14 ◀─ F1, F3 ───────┘                               └─▶ 8 Enc. memory ┴─▶ 9 Trace view ─▶ 10 Reviewer (stretch)
+0 Gate 0 (DONE) ──▶ 1 Binding (RESOLVED) ──▶ 2 Registry ──┬─▶ 3 Codec ─────────┐
+  (CLI, PR #6)        (c)+(a); ADR-0001       (Base fork)  └─▶ 4 Sealed compose ┤
+                                                                                ├─▶ 6 Loop + fallback + commit ─┬─▶ 7 Narration ─┐
+                                            5 Validator I1–I14 ◀─ F1, F3 ───────┘                               └─▶ 8 Enc. memory ┴─▶ 9 Trace view ─▶ 10 Reviewer (stretch)
 ```
 
 **Parallelisable:** 3 ∥ 4 · 7 ∥ 8. **Cross-feature:** 2/3/5/6 need F1 (grammar, `compile`,
@@ -24,41 +24,22 @@ order. **Notion wins** on any disagreement. Regenerated 2026-07-25 for the Compo
 **Gate 0 — validate 0G inference:** shipped as the inference CLI (`packages/arbitration-sdk`,
 PR #6). A stable enclave signer recovers across ≥3 runs; captured chainId 16602, model
 `qwen/qwen2.5-omni-7b`, TEE signer `0x83df4B8E…508cF`, `addLedger(3)` accepted, latency ~1–2.6s.
-**Finding:** the signature is over a provider attestation record, not our text — feeds Issue 1.
-Recorded in ADR-0001 + the package README + Notion. **`issue-worker` starts at Issue 1.**
+**Finding:** the signature is over a provider attestation record, not our text — fed Issue 1.
+Recorded in ADR-0001 + the package README + Notion.
 
----
-
-## 1. Binding redesign decision (design; BLOCKS the registry)
-
-**Depends on:** — · Gate 0 already delivered (PR #6)
-
-### Description
-Decide how to bind *our* recommendation + per-user nonce to the on-chain commit, now that Gate 0
-proved 0G signs an opaque attestation record we cannot control or reproduce. Choose among candidates
-**(a) dual-commit**, **(b) request-side provenance**, **(c) provenance-oracle** (see the PRD's "Open
-decision A"). This is a written decision, not code.
-
-### Acceptance criteria
-- [ ] One candidate chosen, with the security claim it supports stated precisely (what provenance /
-  authorisation / replay each guarantees, and what it does **not**).
-- [ ] The `commitRecommendation` signature is pinned: whether `user`/`nonce` are parsed from the
-  signed text or supplied by the committer, and what `recommendationId` commits to.
-- [ ] **Notion §2–§3 updated** (the stale `_prefixOf` / fixed-prefix mechanism replaced) and
-  **ADR-0001** superseded/updated to record the chosen binding.
-- [ ] `0G booth` sanity-check on whether a request-hash or content-hash preimage is retrievable
-  (informs whether (b) is even possible).
-
-### Technical notes
-Recommendation: lean **(c)** (smallest contract change, honest claim intact) plus the trace-side
-`keccak256(canonicalRecommendation)` from **(a)** for auditability. The enclave signature stays the
-provenance root; per-user replay moves into `commitRecommendation` args.
+**Issue 1 — Binding decision (design): RESOLVED 2026-07-25.** Chose **(c) provenance-oracle +
+(a) trace-side hash**: `user`/`nonce` are committer-supplied args on `commitRecommendation`
+(replay enforced in the contract, no `_prefixOf`); `recommendationId = keccak256(signedText)`;
+the trace stores `payloadHash = keccak256(canonicalRecommendation)` as the off-chain audit anchor.
+Security claim + pinned contract shape in **ADR-0001's Resolution section**; PRD Decision A and
+Notion §2–§3 updated to match. **Residual (external, non-blocking):** the 0G-booth preimage /
+`targetTeeAddress` check. **`issue-worker` now starts at Issue 2.**
 
 ---
 
 ## 2. `RecommendationRegistry.sol` (tracer)
 
-**Depends on:** 1 · **F1:** chain on the Base fork
+**Depends on:** 1 (resolved — ADR-0001) · **F1:** chain on the Base fork
 
 ### Description
 Thinnest slice proving the verified-recommendation path: deploy the registry to the Base fork,
@@ -66,10 +47,15 @@ register signer + committer, commit a signed recommendation.
 
 ### Acceptance criteria
 - [ ] `registerSigner`/`registerCommitter` (onlyOwner) + `commitRecommendation` (onlyCommitter),
-  shaped by Issue 1, deployed to the **Base fork** (`config/addresses.8453.json`).
-- [ ] `ecrecover(signedText, sig) ∈ isRegisteredSigner`; **per-user `nonceOf` replay**;
-  `recommendationId = keccak256(signedText)`; emits
-  `RecommendationCommitted(user, nonce, recommendationId, signer, strategyHashes, templateIds)`.
+  deployed to the **Base fork** (`config/addresses.8453.json`). Pinned signature (Decision A /
+  ADR-0001): `commitRecommendation(bytes signedText, bytes sig, address user, uint64 nonce,
+  bytes32 payloadHash, bytes32[] strategyHashes, bytes32[] templateIds)`.
+- [ ] `ecrecover(signedText, sig) ∈ isRegisteredSigner`; **per-user `nonceOf` replay**
+  (`nonce == nonceOf[user] + 1`, then `nonceOf[user] = nonce`); `recommendationId =
+  keccak256(signedText)` (**distinct from** the committer-supplied `payloadHash`); emits
+  `RecommendationCommitted(user, nonce, recommendationId, signer, payloadHash, strategyHashes, templateIds)`.
+- [ ] **`user`/`nonce` are committer-supplied args, NOT parsed from `signedText`** (Decision A
+  chose (c) provenance-oracle — the signed record is opaque; there is no `_prefixOf`).
 - [ ] Reverts: unregistered signer, unauthorized committer, **stale/replayed nonce**.
 - [ ] **Not** wired into the ship path (binding is a subgraph derivation, Wiring §5).
 
@@ -97,8 +83,10 @@ Build/consume the `StrategyRecommendation` payload and its commit args.
   retry, never throws to the chain.
 
 ### Technical notes
-No canonicalization — carry the enclave's exact bytes. Wire framing (fixed prefix vs not) follows
-Issue 1.
+Carry the enclave's exact `signedText` bytes end-to-end (no canonicalization of the signed text).
+**Separately** compute a canonical recommendation string and hash it into `payloadHash =
+keccak256(canonicalRecommendation)` — the trace-side (a) anchor, distinct from `recommendationId`.
+No fixed prefix lines: user/nonce are committer args, not in the body (Decision A / ADR-0001).
 
 ---
 
