@@ -507,9 +507,13 @@ function RecommendationSet({
             {rec.provenance === "ENCLAVE"
               ? "Signed in the enclave and validated. "
               : `Composed from a template seed — ${rec.reason ?? "sealed inference did not produce this"}. `}
+            {/* What is unconditionally true is the Multicall: one call, whatever
+                is selected. How many SIGNATURES that costs depends on the
+                allowances and on whether the wallet can batch, so it is stated
+                once, by PlanNote, from a chain read — never promised here. */}
             {n === 1
-              ? "Ship it and it goes out as one signature."
-              : "Choose which ones to ship — whatever you keep goes out in one signature."}
+              ? "Ship it and it goes out as a single Multicall."
+              : "Choose which ones to ship — whatever you keep goes out in a single Multicall."}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -568,8 +572,7 @@ function RecommendationSet({
                     : `All ${n} strategies ship`
                   : `${chosen} of ${n} ship`}{" "}
                 in a single{" "}
-                <span className="font-mono text-[12.5px]">Multicall</span> — one
-                signature.
+                <span className="font-mono text-[12.5px]">Multicall</span>.
               </>
             )}
           </p>
@@ -608,11 +611,17 @@ function RecommendationSet({
             disabled={!rec.validation.ok || shipping || !canShip || chosen === 0}
             className="rounded-[10px] bg-ink px-6 py-[13px] text-[15px] font-medium text-white shadow-[var(--shadow)] transition-colors hover:bg-ink-2 disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted disabled:shadow-[inset_0_0_0_1px_var(--border)]"
           >
+            {/* No count until the allowance read says what it is: `?? 1` here
+                would promise a single signature during the window where the
+                plan is still loading, which is exactly the claim we cannot
+                make yet. */}
             {shipping
               ? "Shipping…"
-              : chosen === 0
-                ? "Ship"
-                : `Ship ${chosen === n ? "" : `${chosen} `}— ${plan?.signatures ?? 1} signature${(plan?.signatures ?? 1) === 1 ? "" : "s"}`}
+              : `Ship${chosen === 0 || chosen === n ? "" : ` ${chosen}`}${
+                  plan
+                    ? ` — ${plan.signatures} signature${plan.signatures === 1 ? "" : "s"}`
+                    : ""
+                }`}
           </button>
         </div>
       </div>
