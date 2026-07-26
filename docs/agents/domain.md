@@ -2,23 +2,14 @@
 
 How the building skills should consume this repo's domain documentation.
 
-This repo is **single-context**, organised **by feature**. Notion has **three** features
+This repo is **single-context**, organised **by feature**. There are **three** features
 (F1/F2/F3) plus **Wiring & Delivery**, the shared context that connects them — see the table in
 `CLAUDE.md`.
 
-## Notion first
+## Read these first
 
-**Notion is the source of truth** for the concept, plan and schemas. Before exploring the
-codebase for a task, fetch the Notion page for the feature you're working in (`notion-fetch`
-with the URL from `docs/features/<slug>/README.md`). Local docs are pointers and
-implementation detail, never a replacement.
-
-If a local document contradicts Notion, Notion wins — say so and fix the local document.
-
-## Then read these
-
-- **`CONTEXT.md`** at the repo root — the ubiquitous language, local mirror of the
-  vocabulary defined on the Wiring page
+- **`CONTEXT.md`** at the repo root — the ubiquitous language, the local mirror of the
+  vocabulary defined in Wiring & Delivery
 - **`docs/adr/`** — cross-cutting architectural decisions
 - **`docs/features/<slug>/`** — the feature's local index and its feature-scoped ADRs
 
@@ -30,14 +21,14 @@ terms or decisions actually get resolved.
 
 ```
 /
-├── CLAUDE.md                              ← Notion index + agent skills config
+├── CLAUDE.md                              ← project index + agent skills config
 ├── CONTEXT.md                             ← ubiquitous language
 ├── docs/
 │   ├── adr/                               ← cross-cutting decisions
 │   ├── agents/                            ← this file + prds.md
 │   ├── features/
 │   │   ├── f1-aqua-strategy-vm/
-│   │   │   ├── README.md                  ← Notion link + local scope
+│   │   │   ├── README.md                  ← local scope
 │   │   │   └── adr/                       ← feature-scoped decisions
 │   │   ├── f2-private-recommendations/
 │   │   ├── f3-market-book-context/
@@ -51,12 +42,12 @@ terms or decisions actually get resolved.
 
 A decision that touches only one feature belongs in that feature's `adr/`. A decision that
 changes how features connect — the request flow, the transaction shape, the shared vocabulary
-— belongs in `docs/adr/` **and** on the Wiring page in Notion.
+— belongs in `docs/adr/` and in the Wiring & Delivery feature doc.
 
 ## Use the glossary's vocabulary
 
 When your output names a domain concept (in an issue title, a refactor proposal, a
-hypothesis, a test name), use the term as defined in `CONTEXT.md` and on the Wiring page.
+hypothesis, a test name), use the term as defined in `CONTEXT.md` and in Wiring & Delivery.
 Don't drift to synonyms the glossary explicitly avoids — this project has already been
 burned by imprecise language:
 
@@ -72,7 +63,7 @@ language the project doesn't use (reconsider) or there's a real gap (note it for
 
 ## Flag ADR conflicts
 
-If your output contradicts an existing ADR or a decision recorded in Notion, surface it
+If your output contradicts an existing ADR, surface it
 explicitly rather than silently overriding:
 
 > _Contradicts ADR-0007 (validator rejects, never mutates) — but worth reopening because…_

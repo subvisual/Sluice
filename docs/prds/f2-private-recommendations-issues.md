@@ -1,9 +1,7 @@
 # F2 — Private Recommendations · Issues
 
-Derived from [`f2-private-recommendations.md`](./f2-private-recommendations.md)
-and the Notion [F2](https://app.notion.com/p/3a8caae5863181609acbcfd69a5db06b) /
-[Wiring](https://app.notion.com/p/3a8caae58631816d9aa0eb077e013ffe) pages. Issues in dependency
-order. **Notion wins** on any disagreement.
+Derived from [`f2-private-recommendations.md`](./f2-private-recommendations.md). Issues in
+dependency order.
 
 **Reconciled 2026-07-25** against the **strategy composer** shipped in PR #10, built directly
 rather than through `issue-worker`. **Cut 2026-07-26:** the deferred on-chain/audit half of F2
@@ -64,7 +62,7 @@ budget containment; unknown opcodes are soft notes (grammar is provisional). Six
 
 ## 4. Sealed composition inference (`arbitration-sdk/src/compose.ts`) · 🟡 partially delivered
 
-**Delivered (PR #10):** `compose(broker, cfg, request, ctx)` builds the §9 prompt (grammar +
+**Delivered (PR #10):** `compose(broker, cfg, request, ctx)` builds the prompt (grammar +
 rules + output schema + request + stubbed context + retry history), runs the 0G round-trip via
 `inferChat`, parses the result, retries once on malformed output. Reuses the Gate 0 broker /
 `createRequire` interop / provider-metadata model. The out-of-band enclave signature is fetched

@@ -141,7 +141,7 @@ async function main() {
 	}
 
 	console.log(
-		"\n(Recommendation is grammar-SHAPED per the provisional F1 §5 menu — not grammar-correct, not compiled, not shipped. Enclave signature received but not verified, by scope.)",
+		"\n(Recommendation is grammar-SHAPED per the provisional menu — not grammar-correct, not compiled, not shipped. Enclave signature received but not verified, by scope.)",
 	);
 
 	process.exit(parse.ok ? 0 : 1);

@@ -1,17 +1,16 @@
-// Market & book context the composer reasons over (F3).
+// Market & book context the composer reasons over.
 //
-// Two jobs land in one MarketContext (F3 §1):
-//   - Job 1, the user's OWN book — what they've already shipped. This is now
-//     REAL: read from the Aqua subgraph (see subgraph.ts) via liveContext().
-//   - Job 2, the MARKET — now PARTIAL real: midPrice is live, read from
-//     Chainlink USD feeds on real Base (see pricefeed.ts). Depth, realised
-//     vol, fee tier, and volume are still stubbed — they come from composed
-//     hosted DEX/price subgraphs and are blocked on F3 Open Q2 (which price
-//     subgraph). Labelled per-field via pairFieldSource so nothing downstream
-//     — or on stage — mistakes a stub field for live data.
+// Two jobs land in one MarketContext:
+//   - Job 1, the user's OWN book — what they've already shipped. REAL: read
+//     from the Aqua subgraph (see subgraph.ts) via liveContext().
+//   - Job 2, the MARKET — PARTIAL real: midPrice is live, read from Chainlink
+//     USD feeds on real Base (see pricefeed.ts). Depth, realised vol, fee tier,
+//     and volume are still stubbed — they come from composed hosted DEX/price
+//     subgraphs, blocked on the price-subgraph question. Labelled per-field via
+//     pairFieldSource so nothing downstream mistakes a stub field for live data.
 //
 // `source` records which it is, and contextPromptBlock() renders that honesty
-// straight into the prompt the enclave signs.
+// into the prompt the enclave signs.
 
 import { fetchMid } from "./pricefeed.ts";
 import {
@@ -24,7 +23,7 @@ import addresses from "../../../config/addresses.8453.json";
 
 export type TokenInfo = { symbol: string; address: string; decimals: number };
 
-// The token map, from the ONE address book (F1 §1). This used to be a hardcoded
+// The token map, from the ONE address book. This used to be a hardcoded
 // WETH+USDC literal, which compile.ts derives decimals from — so a budget token
 // outside it threw at compile time even though the picker offered it.
 // Keyed by exact symbol so TOKENS.USDC keeps resolving; look up by user input
@@ -64,7 +63,7 @@ export function pairTokensFor(
 	return [a.symbol, b.symbol];
 }
 
-// Job 2 — the market. STILL A STUB (F3 Open Q2).
+// Job 2 — the market. STILL A STUB.
 export type PairContext = {
 	pair: string;
 	feeTierBps: number;
@@ -118,7 +117,7 @@ export type MarketContext = {
 	userBook: UserBookContext; // job 1 — real when source === "subgraph"
 };
 
-// The stub market. Plausible WETH/USDC numbers; NOT live (F3 job 2 / Open Q2).
+// The stub market. Plausible WETH/USDC numbers; NOT live.
 const STUB_PAIR: PairContext = {
 	pair: "WETH/USDC",
 	feeTierBps: 5,
@@ -214,8 +213,7 @@ export function stubPairFor(pairTokens: [string, string]): {
 
 // Build a MarketContext with a REAL book (job 1) read from the subgraph, keyed
 // to the subgraph's indexed head block. The market (job 2) stays a stub until
-// F3 Open Q2 settles the price source. Network call — used by the CLI, not the
-// unit tests.
+// the price source settles. Network call — used by the CLI, not the unit tests.
 export async function liveContext(
 	maker: string,
 	opts: {
@@ -257,8 +255,7 @@ export async function liveContext(
 	return {
 		// A _meta without a timestamp must not anchor time at 0: the prompt
 		// derives "now" and the deadline window from observedAt, so a zero here
-		// asks the model for deadlines in 1970. Wall clock is the honest
-		// fallback — this function is already a live network read.
+		// asks the model for deadlines in 1970. Wall clock is the honest fallback.
 		observedAt: meta.timestamp ?? Math.floor(Date.now() / 1000),
 		observedBlock: meta.block,
 		source: "subgraph",

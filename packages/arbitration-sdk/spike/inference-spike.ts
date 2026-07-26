@@ -1,7 +1,7 @@
 /**
- * F2 Gate 0 — validate 0G sealed inference BEFORE building anything on top of it.
+ * Gate 0 — validate 0G sealed inference BEFORE building anything on top of it.
  *
- * This probe proves (or kills) every assumption the F2 design rests on:
+ * This probe proves (or kills) every assumption the sealed-inference design rests on:
  *   1. the ledger can be funded (capture the real deposit min + faucet reality)
  *   2. an inference round-trips and returns a chatID (ZG-Res-Key)
  *   3. the signature is fetchable out-of-band and is EIP-191 over the response TEXT

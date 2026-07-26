@@ -4,10 +4,9 @@ import { createRequire } from "node:module";
 import { computeVerified, type InferResult } from "./proof.ts";
 import type { Config } from "./config.ts";
 
-// FIX 1: the SDK's ESM build (lib.esm) throws at load under Node 22
-// ("does not provide an export named 'C'"). The CommonJS build (lib.commonjs)
-// loads cleanly, so pull the runtime value through createRequire while keeping
-// the real type via `import type`.
+// FIX 1: the SDK's ESM build (lib.esm) throws at load under Node 22 ("does not
+// provide an export named 'C'"). The CommonJS build loads cleanly, so pull the
+// runtime value through createRequire, keeping the real type via `import type`.
 const require = createRequire(import.meta.url);
 const { createZGComputeNetworkBroker } =
 	require("@0gfoundation/0g-compute-ts-sdk") as {
@@ -22,29 +21,23 @@ export async function initBroker(wallet: ethers.Wallet): Promise<ZGBroker> {
 
 // FIX 2: a fresh wallet has NO ledger yet — depositFund alone reverts on it.
 // First run must addLedger(minZG) (creates + funds); a rerun already has a
-// ledger, so addLedger would throw — fall back to depositFund (or a no-op if
-// it's already funded above the minimum).
+// ledger, so addLedger throws — fall back to depositFund.
 //
-// CONTRACT (deliberately existence-only, not balance-sufficiency): this
-// function ensures the ledger EXISTS — creating and funding it with minZG on
-// first use — and does NOT re-top-up on reruns, even if usage has since
+// CONTRACT (existence-only, not balance-sufficiency): ensures the ledger EXISTS,
+// funding it with minZG on first use; does NOT re-top-up on reruns even if usage
 // pulled the balance below minZG. A naive `if (balance < minZG) depositFund`
-// would re-deposit a full minZG (or spam tiny top-ups + gas) on almost every
-// invocation, since normal inference usage nudges the balance just under the
-// threshold. That kind of per-tick rebalancing belongs to the later agent
-// loop, not this CLI — here we only need "an account to bill against exists."
-// If callers need a stronger guarantee, that's a different function.
+// would re-deposit on almost every invocation, since normal usage nudges the
+// balance just under the threshold. Per-tick rebalancing is out of scope here —
+// we only need "an account to bill against exists."
 export async function ensureLedgerFunded(
 	broker: ZGBroker,
 	minZG: number,
 ): Promise<void> {
 	try {
 		const ledger = await broker.ledger.getLedger();
-		// Ledger already exists — no-op on rerun rather than re-depositing on
-		// every invocation (that would drain the funded wallet across runs).
-		// Best-effort, log-only visibility into low balance: this costs no
-		// extra round-trip (getLedger() above already fetched it), and we
-		// deliberately do NOT act on it — see the CONTRACT note above.
+		// Ledger already exists — no-op on rerun rather than re-depositing.
+		// Log-only visibility into low balance (getLedger() already fetched it);
+		// we deliberately do NOT act on it — see the CONTRACT note above.
 		try {
 			// Note: ledger.availableBalance may be an ethers v5 BigNumber (not native bigint), so comparison is best-effort.
 			const minNeuron = ethers.parseEther(String(minZG));
@@ -66,8 +59,8 @@ export async function ensureLedgerFunded(
 	try {
 		await broker.ledger.addLedger(minZG);
 	} catch (e) {
-		// Lost a race / already created between getLedger() and here — fall
-		// back to topping up the existing ledger.
+		// Lost a race / already created between getLedger() and here — top up
+		// the existing ledger instead.
 		const msg = e instanceof Error ? e.message : String(e);
 		if (/ledger.*exist|already/i.test(msg)) {
 			await broker.ledger.depositFund(minZG);
@@ -100,9 +93,6 @@ export async function inferChat(
 ): Promise<InferResult> {
 	// FIX 3: acknowledge the provider's TEE signer once before the first
 	// inference. On reruns this throws "already acknowledged" — ignore that.
-	// (In practice the installed SDK checks account.acknowledged internally
-	// and returns early without throwing, so this catch may never fire —
-	// left in place as a harmless defensive fallback.)
 	try {
 		await broker.inference.acknowledgeProviderSigner(cfg.provider);
 	} catch (e) {
@@ -140,17 +130,14 @@ export async function inferChat(
 		data?.id ??
 		"";
 
-	// `endpoint` from getServiceMetadata already ends in `/v1/proxy` (see the
-	// SDK's RequestProcessor.getServiceMetadata), so only append `/signature`.
-	// The SDK's own verifier.fetchSignatureByChatID builds the same URL from
-	// the provider's base `url` + `/v1/proxy/signature/...`.
+	// `endpoint` from getServiceMetadata already ends in `/v1/proxy`, so only
+	// append `/signature` (matching the SDK's verifier.fetchSignatureByChatID).
 	const proofUrl = `${endpoint}/signature/${chatID}?model=${encodeURIComponent(
 		model,
 	)}`;
 
-	// FIX 5: no chatID means there is nothing to fetch a signature for —
-	// treat it as a failed (unverified) attempt rather than hitting the
-	// signature endpoint with an empty id.
+	// FIX 5: no chatID means nothing to fetch a signature for — treat as a
+	// failed (unverified) attempt rather than hitting the endpoint with empty id.
 	if (!chatID) {
 		return {
 			resultText,

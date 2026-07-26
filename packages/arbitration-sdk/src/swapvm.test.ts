@@ -37,9 +37,8 @@ test("an argument-free instruction encodes with a zero length byte", () => {
 });
 
 test("refuses the silent no-op region", () => {
-	// 0x00-0x09 do not revert on chain — they execute and do nothing. A program
-	// carrying one would compute no amounts and still run to completion, so this
-	// has to be caught here rather than by a failing transaction.
+	// 0x00-0x09 do not revert on chain — they execute and do nothing, so a bad
+	// program runs to completion computing no amounts. Must be caught here.
 	for (const opcode of [0x00, 0x05, 0x09]) {
 		assert.throws(
 			() => encodeInstruction({ opcode, args: new Uint8Array(0) }),
@@ -76,8 +75,8 @@ test("fullRange emits salt, deadline, then the curve", () => {
 		decoded.map((i) => i.opcode),
 		[OP.SALT, OP.DEADLINE, OP.XYC_SWAP_XD],
 	);
-	// The curve is terminal — anything adjusting balances or fees must precede it
-	// or the VM reverts, so its position is a correctness property, not style.
+	// The curve is terminal: anything adjusting balances or fees must precede it
+	// or the VM reverts.
 	assert.equal(decoded.at(-1)?.opcode, OP.XYC_SWAP_XD);
 });
 
@@ -101,7 +100,7 @@ test("fullRangeWithFee inserts the fee before the curve — golden", () => {
 	//   16 04 0007a120           FLAT_FEE_AMOUNT_IN_XD (500000 = 0.05% of 1e9)
 	//   11 00                    XYC_SWAP_XD
 	// The fee MUST precede the curve: _flatFeeAmountInXD reverts if amounts were
-	// already computed, so this ordering is a chain-enforced property.
+	// already computed.
 	assert.equal(
 		toHex(fullRangeWithFee({ salt: 1n, deadline: 1800000000, feeBps: 500_000 })),
 		"0x150800000000000000010d05006b49d20016040007a1201100",
@@ -126,10 +125,10 @@ const BANDED_PARAMS: BandedParams = {
 };
 
 test("bandDeltas grows both sides by the same multiple — the price is preserved", () => {
-	// A 1% GEOMETRIC band: priceMax/price = price/priceMin = 1.01. Independently:
-	// sqrt(1.01e18) floors to 1004987562e9, denom = 4987562e9, multiplier
-	// 1e18/denom ≈ 200.4988. An arithmetic ±1% band would give the two sides
-	// different multipliers and shift the quoted price off the shipped ratio.
+	// A 1% GEOMETRIC band: priceMax/price = price/priceMin = 1.01. sqrt(1.01e18)
+	// floors to 1004987562e9, denom = 4987562e9, multiplier 1e18/denom ≈ 200.4988.
+	// An arithmetic ±1% band would give the two sides different multipliers and
+	// shift the quoted price off the shipped ratio.
 	const { deltaA, deltaB } = bandDeltas(10_000_000_000n, 10_000_000_000_000_000_000_000n, 10_000_000);
 	assert.equal(deltaA, 2004987607171n);
 	assert.equal(deltaB, 2004987607171600072339952n);
@@ -179,8 +178,7 @@ test("banded emits salt, deadline, concentrate, then the curve — golden", () =
 
 test("bandedWithFee inserts the fee between the concentrate and the curve — golden", () => {
 	// The band wraps the fee wraps the curve: both are runLoop wrappers, and the
-	// VM reverts any of them placed after amounts are computed. This matches the
-	// filled shape observed on real Base (concentrate before fee before curve).
+	// VM reverts either placed after amounts are computed (concentrate, fee, curve).
 	assert.equal(
 		toHex(bandedWithFee({ ...BANDED_PARAMS, feeBps: 500_000 })),
 		"0x150800000000000000010d05006b49d20013400000000000000000000000000000000000" +
@@ -190,16 +188,15 @@ test("bandedWithFee inserts the fee between the concentrate and the curve — go
 });
 
 test("the banded program depends on the ship amounts", () => {
-	// Unlike full-range, the deltas are computed FROM the amounts — shipping
-	// different amounts under the same program would put the band around the
-	// wrong price, so distinct amounts must yield distinct bytes.
+	// The deltas are computed FROM the amounts, so distinct amounts must yield
+	// distinct bytes — else the band lands around the wrong price.
 	const other = banded({ ...BANDED_PARAMS, amounts: [20_000_000_000n, 20_000_000_000_000_000_000_000n] });
 	assert.notEqual(toHex(other), toHex(banded(BANDED_PARAMS)));
 });
 
 test("a different salt produces different bytes", () => {
-	// This is the whole point of the salt: a docked strategy is burned
-	// permanently, so re-entering a position needs new bytes. F1 §2.
+	// A docked strategy is burned permanently, so re-entering a position needs
+	// new bytes.
 	const a = fullRange({ salt: 1n, deadline: 1800000000 });
 	const b = fullRange({ salt: 2n, deadline: 1800000000 });
 	assert.notEqual(toHex(a), toHex(b));
@@ -216,8 +213,7 @@ test("every emitted opcode is dispatchable", () => {
 });
 
 test("decodeProgram rejects truncated programs", () => {
-	// A wrong argsLength shifts every later instruction, so this must not be
-	// tolerated silently.
+	// A wrong argsLength shifts every later instruction — never tolerate silently.
 	assert.throws(() => decodeProgram(new Uint8Array([OP.DEADLINE, 0x05, 0x01])), /truncated/);
 	assert.throws(() => decodeProgram(new Uint8Array([OP.SALT])), /truncated/);
 });

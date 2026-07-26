@@ -1,21 +1,19 @@
-// Band tiers: one pair, three widths (T0.3 / issue #26).
+// Band tiers: one pair, three widths (issue #26).
 //
-// The product wants risk-tiered recommendations. The full version ranks
-// different PAIRS by historical yield, which needs market data we do not have
-// yet (F3 Open Q2). But on a single pair the risk axis already exists: band
-// width. A tighter XYC_CONCENTRATE_GROW_LIQUIDITY_2D band quotes deeper — more
-// fill volume for the same commitment — and is exhausted by a smaller price
-// move; a wider band is safer and earns less. grammar.ts states exactly that
-// trade-off, and `banded` is the one shape with sustained fills on real Base.
+// The full version ranks different PAIRS by historical yield, which needs
+// market data we do not have yet. But on a single pair the risk axis already
+// exists: band width. A tighter band quotes deeper — more fill volume for the
+// same commitment — and is exhausted by a smaller price move; a wider band is
+// safer and earns less. `banded` is the one shape with sustained fills on real
+// Base.
 //
 // So three tiers ship with zero new data: same pair, same budget, three widths,
-// computed from realised volatility and handed to the model as integers to
-// echo.
+// computed from realised volatility and handed to the model as integers to echo.
 //
 // Labels describe MECHANICS ("exhausted by a ±X% move"), never yield: we have
-// no fee-APR source yet, and a projected return we cannot back is exactly the
-// kind of claim this project refuses to make. Rating the risk of the resulting
-// recommendation is Gate 2's job (F2 §4, deferred) — this only sizes bands.
+// no fee-APR source yet, and a projected return we cannot back is a claim this
+// project refuses to make. Rating the risk of the resulting recommendation is
+// Gate 2's job (deferred) — this only sizes bands.
 
 import type { RiskAppetite } from "./appetite.ts";
 import { FEE_BPS_ONE } from "./opcodes.ts";
@@ -33,17 +31,13 @@ const YEAR_SEC = 365 * 24 * 60 * 60;
 // CALIBRATION — a real decision, stated because the field name alone does not
 // settle it. `realizedVol7dPct` is read as an ANNUALISED percentage measured
 // over a 7-day sample (the standard convention for quoted volatility), not as
-// "the price moved 58% during that week". Two reasons: 58 is the canonical
-// annualised figure for ETH, and the other reading produces ±87%–±99% bands —
-// full-range in all but name, which is not a market-making recommendation.
-// They differ by ~3.5x, so this must be confirmed when F3 Open Q2 lands a real
-// volatility source (the field may want renaming then); the multipliers below
-// are the knob if it turns out otherwise.
+// "the price moved 58% during that week". 58 is the canonical annualised figure
+// for ETH, and the other reading produces ±87%–±99% bands — full-range in all
+// but name. They differ by ~3.5x, so confirm this when a real volatility source
+// lands (the field may want renaming then); the multipliers below are the knob.
 
 // Multiples of the horizon-scaled volatility, per tier. Appetite shifts the SET,
-// never the count: a risk-inclined user gets three tighter choices, not more
-// choices. (This is the "suggest 5/7/9 instead of 3/5/7" behaviour, expressed
-// in band width — the only risk axis this venue actually gives us.)
+// never the count: a risk-inclined user gets three tighter choices, not more.
 const MULTIPLIERS: Record<RiskAppetite, [number, number, number]> = {
 	conservative: [3, 1.5, 0.75],
 	neutral: [2, 1, 0.5],
@@ -63,11 +57,10 @@ const bpsToPct = (bps: number) => ((bps / FEE_BPS_ONE) * 100).toFixed(2);
  * Three band widths for one pair, wide → tight.
  *
  * Volatility is quoted annualised and a strategy lives for `horizonSec`, so it
- * is scaled by sqrt(time) before use: a band that makes sense for a year is far
- * too wide for a week. The result is clamped into the encodable range and forced
- * strictly decreasing — under an extreme volatility all three would otherwise
- * pin to the ceiling, and three identical "tiers" would be a lie the UI would
- * happily render.
+ * is scaled by sqrt(time) before use: a band that fits a year is too wide for a
+ * week. The result is clamped into the encodable range and forced strictly
+ * decreasing — under extreme volatility all three would otherwise pin to the
+ * ceiling, and three identical "tiers" would be a lie the UI would render.
  */
 export function bandTiers(
 	realizedVol7dPct: number,
@@ -103,7 +96,7 @@ export function tiersPromptBlock(
 			`  ${t.tier.padEnd(5)} bandBps ${String(t.bandBps).padStart(10)} — inventory is exhausted by a ±${t.movePct}% move`,
 	);
 	const source = opts.stubVol
-		? "the pair's realised volatility (STUB pair data — F3 job 2 / Open Q2, not live)"
+		? "the pair's realised volatility (STUB pair data — not live)"
 		: "the pair's realised volatility";
 
 	return [
@@ -118,8 +111,7 @@ export function tiersPromptBlock(
 		"specific shape, return exactly three strategies on this pair, one per tier above,",
 		"using the `banded` or `banded-fee` template with that tier's bandBps.",
 		// Never point at a block that was not rendered: with no pairing plan there
-		// is no per-strategy line to copy, and a dangling reference is an invitation
-		// to invent one.
+		// is no per-strategy line to copy.
 		opts.hasPairing
 			? "Take each strategy's amounts from REFERENCE PAIRING's per-strategy line — do not divide anything yourself."
 			: "DIVIDE the budget between the three — the per-token total across all of them must stay within the ceiling, so do not give each strategy the full amount.",

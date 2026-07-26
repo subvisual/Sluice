@@ -1,15 +1,12 @@
 # F2 — Private Recommendations
 
-**Source of truth:** [F2 — Private Recommendations (0G)](https://app.notion.com/p/3a8caae5863181609acbcfd69a5db06b)
-
 0G. Sealed TEE inference that turns a user's request into a signed strategy **recommendation**,
 with the enclave signature recovered off-chain to surface **provenance** (a real 0G TEE produced
 it), the deterministic **validator** (I1–I12, reject-and-re-infer, never mutate), a labelled
 `TEMPLATE_FALLBACK` when attempts are exhausted, and the **reviewer** (Gate 2, a stretch). Replay
 protection is not needed here — there is no daemon and no book being stepped forward.
 
-Fetch the Notion page before planning work here. This file holds only what is local:
-addresses, config paths, commands.
+This file holds only what is local: addresses, config paths, commands.
 
 ## Local
 

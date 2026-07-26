@@ -6,8 +6,7 @@ import { formatUnits, parseUnits } from "viem";
  * Returns `null` for anything that is not an exact representation, INCLUDING
  * more decimal places than the token has. `viem.parseUnits` rounds a too-long
  * fraction, and rounding a ceiling upward hands the composer more budget than
- * the user typed — a small silent bug on the one number that must not be
- * silently wrong.
+ * the user typed.
  */
 export function parseAmount(input: string, decimals: number): bigint | null {
   const trimmed = input.trim();
@@ -26,8 +25,8 @@ export function parseAmount(input: string, decimals: number): bigint | null {
 }
 
 /**
- * Thousands are grouped with a no-break space ("12 000.00"), per the redesign
- * handoff — commas read as decimal separators to half the audience.
+ * Thousands grouped with a no-break space ("12 000.00") — commas read as
+ * decimal separators to half the audience.
  */
 const groupWhole = (whole: string) =>
   BigInt(whole).toLocaleString("en-US").replace(/,/g, " ");
@@ -45,7 +44,7 @@ export function formatAmount(value: bigint, decimals: number, maxFrac = 6) {
 /**
  * Fixed-width display for committed amounts ("12 000.00", "4.0000"): always
  * exactly `frac` fraction digits, truncated never rounded — rounding a ceiling
- * up would display more budget than the user authorised.
+ * up would display more budget than authorised.
  */
 export function formatFixed(value: bigint, decimals: number, frac: number) {
   const full = formatUnits(value, decimals);

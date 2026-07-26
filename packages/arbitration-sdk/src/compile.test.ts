@@ -47,7 +47,7 @@ test("saltFor is bounded to uint64 and is deterministic", () => {
 });
 
 // Golden parity: compile must reproduce the EXACT bytes swapvm's builder emits
-// for the same salt/params — that equality is the warrant for signing it.
+// for the same salt/params — that equality is the warrant for signing.
 test("full-range compiles to the same bytes as the swapvm builder", () => {
 	const r = rec([
 		{
@@ -230,9 +230,9 @@ test("compileRecommendation rejects over-precision virtualAmounts (USDC 6dp)", (
 	assert.throws(() => compileRecommendation(r, MAKER, deriveSaltSeed(r, null)));
 });
 
-// The ENCLAVE path must seed from the signed text, not the recommendation JSON:
-// two callers with the same rec but different signedText must never collide,
-// and the derivation must be deterministic and match keccak256(signedText) exactly.
+// The ENCLAVE path seeds from the signed text, not the recommendation JSON: two
+// callers with the same rec but different signedText must never collide, and the
+// seed must be deterministic and equal keccak256(signedText).
 test("deriveSaltSeed uses the signed text (ENCLAVE branch), not the rec JSON", () => {
 	const r = rec([
 		{

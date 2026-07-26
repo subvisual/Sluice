@@ -1,22 +1,16 @@
 // SwapVM program and order assembly. THE encoder — there is no second one.
 //
-// ORDER LIVES HERE. The model never emits bytecode and never emits an
-// instruction list; it picks a template and its parameters, and this module
-// decides what bytes come out and in what sequence.
-//
 // Program encoding, from the deployed `ContextLib.runLoop`:
 //
 //     [opcode: 1 byte][argsLength: 1 byte][args: argsLength bytes]
 //
-// read in a loop until the program is exhausted, dispatched by indexing
-// `ctx.vm.opcodes[opcode]`. argsLength is a single byte, so no instruction may
-// carry more than 255 bytes of arguments.
+// read in a loop until exhausted, dispatched by indexing `ctx.vm.opcodes[opcode]`.
+// argsLength is a single byte, so no instruction may carry more than 255 bytes.
 //
-// The opcode NUMBERS are not here — they are data, in config/opcodes.8453.json.
-// Contracts do not re-implement any of this: `npm run fixtures` writes the bytes
-// this module produces to config/fixtures/strategies.json, and the Foundry tests
-// and scripts ship exactly those. That way what gets tested on chain is what the
-// composer would actually emit.
+// Opcode NUMBERS are not here — they are data, in config/opcodes.8453.json.
+// `npm run fixtures` writes the bytes this module produces to
+// config/fixtures/strategies.json, which the Foundry tests and scripts ship
+// verbatim, so what gets tested on chain is what the composer emits.
 
 import { AbiCoder, keccak256 } from "ethers";
 import { op, isRealOpcode, opcodeName, FEE_BPS_ONE } from "./opcodes.ts";
@@ -27,9 +21,8 @@ const MAX_ARGS_LENGTH = 255;
 
 export function encodeInstruction(ins: Instruction): Uint8Array {
 	if (!isRealOpcode(ins.opcode)) {
-		// Emitting into the no-op region would silently do nothing on chain; past
-		// the end of the dispatch array it reverts an unnamed Panic(0x32). Neither
-		// is allowed to leave this module.
+		// The no-op region silently does nothing on chain; past the end of the
+		// dispatch array reverts an unnamed Panic(0x32). Neither may leave here.
 		throw new Error(`refusing to emit ${opcodeName(ins.opcode)}: not a dispatchable opcode`);
 	}
 	if (ins.args.length > MAX_ARGS_LENGTH) {
@@ -54,8 +47,8 @@ export function encodeProgram(instructions: Instruction[]): Uint8Array {
 }
 
 // --- argument encoders -------------------------------------------------------
-// Widths are fixed by each instruction's natspec and are not negotiable: the VM
-// slices by offset, so a wrong width silently misreads every later field.
+// Widths are fixed by each instruction's natspec: the VM slices by offset, so a
+// wrong width silently misreads every later field.
 
 export function uintBytes(value: bigint, width: number): Uint8Array {
 	if (value < 0n) throw new Error(`negative value: ${value}`);
@@ -83,10 +76,10 @@ export function fromHex(hex: string): Uint8Array {
 
 // --- instructions ------------------------------------------------------------
 
-// `_salt` is a genuine no-op — its body is empty. Its whole purpose is to vary
-// the bytes so two otherwise-identical strategies hash differently. Amounts are
-// NOT part of the strategy, and a docked hash is burned permanently, so the salt
-// must vary per recommendation or a re-ship collides with a dead hash. F1 §2.
+// `_salt` is a genuine no-op (empty body); it varies the bytes so two otherwise
+// identical strategies hash differently. Amounts are NOT part of the strategy,
+// and a docked hash is burned permanently, so the salt must vary per
+// recommendation or a re-ship collides with a dead hash.
 export function salt(value: bigint): Instruction {
 	return { opcode: op("SALT"), args: uintBytes(value, 8) };
 }
@@ -96,10 +89,10 @@ export function deadline(unixSeconds: number): Instruction {
 	return { opcode: op("DEADLINE"), args: uintBytes(BigInt(unixSeconds), 5) };
 }
 
-// `_xycSwapXD` takes NO arguments. Constant product over the virtual balances the
-// strategy was shipped with, for whichever pair the taker names. Reverts
-// XYCSwapRecomputeDetected if amounts were already computed — which is what makes
-// "exactly one curve" enforced by the VM rather than by our convention.
+// `_xycSwapXD` takes NO arguments. Constant product over the shipped virtual
+// balances, for whichever pair the taker names. Reverts
+// XYCSwapRecomputeDetected if amounts were already computed, so "exactly one
+// curve" is enforced by the VM, not by convention.
 export function xycSwap(): Instruction {
 	return { opcode: op("XYC_SWAP_XD"), args: new Uint8Array(0) };
 }
@@ -114,17 +107,17 @@ export function flatFeeAmountIn(feeBps: number): Instruction {
 }
 
 // `_xycConcentrateGrowLiquidity2D` — grows both effective balances by a delta
-// before the curve runs, concentrating the shipped liquidity around the shipped
+// before the curve runs, concentrating shipped liquidity around the shipped
 // price. args are deltaLt || deltaGt (32 bytes each), keyed by TOKEN SORT ORDER:
 // the deployed build2D/parse2D map them back by comparing tokenIn < tokenOut at
 // swap time, so the encoder sorts here and callers pass deltas aligned with the
 // token order they were computed for.
 //
-// It is a wrapper like the fee (it calls ctx.runLoop() and post-processes), so
-// it MUST precede the curve, and it requires the curve to have computed both
-// amounts — a program ending in this instruction reverts. It also persists a
-// per-orderHash scale on the router (deltaScales), which fresh salted bytes
-// start clean — one more reason every strategy carries a salt.
+// A wrapper like the fee (calls ctx.runLoop() and post-processes), so it MUST
+// precede the curve and requires the curve to have computed both amounts — a
+// program ending in this instruction reverts. It also persists a per-orderHash
+// scale on the router (deltaScales), which fresh salted bytes start clean —
+// another reason every strategy carries a salt.
 export function xycConcentrateGrowLiquidity2D(
 	tokenA: string,
 	tokenB: string,
@@ -162,17 +155,16 @@ function isqrt(n: bigint): bigint {
 // The deltas that concentrate `amounts` into a GEOMETRIC band around the
 // shipped price: priceMax/price = price/priceMin = 1 + bandBps/1e9.
 //
-// This is the deployed XYCConcentrateArgsBuilder.computeDeltas specialised to
-// that band: with both sqrt ratios equal, deltaA and deltaB are the same
-// multiple of their amounts, so the grown pool still quotes EXACTLY the shipped
-// ratio. An arithmetic band (price ± x%) makes the two multipliers differ and
-// silently shifts the quoted price off the shipped ratio by ~x% — that is the
-// unsettled arithmetic that kept this instruction in the grammar's OMITTED
-// list, and why this helper exists instead of taking raw priceMin/priceMax.
+// The deployed XYCConcentrateArgsBuilder.computeDeltas specialised to that band:
+// with both sqrt ratios equal, deltaA and deltaB are the same multiple of their
+// amounts, so the grown pool still quotes EXACTLY the shipped ratio. An
+// arithmetic band (price ± x%) makes the multipliers differ and shifts the
+// quoted price off the shipped ratio by ~x% — hence a geometric helper rather
+// than raw priceMin/priceMax.
 //
-// The real inventory drains exactly when the price reaches a band edge; a draw
-// past the edge exceeds the shipped virtual amount and the fill reverts in
-// Aqua's pull. Ceilings, not promises — F1 §2.
+// Inventory drains exactly when the price reaches a band edge; a draw past the
+// edge exceeds the shipped virtual amount and reverts in Aqua's pull. Virtual
+// amounts are a ceiling, not a promise.
 export function bandDeltas(
 	amountA: bigint,
 	amountB: bigint,
@@ -200,17 +192,14 @@ export function bandDeltas(
 
 export type FullRangeParams = { salt: bigint; deadline: number };
 
-// The simplest strategy that works: market-make across the whole price range at
-// the ratio implied by the shipped amounts.
+// Market-make across the whole price range at the ratio implied by the shipped
+// amounts.
 //
 // The curve goes LAST. It is terminal, and both the fee and decay instructions
-// revert if amounts have already been computed — so ordering is enforced by the
-// VM, not merely by convention.
-//
-// Note how little is in these bytes: only the salt and the deadline vary. With
-// this template the PRICE is the ratio of the shipped virtual amounts and the
-// DEPTH is their absolute size, and neither is in the program. The economic
-// content lives in ship()'s arguments.
+// revert if amounts have already been computed, so ordering is enforced by the
+// VM, not by convention. PRICE is the ratio of the shipped virtual amounts and
+// DEPTH is their absolute size; neither is in the program — the economic content
+// lives in ship()'s arguments.
 export function fullRange(p: FullRangeParams): Uint8Array {
 	return encodeProgram([salt(p.salt), deadline(p.deadline), xycSwap()]);
 }
@@ -226,16 +215,14 @@ export type BandedParams = FullRangeParams & {
 };
 
 // Concentrate the shipped liquidity into a band around the shipped price: same
-// price and same real commitment as full-range, but the depth a taker quotes
-// against is multiplied — tighter band, deeper quote, and the inventory drains
-// exactly at the band edges.
+// price and same real commitment as full-range, but multiplied quote depth, and
+// inventory drains exactly at the band edges.
 //
 // Unlike full-range, the PROGRAM depends on the ship amounts: the concentrate
 // deltas are computed from them, so the amounts passed to ship() must be the
 // amounts compiled here or the band sits around the wrong price. The band goes
-// before the fee, and both before the curve — each wraps what follows, and the
-// VM reverts any other order. Matches the only shape with sustained fills on
-// real Base (SALT + CONCENTRATE_2D + XYC, 14 of the venue's 19 fills).
+// before the fee, both before the curve — each wraps what follows, and the VM
+// reverts any other order.
 export function banded(p: BandedParams): Uint8Array {
 	const { deltaA, deltaB } = bandDeltas(p.amounts[0], p.amounts[1], p.bandBps);
 	return encodeProgram([
@@ -260,7 +247,7 @@ export function bandedWithFee(p: BandedParams & { feeBps: number }): Uint8Array 
 // --- the Aqua order ----------------------------------------------------------
 
 // MakerTraits bit 254. In Aqua mode balances come from Aqua rather than from a
-// maker signature, which is what lets one wallet back the strategy.
+// maker signature, letting one wallet back the strategy.
 export const USE_AQUA_INSTEAD_OF_SIGNATURE = 1n << 254n;
 
 export type Order = { maker: string; traits: bigint; program: Uint8Array };
@@ -271,8 +258,8 @@ export type Order = { maker: string; traits: bigint; program: Uint8Array };
 // receiver in Aqua mode.
 //
 // tokenIn/tokenOut are NOT in the order and NOT in its hash; the taker passes
-// them to swap(). One shipped strategy therefore serves every pair among the
-// tokens it was shipped with.
+// them to swap(). One shipped strategy therefore serves every pair among its
+// tokens.
 export function aquaOrder(maker: string, program: Uint8Array): Order {
 	return { maker, traits: USE_AQUA_INSTEAD_OF_SIGNATURE | BigInt(maker), program };
 }
@@ -288,8 +275,8 @@ export function shipBytes(order: Order): Uint8Array {
 	return fromHex(encoded);
 }
 
-// Computable before the user signs anything, which is what lets the UI show it
-// and what the recommendation commits to on-chain.
+// Computable before the user signs anything, so the UI can show it and the
+// recommendation can commit to it on-chain.
 export function strategyHash(order: Order): string {
 	return keccak256(shipBytes(order));
 }
@@ -312,9 +299,8 @@ export function decodeProgram(program: Uint8Array): Instruction[] {
 }
 
 // Reverse of shipBytes(): recover the Order from the exact bytes ship() stored
-// (the subgraph's `strategyData`). This is what lets the dashboard read a
-// position's program — and its deadline — from the chain instead of trusting
-// anything remembered client-side.
+// (the subgraph's `strategyData`), so the dashboard reads a position's program
+// and deadline from the chain rather than from client-side memory.
 export function decodeOrder(data: Uint8Array): Order {
 	const [decoded] = AbiCoder.defaultAbiCoder().decode(
 		["tuple(address maker, uint256 traits, bytes data)"],
@@ -328,8 +314,8 @@ export function decodeOrder(data: Uint8Array): Order {
 }
 
 // The DEADLINE instruction's unix seconds, or null when the program carries
-// none. Our templates always emit one; a maker's book can also hold strategies
-// shipped outside Sluice, and those must render as "no deadline", not as 1970.
+// none. Our templates always emit one, but a maker's book can hold strategies
+// shipped outside Sluice, which must render as "no deadline", not as 1970.
 export function deadlineOf(instructions: Instruction[]): number | null {
 	const found = instructions.find((ins) => ins.opcode === op("DEADLINE"));
 	if (!found) return null;
@@ -338,8 +324,8 @@ export function deadlineOf(instructions: Instruction[]): number | null {
 	return Number(value);
 }
 
-// Used by the app's "why this" expander, which shows the user structured
-// instructions rather than a wall of bytes.
+// Used by the app's "why this" expander to show structured instructions rather
+// than a wall of bytes.
 export function formatProgram(program: Uint8Array): string {
 	return decodeProgram(program)
 		.map((ins) => `${opcodeName(ins.opcode)}${ins.args.length ? ` ${toHex(ins.args)}` : ""}`)

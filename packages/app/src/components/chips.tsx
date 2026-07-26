@@ -46,11 +46,11 @@ export function RiskChip({ risk }: { risk: RiskRating | null }) {
 }
 
 /**
- * ENCLAVE gets its verification check; a template fallback is a normal,
- * honest outcome and is labelled without one. `null` (no local record — a
- * cache-miss position, not necessarily an unsigned one) gets a neutral,
- * unstyled label of its own — never folded into "TEMPLATE_FALLBACK", which
- * would falsely claim it's known to be unsigned.
+ * ENCLAVE gets its verification check; a template fallback is a normal, honest
+ * outcome and is labelled without one. `null` (no local record — a cache-miss
+ * position, not necessarily unsigned) gets a neutral, unstyled label of its
+ * own — never folded into "TEMPLATE_FALLBACK", which would falsely claim it's
+ * known to be unsigned.
  */
 export function ProvenanceChip({ provenance }: { provenance: Provenance }) {
   if (provenance === null) {

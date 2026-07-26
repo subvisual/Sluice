@@ -1,5 +1,5 @@
-// No "use client" — this is a leaf of the dashboard's client tree; marking it
-// as its own client entry would demand serializable props (it takes callbacks).
+// No "use client" — a leaf of the dashboard's client tree; its own client entry
+// would demand serializable props (it takes callbacks).
 
 import { useEffect, useState } from "react";
 import { displayFrac, formatFixed } from "@/lib/amount";
@@ -10,9 +10,9 @@ import { SlotTable } from "./slot-table";
 import { PairIcons } from "./token-icon";
 
 /**
- * Strategy detail — a right sheet over the blurred dashboard. Everything
- * about one shipped strategy. There is no edit action anywhere: shipped
- * strategies are immutable, the only exits are dock() and expiry.
+ * Strategy detail — a right sheet over the blurred dashboard, everything about
+ * one shipped strategy. No edit action anywhere: shipped strategies are
+ * immutable, the only exits are dock() and expiry.
  */
 export function DetailSheet({
   position,
@@ -43,8 +43,8 @@ export function DetailSheet({
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
-      {/* The blur is load-bearing — without it the dashboard text competes
-          with the sheet. */}
+      {/* The blur is load-bearing — without it the dashboard text competes with
+          the sheet. */}
       <button
         aria-label="Close"
         onClick={onClose}

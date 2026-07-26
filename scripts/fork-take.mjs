@@ -106,7 +106,7 @@ if (mine.length === 0) {
 const shipped = mine[mine.length - 1];
 const strategyHash = shipped.args.strategyHash;
 
-// The shipped bytes ARE abi.encode(Order{maker, traits, program}) — F1 §2.
+// The shipped bytes ARE abi.encode(Order{maker, traits, program}).
 const [order] = decodeAbiParameters(
   [
     {
@@ -193,7 +193,7 @@ const approveHash = await walletClient.writeContract({
 await publicClient.waitForTransactionReceipt({ hash: approveHash });
 
 // Quote immediately before the swap and compare, so a divergence is visible
-// rather than inferred (F1 §3 job 2).
+// rather than inferred.
 const { result: quoted } = await publicClient.simulateContract({
   account: taker,
   address: router,

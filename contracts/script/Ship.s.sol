@@ -16,7 +16,7 @@ interface IAquaShip {
 }
 
 /// @title Ship a strategy produced by the TypeScript composer
-/// @notice The maker signs this. Tokens never leave the wallet — Aqua records virtual
+/// @notice The maker signs this. Tokens never leave the wallet: Aqua records virtual
 ///         balances and pulls the real ERC20 only when a taker fills.
 ///
 ///         The bytes are NOT built here. Regenerate them first, then ship:
@@ -25,9 +25,9 @@ interface IAquaShip {
 ///           forge script script/Ship.s.sol --rpc-url http://127.0.0.1:8545 \
 ///             --broadcast --private-key $SLUICE_MAKER_KEY
 ///
-///         SLUICE_FIXTURE selects which strategy. Take.s.sol reads the same one, so the
-///         two cannot drift — that is the point of routing both through the fixture rather
-///         than through matching constructor arguments.
+///         SLUICE_FIXTURE selects which strategy. Take.s.sol reads the same one, so routing
+///         both through the fixture (not matching constructor args) is what stops them
+///         drifting.
 contract ShipScript is Script {
     function run() external {
         string memory cfg = vm.readFile("../config/addresses.8453.json");
@@ -45,7 +45,7 @@ contract ShipScript is Script {
 
         vm.startBroadcast();
         // Aqua pulls from the maker's wallet at fill time, so the allowance is what makes
-        // the position fillable. Without it the strategy ships and every fill reverts.
+        // the position fillable: without it the strategy ships and every fill reverts.
         for (uint256 i = 0; i < f.tokens.length; i++) {
             IERC20Ship(f.tokens[i]).approve(aqua, type(uint256).max);
         }

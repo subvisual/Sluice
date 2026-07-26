@@ -1,11 +1,8 @@
 import type { Address } from "viem";
 
 /**
- * The request envelope — F2 §5.
- *
- * Built per request from the user's own input, NOT declared once in a config
- * file. This is the biggest structural change from the superseded daemon
- * design, where the equivalent object was a long-lived "mandate".
+ * The request envelope, built per request from the user's own input, NOT
+ * declared once in a config file.
  */
 export type RecommendationRequest = {
   user: Address;
@@ -15,10 +12,10 @@ export type RecommendationRequest = {
   /**
    * Tokens THEY selected, amounts THEY set, in base units.
    *
-   * This is a CEILING THE USER DECLARED, not an observation of their balance.
-   * There is no stored `realBalance` anywhere in this system — every balance
-   * check evaluates against a live snapshot at `observedBlock`. Conflating the
-   * two is how you recommend committing tokens the user did not offer.
+   * A CEILING THE USER DECLARED, not an observation of their balance. There is
+   * no stored `realBalance` — every balance check evaluates against a live
+   * snapshot at `observedBlock`. Conflating the two recommends committing
+   * tokens the user did not offer.
    */
   budget: Record<Address, bigint>;
   /** How many strategies the Multicall may carry. */
@@ -44,12 +41,11 @@ export type TokenSelection = {
 };
 
 /**
- * Market context — F3. Composed from hosted subgraphs against real Base, plus
- * the user's own book from our local graph-node.
+ * Market context. Composed from hosted subgraphs against real Base, plus the
+ * user's own book from our local graph-node.
  *
- * Every field is nullable on purpose. F3 is not wired yet, and a prompt that
- * invents pool depth is worse than one that admits it has none: "a
- * recommendation made without realised volatility is a guess with good grammar."
+ * Every field is nullable on purpose: a prompt that invents pool depth is worse
+ * than one that admits it has none.
  */
 export type MarketContext = {
   observedAt: number;
@@ -75,7 +71,7 @@ export type MarketContext = {
     | null;
 };
 
-/** One rejected attempt, carried forward across retries — F2 §4. */
+/** One rejected attempt, carried forward across retries. */
 export type ViolationRecord = {
   attempt: number;
   /** e.g. "I2" */

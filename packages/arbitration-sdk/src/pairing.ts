@@ -1,12 +1,10 @@
-// Value-matched pairing arithmetic, computed FOR the model (T0.2 / issue #25).
+// Value-matched pairing arithmetic, computed FOR the model (issue #25).
 //
 // The shipped virtualAmounts set both the price (their ratio) and the depth
-// (their size) — grammar.ts says exactly that, and then the prompt leaves the
-// model to divide a budget by a mid price across two different decimal scales.
-// That is the arithmetic a 7B model quietly gets wrong, and a wrong ratio is
-// not cosmetic: it ships a strategy priced off-mid, which is free money for the
-// first taker. Nothing in the validator catches it today (a price-vs-mid
-// invariant is Tier 2 work), so the cheapest fix is to not ask.
+// (their size). Left to itself, the model divides a budget by a mid price
+// across two decimal scales — arithmetic a 7B model quietly gets wrong, and a
+// wrong ratio ships a strategy priced off-mid: free money for the first taker.
+// The validator does not catch it today, so the cheapest fix is to not ask.
 //
 // Everything here is exact fixed-point on decimal strings. A float would shift
 // the last digits of a number that ends up inside a signed artifact.
@@ -15,9 +13,8 @@ import type { MarketContext } from "./context.ts";
 import type { RecommendationRequest, TokenBudget } from "./recommendation.ts";
 
 // Internal working precision, and the precision we print at. Six fractional
-// digits is exact for USDC (6 decimals) and a fine granularity for a WETH
-// CEILING — and it keeps the model from emitting more digits than a token has,
-// which the app otherwise has to truncate on the way back in.
+// digits is exact for USDC (6 decimals) and fine for a WETH CEILING, and keeps
+// the model from emitting more digits than a token has.
 const WORK_ONE = 10n ** 18n;
 const DISPLAY_FRAC = 6;
 const DISPLAY_ONE = 10n ** BigInt(DISPLAY_FRAC);
@@ -31,8 +28,8 @@ function parseDec(s: string): bigint | null {
 	return BigInt(whole + (frac + "0".repeat(18)).slice(0, 18));
 }
 
-/// A JS number as a decimal string. Rejects the exponential forms (1e-7, 1e21)
-/// rather than parsing them — midPrice is data we display and divide by, and a
+/// A JS number as a decimal string. Rejects exponential forms (1e-7, 1e21)
+/// rather than parsing them: midPrice is data we display and divide by, and a
 /// silently mangled price is worse than no pairing block at all.
 function numberToDec(n: number): string | null {
 	if (!Number.isFinite(n) || n <= 0) return null;

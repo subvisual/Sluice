@@ -9,14 +9,12 @@ let initialized = false;
 /**
  * Idempotent — called from the Providers useState initializer, which React
  * strict mode double-invokes in dev. It MUST also run during SSR: client
- * components server-render, and useAppKit throws unless createAppKit ran in
- * the same runtime (gating this on `typeof window` 500'd every SSR pass once
- * a projectId was set). Reown's Next.js pattern is module-scope createAppKit,
- * evaluated on both sides; the server instance exists only to satisfy SSR
- * hook calls — the latch means it keeps the first request's mode, which is
- * fine because no SSR'd markup depends on AppKit's mode-specific internals.
- * Without a projectId this no-ops; the header renders a note instead of a
- * connect button (connect-button.tsx), so AppKit hooks are never reached.
+ * components server-render, and useAppKit throws unless createAppKit ran in the
+ * same runtime (gating on `typeof window` 500'd every SSR pass once a projectId
+ * was set). The latched server instance keeps the first request's mode, fine
+ * because no SSR'd markup depends on AppKit's mode-specific internals. Without a
+ * projectId this no-ops; the header renders a note instead of a connect button
+ * (connect-button.tsx), so AppKit hooks are never reached.
  */
 export function initAppKit(adapter: WagmiAdapter, mode: RpcMode): void {
   if (initialized || !REOWN_PROJECT_ID) {

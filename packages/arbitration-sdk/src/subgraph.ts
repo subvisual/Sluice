@@ -1,21 +1,19 @@
-// F3 job 1 — the user's own book, read from the Aqua subgraph.
+// Job 1 — the user's own book, read from the Aqua subgraph.
 //
-// This is the client that turns indexed Aqua activity into the shape F2's
-// composer consumes as MarketContext.userBook (see context.ts). It answers
-// "what has this maker already shipped" — committed per-token balances, live
-// strategies, recent fills — for a given maker address.
+// Turns indexed Aqua activity into the shape the composer consumes as
+// MarketContext.userBook (see context.ts): committed per-token balances, live
+// strategies, recent fills, for a given maker address.
 //
-// SCOPE: job 1 only. Job 2 (market: pool depth, realised vol) comes from
-// composed hosted DEX/price subgraphs, not ours, and is blocked on F3 Open Q2
-// (which price subgraph). The Recommendation/Template join (Notion F3 §3) does
-// not exist — there is no on-chain record of recommendations to index.
+// SCOPE: the book only. Market data (pool depth, realised vol) comes from
+// composed hosted DEX/price subgraphs, not ours, and is blocked on the price
+// subgraph question. There is no on-chain record of recommendations to index.
 //
-// Endpoint is a CONFIG value, never a code assumption (F3 §2): defaults to the
-// deployed Studio Base subgraph and swaps to the local fork graph-node via
+// Endpoint is a CONFIG value, never a code assumption: defaults to the deployed
+// Studio Base subgraph and swaps to the local fork graph-node via
 // SLUICE_SUBGRAPH_URL. No fork-only behaviour may leak in here.
 
-// Deployed Graph Studio endpoint for the generic Aqua subgraph on Base
-// (subgraph/README.md §7, v0.1.2). Real protocol data, no local stack needed.
+// Deployed Graph Studio endpoint for the generic Aqua subgraph on Base.
+// Real protocol data, no local stack needed.
 export const DEFAULT_BASE_SUBGRAPH =
 	"https://api.studio.thegraph.com/query/1756952/aqua-base/version/latest";
 
@@ -34,8 +32,7 @@ export function subgraphUrl(): string {
 // ---------------------------------------------------------------------------
 
 // Exact integer-string -> decimal-string conversion. BigInt-based so token
-// amounts never touch floating point (a raw uint256 through Number is a silent
-// correctness bug). `decimals === null` means we don't know the token's scale,
+// amounts never touch floating point. `decimals === null` means unknown scale,
 // so we return the raw value unscaled rather than guess.
 export function formatUnits(raw: string, decimals: number | null): string {
 	if (decimals == null) return raw;
@@ -113,9 +110,9 @@ export type UserBook = {
 	recentFills: RecentFill[];
 };
 
-// Map raw subgraph rows into a clean, human-readable UserBook. Pure: no
-// network, no clock. A null `maker` row (unknown / never-active address) yields
-// an empty-but-valid book rather than throwing.
+// Map raw subgraph rows into a human-readable UserBook. Pure: no network, no
+// clock. A null `maker` row (unknown address) yields an empty-but-valid book
+// rather than throwing.
 export function shapeUserBook(maker: string, data: any): UserBook {
 	const m = maker.toLowerCase();
 	const raw = data?.maker ?? null;

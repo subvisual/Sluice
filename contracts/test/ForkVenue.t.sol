@@ -4,8 +4,8 @@ pragma solidity 0.8.30;
 import { Test } from "forge-std/Test.sol";
 import { console } from "forge-std/console.sol";
 
-/// @dev EIP-5267. Declared inline rather than imported — forge-std does not ship it, and
-///      this one function is all we need to identify the deployed router.
+/// @dev EIP-5267, declared inline — forge-std does not ship it, and this one function is
+///      all we need to identify the deployed router.
 interface IERC5267 {
     function eip712Domain()
         external
@@ -28,25 +28,20 @@ interface IERC20Metadata {
 }
 
 /// @title The venue is what we think it is
-/// @notice G1 from F1 §7 — the gate the whole venue rescope rests on. Everything else in
-///         F1 assumes real Aqua and SwapVM bytecode is reachable on a Base fork at the
-///         canonical addresses. If this fails, self-deployment comes back and the Ignition
-///         contingency is un-demoted.
+/// @notice G1 — the gate the whole venue rescope rests on: real Aqua and SwapVM bytecode
+///         reachable on a Base fork at the canonical addresses. If this fails,
+///         self-deployment comes back.
 ///
 ///         It also pins WHICH router is deployed. `AquaSwapVMRouter` and the generic
 ///         `SwapVMRouter` expose different instruction sets, and the strategy grammar
 ///         depends on getting that right.
 ///
-///         Run:
-///           cd contracts && forge test
+///         Run:  cd contracts && forge test
 ///
-///         The RPC comes from SLUICE_RPC_URL when set, falling back to Base's public
-///         endpoint so this runs with no setup. Foundry reads .env from its own project
-///         root, so that file belongs here rather than at the repo root — see
-///         contracts/.env.example.
-///
-///         Needs no funding, no private key and no shipped strategy — everything here is
-///         a read against the pinned fork block in config/addresses.8453.json.
+///         RPC comes from SLUICE_RPC_URL, falling back to Base's public endpoint. Foundry
+///         reads .env from its own project root — see contracts/.env.example. Needs no
+///         funding, key or shipped strategy; every check is a read against the pinned fork
+///         block in config/addresses.8453.json.
 contract ForkVenueTest is Test {
     /// @dev Rate-limits. Fine for these reads, not for the taker driver.
     string internal constant PUBLIC_BASE_RPC = "https://mainnet.base.org";
@@ -76,8 +71,8 @@ contract ForkVenueTest is Test {
 
     /// @notice The fork is pinned where we said it is.
     /// @dev chainId is asserted but is NOT a guard: a Base fork reports 8453 exactly like
-    ///      Base mainnet. What separates rehearsal from a real transaction is the
-    ///      anvil-only fork probe plus SLUICE_ALLOW_MAINNET. See F1 §1.
+    ///      Base mainnet. What separates rehearsal from a real transaction is the anvil-only
+    ///      fork probe plus SLUICE_ALLOW_MAINNET.
     function test_forkIsPinned() public view {
         assertEq(block.chainid, 8453, "not on Base");
         assertEq(block.number, forkBlock, "fork block drifted from config");
@@ -107,10 +102,9 @@ contract ForkVenueTest is Test {
 
     /// @notice Which router is at this address, and which version.
     /// @dev The EIP-712 domain carries the name and version passed to the SwapVM
-    ///      constructor, so it identifies the contract without trusting an address list.
-    ///      NOTE: the deployed version is NOT the tip of 1inch/swap-vm master — the ABI and
-    ///      the instruction set both differ. Read the Sourcify-verified deployed source
-    ///      rather than master when building anything against this.
+    ///      constructor, so it identifies the contract without trusting an address list. The
+    ///      deployed version is NOT the tip of 1inch/swap-vm master — ABI and instruction
+    ///      set both differ. Read the Sourcify-verified deployed source, not master.
     function test_routerIdentity() public view {
         (, string memory name, string memory version,, address verifyingContract,,) =
             IERC5267(router).eip712Domain();
@@ -125,7 +119,7 @@ contract ForkVenueTest is Test {
     /// @notice Every token the composer offers is real, and its decimals are what tokenList says.
     /// @dev Not cosmetic: the compiler scales virtual amounts by these decimals, so a wrong
     ///      value here ships the wrong size, and identical bytes with different amounts hash
-    ///      the same (F1 §2). Symbols are mixed-case on purpose — USDe and cbBTC are not
+    ///      the same. Symbols are mixed-case on purpose — USDe and cbBTC are not
     ///      all-caps, which is exactly what a toUpperCase() lookup gets wrong.
     function test_offeredTokensMatchTheTokenList() public view {
         assertEq(IERC20Metadata(weth).decimals(), 18, "WETH is not 18dp");

@@ -8,10 +8,9 @@ import type { TokenMeta } from "./types";
 
 /**
  * ServerComposeResult → the shapes the compose screen renders. Pure mapping —
- * no fetch, no state. Labels come from the SDK's own TEMPLATES so the two
- * sides cannot drift; anything the SDK returns that the app cannot render
- * (an unknown token, an unknown template id) degrades to a visible raw value,
- * never a crash.
+ * no fetch, no state. Labels come from the SDK's own TEMPLATES so the two sides
+ * cannot drift; anything the SDK returns that the app cannot render (an unknown
+ * token or template id) degrades to a visible raw value, never a crash.
  */
 
 export const COMPOSE_STEPS = [
@@ -48,7 +47,7 @@ export type UiRecommendation = {
   nonce: number;
   provenance: Provenance;
   reason: string | null;
-  /** Book provenance (F3 job 1): the user's live subgraph book, or a stub. */
+  /** Book provenance: the user's live subgraph book, or a stub. */
   contextSource: ServerComposeResult["contextSource"];
   proof: {
     signer: string | null;
@@ -141,15 +140,14 @@ function toUiStrategy(s: ServerStrategy): UiStrategy {
 
   const legs = s.tokens.flatMap((address, k) => {
     const token = tokenBy(address as `0x${string}`);
-    // No app-side metadata → no way to render base units; the validator's I1
-    // is what reports an out-of-budget token, so dropping the leg is display
-    // honesty, not silence.
+    // No app-side metadata → no way to render base units. The validator's I1
+    // reports an out-of-budget token, so dropping the leg is display honesty,
+    // not silence.
     if (!token) return [];
-    // The model may emit more fraction digits than the token has (a 6-dp
-    // USDC amount like "1000.3333333"). parseAmount rightly refuses to round
-    // that — rounding a ceiling upward hands the composer more budget than
-    // the user typed — so truncate the fraction down to the token's decimals
-    // first. Truncating a ceiling downward is safe; it can only understate it.
+    // The model may emit more fraction digits than the token has. parseAmount
+    // refuses to round that — rounding a ceiling upward hands the composer more
+    // budget than the user typed — so truncate down to the token's decimals.
+    // Truncating a ceiling down is safe; it can only understate it.
     const truncated = truncateFraction(s.virtualAmounts[k], token.decimals);
     const virtual = parseAmount(truncated, token.decimals);
     return virtual !== null ? [{ token, virtual }] : [];
@@ -218,8 +216,7 @@ const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /**
  * Truncate a decimal string's fraction to at most `decimals` digits, never
- * rounding. Safe for a ceiling: dropping digits can only understate it, never
- * hand out more budget than the model actually asked for.
+ * rounding. Safe for a ceiling: dropping digits can only understate it.
  */
 function truncateFraction(input: string, decimals: number): string {
   const dot = input.indexOf(".");
@@ -232,11 +229,9 @@ function truncateFraction(input: string, decimals: number): string {
 
 /**
  * The Positions screen's short label. The SDK's TEMPLATES label reads like
- * "banded · concentrate around the current price" — the part after the "·"
- * is the human-readable description; the slug-ish prefix is not. Falls back
- * to the full label (no "·" to split on), then to the raw templateId (no
- * template found at all). Shared with the subgraph read-back mapper so both
- * paths label a template identically.
+ * "banded · concentrate around the current price"; keep the human half after
+ * the "·". Falls back to the full label, then the raw templateId. Shared with
+ * the subgraph read-back mapper so both paths label a template identically.
  */
 export function shortLabel(label: string | undefined, templateId: string): string {
   if (!label) return templateId;

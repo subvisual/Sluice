@@ -17,10 +17,9 @@ import {
 import { OP, isRealOpcode } from "./opcodes.ts";
 import { fullRange, fullRangeWithFee, banded, bandedWithFee, decodeProgram } from "./swapvm.ts";
 
-// The property that makes this file trustworthy: the menu cannot name anything
-// the venue does not dispatch. The old grammar offered _limitSwap1D, three
-// invalidators and an oracle adjuster, none of which have an opcode — so the
-// model produced well-formed JSON describing an unbuildable strategy.
+// The menu cannot name anything the venue does not dispatch. The old grammar
+// offered _limitSwap1D, three invalidators and an oracle adjuster, none with an
+// opcode — so the model produced well-formed JSON for an unbuildable strategy.
 test("every instruction named anywhere in the grammar exists in the pinned table", () => {
 	assert.deepEqual(unknownInstructions(), []);
 });
@@ -33,8 +32,8 @@ test("every offered instruction is dispatchable, not a silent no-op", () => {
 });
 
 test("the instructions that no longer exist are gone from the menu", () => {
-	// Named explicitly so a future edit that reintroduces them fails loudly
-	// rather than quietly producing strategies that cannot be compiled.
+	// Named explicitly so a future edit reintroducing them fails loudly rather
+	// than quietly producing uncompilable strategies.
 	const removed = [
 		"_limitSwap1D",
 		"_limitSwapOnlyFull1D",
@@ -52,9 +51,9 @@ test("the instructions that no longer exist are gone from the menu", () => {
 });
 
 test("the taker gates are not offered while swapvm.ts has no encoder for them", () => {
-	// Offering the model an instruction our own compiler cannot emit is the
-	// grammar-drift bug one layer down: it passes every menu check and fails at
-	// compile time. They live in OMITTED until an encoder exists.
+	// Offering an instruction our own compiler cannot emit is grammar-drift one
+	// layer down: it passes every menu check and fails at compile time. These
+	// live in OMITTED until an encoder exists.
 	for (const name of ["ONLY_TAKER_TOKEN_BALANCE_NON_ZERO", "ONLY_TAKER_TOKEN_BALANCE_GTE"]) {
 		assert.ok(name in OMITTED, `${name}: not in OMITTED`);
 		assert.ok(!grammarPromptBlock().includes(name), `${name} is on the menu but has no encoder`);
@@ -62,8 +61,7 @@ test("the taker gates are not offered while swapvm.ts has no encoder for them", 
 });
 
 // A template is IN the grammar only if these bytes can be produced today. This
-// mapping is the test's own — if a template is added without extending it, the
-// test throws, which is the point.
+// mapping is the test's own: a template added without extending it throws here.
 function compileTemplate(t: Template): Uint8Array {
 	const base = { salt: 1n, deadline: 1_800_000_000 };
 	// The banded templates need tokens and amounts — the deltas derive from them.

@@ -1,29 +1,22 @@
 // The SwapVM strategy grammar the model fills in — for the DEPLOYED router.
 //
-// Every instruction named here is looked up through opcodes.ts, which loads the
-// pinned table in config/opcodes.8453.json. An instruction that is not
-// dispatchable cannot appear in this file without throwing on import, so the
-// menu we show the model cannot drift from the venue we ship to.
-//
-// The menu is narrower still: an instruction is offered ONLY if swapvm.ts can
-// encode it AND a fixture has shipped and filled it on the fork. "The venue
-// dispatches it" is not enough — offering the model something our own compiler
-// cannot emit is the same bug as offering something the venue cannot run,
-// one layer down. grammar.test.ts compiles every template to enforce this.
+// Every instruction named here is looked up through opcodes.ts (the pinned table
+// in config/opcodes.8453.json). A non-dispatchable instruction throws on import,
+// so the menu cannot drift from the venue. It is narrower still: an instruction
+// is offered ONLY if swapvm.ts can encode it AND a fixture has shipped and filled
+// it on the fork — offering something our own compiler cannot emit is the same
+// grammar-drift bug one layer down. grammar.test.ts compiles every template.
 //
 // THE REAL SHAPE IS A NEST, NOT A LIST
 //
-// `_flatFeeAmountInXD` (and `_decayXD`) call `ctx.runLoop()` in their own
-// bodies: they execute everything after them as an inner loop, then
-// post-process. A strategy is therefore fee(curve), emitted flat. Ordering is
-// enforced by the VM rather than by us — the wrappers open with
-// `require(amountIn == 0 || amountOut == 0)` and every curve has a recompute
-// guard, so a fee after the curve reverts and two curves revert. Our compiler
-// owns the order; the chain agrees with it.
+// `_flatFeeAmountInXD` (and `_decayXD`) call `ctx.runLoop()` in their own bodies:
+// they execute everything after them as an inner loop, then post-process. A
+// strategy is therefore fee(curve), emitted flat. Ordering is VM-enforced — the
+// wrappers open with `require(amountIn == 0 || amountOut == 0)` and every curve
+// has a recompute guard, so a fee after the curve reverts and two curves revert.
 //
-// (The six-slot grammar this file used to describe — balance setup, swap
-// logic, oracle adjust, invalidation — could not be built against this router
-// at all; see the PR #15 discussion. Do not reintroduce it.)
+// (The six-slot grammar this file used to describe could not be built against
+// this router at all; see PR #15. Do not reintroduce it.)
 
 import { OP, op, FEE_BPS_ONE } from "./opcodes.ts";
 
@@ -54,11 +47,10 @@ export const WRAPPERS: InstructionSpec[] = [
 	},
 ];
 
-/// Optional band. MUST precede the fee and the curve, and requires a curve
-/// after it — it post-processes the computed amounts, so a program ending here
-/// reverts. The model chooses bandBps ONLY; the compiler derives the on-chain
-/// deltas from bandBps and the virtual amounts, the same way it owns bytes and
-/// ordering everywhere else. Raw deltas are never a model output.
+/// Optional band. MUST precede the fee and the curve, and requires a curve after
+/// it — it post-processes the computed amounts, so a program ending here reverts.
+/// The model chooses bandBps ONLY; the compiler derives the on-chain deltas from
+/// bandBps and the virtual amounts. Raw deltas are never a model output.
 export const BAND: InstructionSpec = {
 	name: "XYC_CONCENTRATE_GROW_LIQUIDITY_2D",
 	opcode: op("XYC_CONCENTRATE_GROW_LIQUIDITY_2D"),
@@ -87,9 +79,8 @@ export const CURVES: InstructionSpec[] = [
 ];
 
 /// Dispatchable on the router but deliberately not offered. Each entry records
-/// something that cost real time to learn; everything else the router
-/// dispatches (jumps, progressive/output-side fees, the supply-share gate) is
-/// simply unused — no entry needed until someone reaches for one.
+/// something that cost real time to learn; everything else the router dispatches
+/// (jumps, progressive/output-side fees, the supply-share gate) is simply unused.
 export const OMITTED: Record<string, string> = {
 	XYC_CONCENTRATE_GROW_LIQUIDITY_XD:
 		"N-token variant of the band. The 2D variant's delta arithmetic is settled " +
@@ -108,19 +99,18 @@ export const OMITTED: Record<string, string> = {
 /// SALT is emitted by the compiler on every strategy and is NOT a model choice.
 /// It is a genuine no-op whose only job is to vary the bytes: a docked hash is
 /// burned permanently and amounts are not in the preimage, so re-entering a
-/// position needs new bytes under a new salt. F1 §2.
+/// position needs new bytes under a new salt.
 export const COMPILER_EMITTED = ["SALT"] as const;
 
 export const CURVE_OPTIONS = CURVES.map((i) => i.name);
 export const WRAPPER_OPTIONS = WRAPPERS.map((i) => i.name);
 export const BAND_OPTIONS = [BAND.name];
 /// Empty until a taker-gate encoder exists — see OMITTED. Kept because
-/// recommendation.ts notes any guard the model invents against this list.
+/// recommendation.ts checks any guard the model invents against this list.
 export const GUARD_OPTIONS: string[] = [];
 
 /// Enforced deterministically by the validator, and stated to the model so it
-/// complies on the first attempt more often — every retry is a round trip a
-/// user is waiting on.
+/// complies on the first attempt more often.
 export const COMPAT_RULES: string[] = [
 	"Exactly one curve instruction, and it is LAST. It is terminal: the VM reverts if amounts were already computed.",
 	"The fee comes BEFORE the curve. Placed after, the VM reverts.",
@@ -143,8 +133,8 @@ export type Template = {
 };
 
 /// Known-good seed shapes. Membership requires a fixture that has shipped and
-/// filled on the fork — grammar.test.ts compiles each one, and fixtures.ts
-/// carries each one through the G3 test.
+/// filled on the fork — grammar.test.ts compiles each one, fixtures.ts carries
+/// each through the G3 test.
 export const TEMPLATES: Template[] = [
 	{
 		id: "full-range",

@@ -35,9 +35,8 @@ import { TokenPicker, type PickerRow } from "./token-picker";
  *
  * Validation is `buildRecommendationRequest()`, not re-derived here; the only
  * screen-level check is MALFORMED (an unparseable amount never becomes a
- * bigint, so the builder cannot see it). The composer round trip calls the
- * real `POST /api/compose` route — see `from-server.ts` for how the response
- * maps onto what this screen renders.
+ * bigint, so the builder cannot see it). See `from-server.ts` for how the
+ * response maps onto what this screen renders.
  */
 
 type Phase = "idle" | "composing" | "done";
@@ -61,7 +60,7 @@ export function ComposeScreen() {
   // resolves asynchronously right after connecting, so there's a real (if
   // short) window where a validated recommendation exists but shipping would
   // silently no-op. The Ship button must not be clickable during that window
-  // (Task 6 review finding 4) — folded into `RecommendationSet`'s `disabled`.
+  // — folded into `RecommendationSet`'s `disabled`.
   const canShip = Boolean(walletClient && publicClient);
 
   const [prompt, setPrompt] = useState("");
@@ -164,9 +163,9 @@ export function ComposeScreen() {
     setRec(null);
     setComposeError(null);
 
-    // Cosmetic pacing (design decision 4): the steps advance on a timer while
-    // the round trip is in flight and snap to done when the response lands —
-    // they are pacing, not claims about server state.
+    // Cosmetic pacing: the steps advance on a timer while the round trip is in
+    // flight and snap to done when the response lands — pacing, not claims
+    // about server state.
     const timer = setInterval(() => {
       if (runRef.current === run) {
         setStep((s) => Math.min(s + 1, COMPOSE_STEPS.length - 1));
@@ -227,7 +226,7 @@ export function ComposeScreen() {
     setShipError(null);
     setShipping(true);
     try {
-      // One wallet signature over the Multicall (F1 §2). recordShipped caches
+      // One wallet signature over the Multicall. recordShipped caches
       // the metadata this recommendation carries — keyed by the real
       // strategyHash — so the dashboard's join can render it before the
       // subgraph has indexed the ship. Only the chosen strategies are cached:
@@ -541,7 +540,7 @@ function RecommendationSet({
           {rec.proof.verified ? "verified" : "unverified"} · {rec.proof.latencyMs}ms
         </p>
       )}
-      {/* Book provenance (F3 job 1) — a stub book must say so on screen. */}
+      {/* Book provenance — a stub book must say so on screen. */}
       <p className="mt-2 font-mono text-[10.5px] text-muted-3">
         book ·{" "}
         {rec.contextSource === "subgraph"

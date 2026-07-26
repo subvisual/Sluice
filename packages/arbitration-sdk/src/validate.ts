@@ -1,10 +1,10 @@
-// Deterministic recommendation validator (F2 §6). It REJECTS; it never mutates
-// and never rewrites (F2 §4: "nothing is ever edited. Violations reject and
-// re-infer"). A pure function of (recommendation, request, chain state).
+// Deterministic recommendation validator. It REJECTS; it never mutates and never
+// rewrites — violations reject and re-infer. A pure function of (recommendation,
+// request, chain state).
 //
-// This implements every invariant that is in scope for the recommendation path
-// AND meaningful on the deployed AquaSwapVMRouter (F1 grammar, now settled — the
-// menu in grammar.ts is the complete instruction set of the pinned router):
+// Implements every invariant in scope for the recommendation path AND meaningful
+// on the deployed AquaSwapVMRouter (the menu in grammar.ts is the complete
+// instruction set of the pinned router):
 //
 //   Budget & authority (grammar-independent):
 //   I1  every token in r is a token the user selected in q.budget
@@ -30,7 +30,7 @@
 //   I6  (partial-fill ⇒ token-invalidation): no LimitSwap / invalidation opcode.
 //   I9  (oracle adjuster ⇒ feed configured): no oracle-adjust opcode anywhere.
 // Parked:
-//   I15 whole-balance sizing — belongs to the future whole-balance mode (F2 §6).
+//   I15 whole-balance sizing — belongs to the future whole-balance mode.
 
 import type {
 	RecommendationRequest,
@@ -52,10 +52,10 @@ export type Violation = {
 	message: string;
 };
 
-// The live chain facts the validator needs. Stands in for the "s: ChainState"
-// argument in F2 §6. `chainId` is the config chain the recommendation must
-// target; `headBlock` is the current indexed head; `now` is the current unix
-// time (for the deadline bound); `maxBlockLag` is the I12 staleness policy.
+// The live chain facts the validator needs. `chainId` is the config chain the
+// recommendation must target; `headBlock` is the current indexed head; `now` is
+// the current unix time (for the deadline bound); `maxBlockLag` is the I12
+// staleness policy.
 export type ChainState = {
 	chainId: number;
 	headBlock: number;
@@ -82,10 +82,9 @@ function fracLen(s: string): number {
 	return dot === -1 ? 0 : s.length - dot - 1;
 }
 
-// Exact conversion of a decimal string to a scaled integer, so amounts are
-// summed and compared without floating-point error (0.1 + 0.1 + 0.1 must equal
-// 0.3, which IEEE-754 gets wrong). Caller guarantees `s` matches DECIMAL and
-// fracLen(s) <= scale.
+// Exact conversion of a decimal string to a scaled integer, so amounts sum and
+// compare without floating-point error. Caller guarantees `s` matches DECIMAL
+// and fracLen(s) <= scale.
 function toScaled(s: string, scale: number): bigint {
 	const [intPart, fracPart = ""] = s.split(".");
 	const padded = (fracPart + "0".repeat(scale)).slice(0, scale);
@@ -93,11 +92,10 @@ function toScaled(s: string, scale: number): bigint {
 }
 
 // Every message ends by naming the value that would satisfy the rule, whenever
-// that value is deterministic. The rejection feedback IS the next prompt
-// (compose.ts hands these straight back), and the retry budget is one attempt —
-// a model made to re-derive the number it just got wrong usually gets it wrong
-// again. Where no deterministic fix exists — which template suits the intent —
-// the message states the rule and stops; invented advice is worse than none.
+// that value is deterministic: the rejection feedback IS the next prompt
+// (compose.ts hands these straight back) and the retry budget is one attempt.
+// Where no deterministic fix exists (which template suits the intent) the
+// message states the rule and stops; invented advice is worse than none.
 
 /// The menu for a slot, as a corrective clause. An empty menu is a real answer
 /// on this venue (no guard has an encoder yet), and the fix is to drop the slot.
@@ -192,8 +190,7 @@ function validateStrategy(
 	const addrs = st.tokens.map((t) => String(t).toLowerCase());
 	for (let k = 1; k < addrs.length; k++) {
 		if (!(addrs[k - 1] < addrs[k])) {
-			// The sorted order is the fix — and the amounts move with their tokens,
-			// which is the half a model drops when it reorders on its own.
+			// The sorted order is the fix, and the amounts move with their tokens.
 			const canonical = [...st.tokens].sort((x, y) =>
 				String(x).toLowerCase() < String(y).toLowerCase() ? -1 : 1,
 			);
@@ -205,10 +202,9 @@ function validateStrategy(
 		}
 	}
 
-	// I11 — each amount is a decimal string and strictly positive. (The uint256
-	// ceiling is a base-unit property enforced when the amount is scaled at
-	// compile time; here we reject the two errors a model actually makes:
-	// non-numeric, and zero — a zero leg commits or computes nothing.)
+	// I11 — each amount is a decimal string and strictly positive. The uint256
+	// ceiling is enforced when the amount is scaled at compile time; here we
+	// reject non-numeric and zero (a zero leg commits or computes nothing).
 	st.virtualAmounts.forEach((a, k) => {
 		if (typeof a !== "string" || !DECIMAL.test(a)) {
 			push(
@@ -254,7 +250,7 @@ export function validate(
 
 	// I4 — chain match. The user-equality half (r.user == q.user) is deferred:
 	// `user` is a committer-supplied arg, not part of the recommendation-only
-	// payload (F2 §2/§5), so there is nothing to compare here yet.
+	// payload, so there is nothing to compare here yet.
 	if (r.chainId !== s.chainId) {
 		push(
 			"I4",
@@ -308,8 +304,8 @@ export function validate(
 		validateStrategy(st, q, s, `strategies[${i}]`, push),
 	);
 
-	// I12 — freshness. A snapshot ahead of head is impossible (future); one too
-	// far behind head is stale. Both fail.
+	// I12 — freshness. A snapshot ahead of head is impossible; one too far behind
+	// is stale. Both fail.
 	const lag = s.maxBlockLag ?? DEFAULT_MAX_BLOCK_LAG;
 	if (r.observedBlock > s.headBlock) {
 		push(

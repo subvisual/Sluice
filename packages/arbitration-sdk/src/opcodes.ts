@@ -2,25 +2,22 @@
 //
 // The numbers live in that file and NOWHERE else. They are deployment-specific
 // data — pinned empirically against the Sourcify-verified deployed source and
-// confirmed by executing each opcode on a fork — not something derivable from
-// any source you can read safely. Read the `_neverDeriveFromMaster` and
-// `_neverReadTheLiteralTopToBottom` notes in the JSON before touching them.
+// confirmed by executing each opcode on a fork — not derivable from the master
+// source (the deployed numbers differ from it). Read the `_neverDeriveFromMaster`
+// and `_neverReadTheLiteralTopToBottom` notes in the JSON before touching them.
 //
-// This module's only jobs are to load that data, fail loudly if it is malformed,
-// and hand out named constants so a redeployment is a change to one JSON file
-// rather than a hunt through the templates.
+// This module loads that data, fails loudly if malformed, and hands out named
+// constants so a redeployment is a change to one JSON file.
 //
-// Loaded through a static JSON import rather than `node:fs` — `grammar.ts`
-// (which needs OP/FEE_BPS_ONE) is a real, non-type import of this module from
-// `from-server.ts`, and that mapper runs client-side in the compose screen, so
-// this module has to bundle for the browser too, not just for the CLIs.
+// Loaded through a static JSON import rather than `node:fs`: grammar.ts is a
+// real (non-type) import of this module from from-server.ts, which runs
+// client-side in the compose screen, so this module must bundle for the browser
+// too, not just the CLIs.
 
 import table from "../../../config/opcodes.8453.json";
 
-// packages/arbitration-sdk/src -> repo root. The address book lives beside this
-// file and the subgraph reads both, so config/ is the shared home rather than
-// anything package-local. A label for error messages only now — the table
-// itself comes in through the JSON import above, not a runtime file read.
+// A label for error messages only — the table comes in through the JSON import
+// above, not a runtime file read.
 export const OPCODES_PATH = "config/opcodes.8453.json";
 
 type OpcodeTable = {
@@ -37,8 +34,8 @@ type OpcodeTable = {
 function load(): OpcodeTable {
 	const raw = table as OpcodeTable;
 
-	// Validate on import rather than at the first bad emit. A malformed table is
-	// the one failure that can produce a program which runs and does nothing.
+	// Validate on import rather than at the first bad emit: a malformed table
+	// can produce a program that runs and does nothing.
 	for (const field of ["firstRealOpcode", "lastRealOpcode", "feeBpsOne"] as const) {
 		if (typeof raw[field] !== "number") {
 			throw new Error(`${OPCODES_PATH}: ${field} missing or not a number`);

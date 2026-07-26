@@ -16,8 +16,7 @@ import {
 import { isRealOpcode, SWAPVM_ROUTER_VERSION } from "./opcodes.ts";
 
 // The contracts ship these exact bytes. If this file drifts from the generator,
-// Foundry is testing something the composer would never emit — which is the
-// whole failure mode having one encoder is meant to remove.
+// Foundry is testing something the composer would never emit.
 test("the checked-in fixture matches what the encoder produces now", () => {
 	assert.deepEqual(
 		readFixtures(),
@@ -65,8 +64,7 @@ test("no fixture emits into the silent no-op region or past the dispatch array",
 test("the strategy really is abi.encode(order), not the bare program", () => {
 	// Aqua stores keccak256(strategy) and the router computes
 	// keccak256(abi.encode(order)) in Aqua mode. Shipping the program alone would
-	// key the balances to a hash no swap can reach — and it would not revert until
-	// somebody tried to fill.
+	// key balances to a hash no swap can reach, and would not revert until a fill.
 	for (const f of readFixtures().strategies) {
 		assert.notEqual(f.outputs.strategy, f.outputs.program);
 		assert.ok(f.outputs.strategy.length > f.outputs.program.length);

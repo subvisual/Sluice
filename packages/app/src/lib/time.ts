@@ -28,7 +28,7 @@ export type CountdownTone = "ok" | "warn" | "muted";
 
 /**
  * "5d 12h left" · "18h left" · "expired 2d ago". Tone turns `warn` under 24h —
- * the card's visual cue that the unwind is close.
+ * the card's cue that the unwind is close.
  */
 export function countdown(
   deadline: number,

@@ -45,9 +45,9 @@ test("composeForApp without ZG_PRIVATE_KEY returns a labelled, valid fallback", 
 	assert.equal(res.proof, null);
 	assert.equal(res.messages, null);
 	assert.equal(res.attempts, 0);
-	// The fallback draws strictly on the user's budget, and it passes the
-	// validator — on the WALL clock, since nothing was fetched: the deadline
-	// bound and the stub snapshot share the request's single `now`.
+	// The fallback draws strictly on the user's budget and passes the validator
+	// on the WALL clock: nothing was fetched, so the deadline bound and the stub
+	// snapshot share the request's single `now`.
 	assert.equal(res.recommendation.strategies.length, 1);
 	assert.deepEqual(res.recommendation.strategies[0].tokens, [
 		WETH.address,

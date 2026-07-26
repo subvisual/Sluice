@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Stand up the local indexing stack: anvil fork of Base + graph-node + the Aqua
 # subgraph, indexing from the fork block onward (never the real deploy blocks —
-# see README §6: historical indexing through anvil never catches up).
+# historical indexing through anvil never catches up).
 #
 # Run this BEFORE sending local transactions: activity from before the deployed
 # startBlock is invisible to the index.
