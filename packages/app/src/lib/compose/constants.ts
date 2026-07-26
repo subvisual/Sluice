@@ -10,7 +10,7 @@ export const RECOMMENDATION_SCHEMA = "sluice.recommendation/1";
  */
 export const REQUEST_DEFAULTS = {
   /** F1 Q5 will set this properly — it is a gas measurement on the fork, not a guess. */
-  maxStrategies: 3,
+  maxStrategies: 1,
   maxDeadlineSec: 7 * 24 * 60 * 60,
   maxInferenceRetries: 2,
 } as const;
