@@ -7,6 +7,11 @@
 # startBlock is invisible to the index.
 #
 # Env: BASE_RPC_URL — upstream RPC for the fork (default: https://mainnet.base.org)
+#      FORK_BLOCK   — block to fork at; "latest" or unset forks the chain head.
+#                     scripts/demo-up.sh passes the pinned block from
+#                     config/addresses.8453.json so the venue does not drift
+#                     between rehearsal and demo. Reassigned below to whatever
+#                     anvil actually forked at, which is the subgraph startBlock.
 set -euo pipefail
 cd "$(dirname "$0")/.." # subgraph/
 
@@ -31,14 +36,22 @@ if have_anvil; then
     echo "           Restart it with --host 0.0.0.0 or the index will never advance."
   fi
 else
-  echo "starting anvil (fork: $BASE_RPC_URL)"
+  # Unquoted on purpose: empty means "fork the head", otherwise it has to split
+  # into two argv entries. The value is a block number, never a path.
+  PIN=""
+  if [ -n "${FORK_BLOCK:-}" ] && [ "${FORK_BLOCK}" != "latest" ]; then
+    PIN="--fork-block-number ${FORK_BLOCK}"
+    echo "starting anvil (fork: $BASE_RPC_URL @ block $FORK_BLOCK)"
+  else
+    echo "starting anvil (fork: $BASE_RPC_URL @ head)"
+  fi
   # --host 0.0.0.0 is REQUIRED, not a preference: graph-node runs in a container
   # and reaches the chain over host.docker.internal, which arrives on a non-loopback
   # interface. anvil's default 127.0.0.1 bind refuses it, and the only symptom is
   # "unable to fetch genesis" in the graph-node log followed by an index that never
   # advances. It does mean the fork is reachable from your LAN — it holds nothing
   # but well-known test keys, but do not run it on an untrusted network.
-  nohup anvil --fork-url "$BASE_RPC_URL" --block-time 2 --host 0.0.0.0 >local/anvil.log 2>&1 &
+  nohup anvil --fork-url "$BASE_RPC_URL" $PIN --block-time 2 --host 0.0.0.0 >local/anvil.log 2>&1 &
   echo $! >local/.anvil.pid
   for i in $(seq 1 30); do
     sleep 1

@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { DEV_AUTOCONNECT } from "@/lib/dev-wallet";
 import type { RpcMode } from "@/lib/network";
 import { ConnectButton } from "./connect-button";
 import { NetworkToggle } from "./network-toggle";
@@ -41,7 +42,7 @@ export function AppShell({
               </span>
             </p>
             <div className="ml-auto flex items-center justify-end gap-3.5">
-              <NetworkToggle mode={mode} />
+              <NetworkToggle mode={mode} pinned={DEV_AUTOCONNECT} />
               <ConnectButton mode={mode} />
             </div>
           </header>
