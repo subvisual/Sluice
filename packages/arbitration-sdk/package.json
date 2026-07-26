@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     "./serve": "./src/serve.ts",
-    "./grammar": "./src/grammar.ts"
+    "./grammar": "./src/grammar.ts",
+    "./subgraph": "./src/subgraph.ts"
   },
   "scripts": {
     "infer": "tsx src/cli.ts",
