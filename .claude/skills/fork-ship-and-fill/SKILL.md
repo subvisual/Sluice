@@ -125,24 +125,56 @@ Expect quote and fill to agree exactly, and the balance table to show the maker'
 wallet changing. **Ship moves nothing; the fill is when tokens move.** That is
 the claim the whole product rests on — show it.
 
-## 6. What the dashboard can and cannot show
+## 6. Seeing the fill on the dashboard (the local index)
 
-The book is a JOIN of subgraph data with a local metadata cache. The deployed
-Base subgraph has no record of fork transactions, so after a fill the card still
-shows the just-shipped overlay with `consumed 0`. **That is not a bug and not
-proof of anything** — the balances from step 5 are the evidence.
+The book is a JOIN of subgraph data with a local metadata cache. Against the
+**deployed** Base subgraph there is no record of a fork transaction, so after a
+real fill the card still reads `consumed 0` — not a bug, and not evidence of
+anything. To make it move you need a subgraph indexing *this* fork.
 
-To make `consumed` move on screen you need a subgraph indexing this fork:
+Do this **before** the walkthrough — it indexes from the fork block forward.
 
 ```bash
-subgraph/local/fork-up.sh        # anvil + graph-node + the Aqua subgraph
+subgraph/local/fork-up.sh
+```
+
+Then point the app at it (the whole app, not just the route):
+
+```bash
 SLUICE_SUBGRAPH_URL=http://localhost:8000/subgraphs/name/sluice/aqua-local npm run dev
 ```
 
-Start it **before** shipping — it indexes from the fork block forward, and it
-needs the `docker compose` v2 plugin (`docker compose version`). If that plugin
-is missing, this step is unavailable; say so rather than reporting the unchanged
-card as a finding.
+After a fill the card shows `0.0794 consumed of 0.3333` with a progress bar,
+while the strategies you dropped stay at `0.0000`. Verified end to end.
+
+Four things that will bite, in the order they bit:
+
+1. **`docker compose` v2 must exist** — `docker compose version`. It is a plugin,
+   separate from the docker CLI. On macOS/Homebrew: `brew install docker-compose`
+   then symlink it where docker looks:
+   `ln -sf /opt/homebrew/lib/docker/cli-plugins/docker-compose ~/.docker/cli-plugins/`.
+2. **anvil must bind `0.0.0.0`.** graph-node is in a container and reaches the
+   chain over `host.docker.internal`; a loopback-only anvil refuses it. The only
+   symptom is `unable to fetch genesis` in the graph-node log and an index that
+   never advances. `fork-up.sh` now starts anvil correctly and warns about an
+   existing loopback-only one — but if you started anvil yourself, restart it
+   with `--host 0.0.0.0`.
+3. **The first deploy can `ECONNRESET`** while graph-node warms up (the image is
+   amd64 and runs emulated on Apple silicon, so everything is slow). The node has
+   usually accepted the deploy anyway. `fork-up.sh` retries once; confirm with
+   `curl localhost:8030/graphql -d '{"query":"{ indexingStatuses { health } }"}'`
+   rather than trusting the CLI's error.
+4. **Do not read the index too early.** Query `_meta { block { number } }` and
+   compare it to `cast block-number` before concluding a fill was missed. An
+   index that is two blocks behind looks exactly like a broken handler.
+
+Useful query — strategy inventory and fills straight from the index:
+
+```bash
+curl -s http://localhost:8000/subgraphs/name/sluice/aqua-local \
+  -H 'content-type: application/json' \
+  -d '{"query":"{ _meta { block { number } } strategies { strategyHash fillCount balances { token { id } initialVirtual virtualBalance totalPulled } } }"}'
+```
 
 ## Troubleshooting
 

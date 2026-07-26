@@ -235,8 +235,9 @@ console.log(`  taker  ${tokenOut.symbol}  ${fmt(before.takerOut, tokenOut)} -> $
 
 console.log(`\ntx ${swapHash} (block ${receipt.blockNumber})`);
 console.log(
-  "\nthe dashboard only reflects this if a subgraph is indexing THIS fork\n" +
-    "(subgraph/local/fork-up.sh + SLUICE_SUBGRAPH_URL). Against the deployed Base\n" +
-    "subgraph the book has no record of a fork tx, so the card keeps showing the\n" +
-    "just-shipped overlay with consumed 0 — the balances above are the real proof.",
+  "\nthe dashboard reflects this only if a subgraph is indexing THIS fork\n" +
+    "(subgraph/local/fork-up.sh + SLUICE_SUBGRAPH_URL) — then the card reads\n" +
+    "`consumed` against the ceiling. Against the deployed Base subgraph the book\n" +
+    "has no record of a fork tx and the card stays at 0, which proves nothing\n" +
+    "either way; the balances above are what actually moved.",
 );

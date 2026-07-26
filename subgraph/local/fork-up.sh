@@ -23,9 +23,22 @@ have_anvil() { rpc '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":
 # 1. anvil fork
 if have_anvil; then
   echo "anvil already running on :8545 (note: local txs sent before now won't be indexed)"
+  # An anvil started without --host 0.0.0.0 is invisible to graph-node — see the
+  # comment on the anvil launch below. Worth saying now rather than letting the
+  # index sit at the start block looking merely slow.
+  if command -v lsof >/dev/null 2>&1 && lsof -nP -iTCP:8545 -sTCP:LISTEN 2>/dev/null | grep -q '127.0.0.1:8545'; then
+    echo "  WARNING: it is bound to 127.0.0.1 only, so the graph-node container cannot reach it."
+    echo "           Restart it with --host 0.0.0.0 or the index will never advance."
+  fi
 else
   echo "starting anvil (fork: $BASE_RPC_URL)"
-  nohup anvil --fork-url "$BASE_RPC_URL" --block-time 2 >local/anvil.log 2>&1 &
+  # --host 0.0.0.0 is REQUIRED, not a preference: graph-node runs in a container
+  # and reaches the chain over host.docker.internal, which arrives on a non-loopback
+  # interface. anvil's default 127.0.0.1 bind refuses it, and the only symptom is
+  # "unable to fetch genesis" in the graph-node log followed by an index that never
+  # advances. It does mean the fork is reachable from your LAN — it holds nothing
+  # but well-known test keys, but do not run it on an untrusted network.
+  nohup anvil --fork-url "$BASE_RPC_URL" --block-time 2 --host 0.0.0.0 >local/anvil.log 2>&1 &
   echo $! >local/.anvil.pid
   for i in $(seq 1 30); do
     sleep 1
@@ -64,11 +77,22 @@ cat >local/networks-local.json <<EOF
 }
 EOF
 cp subgraph.yaml subgraph.local.yaml
+# generated/ is gitignored, so a fresh clone has no types and `graph build` dies
+# with "The AssemblyScript compiler crashed" — which reads like a compiler bug and
+# is really just a missing codegen. Both steps are idempotent.
+[ -d node_modules ] || npm install
+npx graph codegen subgraph.local.yaml
 npx graph build subgraph.local.yaml --network base --network-file local/networks-local.json
 
-# 5. deploy to the local node
+# 5. deploy to the local node. The first deploy after a cold start can drop the
+# connection (ECONNRESET) while graph-node is still warming up — the node has
+# usually accepted it anyway, but retrying once is cheaper than reasoning about
+# which half happened.
 npx graph create sluice/aqua-local --node "$NODE" 2>/dev/null || true
-npx graph deploy sluice/aqua-local subgraph.local.yaml --node "$NODE" --ipfs "$IPFS" --version-label v0.1.0-local
+deploy() {
+  npx graph deploy sluice/aqua-local subgraph.local.yaml --node "$NODE" --ipfs "$IPFS" --version-label v0.1.0-local
+}
+deploy || { echo "deploy failed once (graph-node still warming up?) — retrying"; sleep 5; deploy; }
 
 # 6. smoke check
 sleep 5
