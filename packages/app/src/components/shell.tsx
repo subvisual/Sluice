@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { EXPECTED_CHAIN_ID } from "@/lib/compose/constants";
 import type { RpcMode } from "@/lib/network";
 import { ConnectButton } from "./connect-button";
 import { NetworkToggle } from "./network-toggle";
@@ -31,7 +30,7 @@ export function AppShell({
       }}
     >
       <div className="flex w-full min-w-0 overflow-hidden rounded-[26px] border border-glass-edge bg-glass shadow-[var(--shadow-lg)] backdrop-blur-[18px]">
-        <Rail mode={mode} />
+        <Rail />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <header className="z-20 flex flex-wrap items-center justify-between gap-5 border-b border-glass-edge bg-glass-3 px-[30px] py-[15px]">
             <p className="max-w-[520px] text-[13px] leading-normal text-muted-2">
@@ -62,12 +61,8 @@ const NAV_ACTIVE =
   "border border-glass-line bg-card font-medium text-text shadow-[var(--shadow-sm)]";
 const NAV_IDLE = "border border-transparent text-muted hover:text-text";
 
-function Rail({ mode }: { mode: RpcMode }) {
+function Rail() {
   const pathname = usePathname();
-
-  // The fork shares Base's chainId, so the network label is derived from the
-  // RPC mode — chainId alone cannot tell a rehearsal from the real thing.
-  const networkLabel = `${mode === "local" ? "BASE FORK" : "BASE"} · ${EXPECTED_CHAIN_ID}`;
 
   return (
     <aside className="box-border flex h-full w-[236px] min-h-0 flex-none flex-col gap-[22px] overflow-y-auto border-r border-glass-edge bg-glass-3 px-[14px] py-[22px]">
@@ -101,19 +96,6 @@ function Rail({ mode }: { mode: RpcMode }) {
         </Link>
 
       </nav>
-
-      <div className="mt-auto rounded-[14px] border border-glass-line bg-card-2 p-3.5 shadow-[var(--shadow-sm)]">
-        <div className="flex items-center gap-[7px] font-mono text-[10px] tracking-[0.06em] text-aqua-text">
-          <span className="h-1.5 w-1.5 rounded-full bg-aqua" />
-          <span>{networkLabel}</span>
-        </div>
-        {/* Honest state line — market/pair context (F3) is still a stub. */}
-        <p className="mt-2 text-[11px] leading-normal text-muted-2">
-          Market pair context is stubbed. Sealed inference is live when the
-          server holds an enclave key; anything else is labelled
-          TEMPLATE_FALLBACK.
-        </p>
-      </div>
 
       <PoweredBy />
     </aside>
