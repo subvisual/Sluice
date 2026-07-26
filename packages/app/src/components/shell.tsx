@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { EXPECTED_CHAIN_ID } from "@/lib/compose/constants";
-import { RPC_URL } from "@/lib/wagmi";
+import type { RpcMode } from "@/lib/network";
 import { ConnectButton } from "./connect-button";
 
 /**
@@ -14,7 +14,13 @@ import { ConnectButton } from "./connect-button";
  * `position:fixed` detail sheet — intentional: the sheet is clipped by the
  * shell's radius.
  */
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  mode,
+}: {
+  children: ReactNode;
+  mode: RpcMode;
+}) {
   return (
     <div
       className="box-border flex h-screen p-[26px]"
@@ -24,7 +30,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       }}
     >
       <div className="flex w-full min-w-0 overflow-hidden rounded-[26px] border border-glass-edge bg-glass shadow-[var(--shadow-lg)] backdrop-blur-[18px]">
-        <Rail />
+        <Rail mode={mode} />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <header className="z-20 flex flex-wrap items-center justify-between gap-5 border-b border-glass-edge bg-glass-3 px-[30px] py-[15px]">
             <p className="max-w-[520px] text-[13px] leading-normal text-muted-2">
@@ -54,12 +60,12 @@ const NAV_ACTIVE =
   "border border-glass-line bg-card font-medium text-text shadow-[var(--shadow-sm)]";
 const NAV_IDLE = "border border-transparent text-muted hover:text-text";
 
-function Rail() {
+function Rail({ mode }: { mode: RpcMode }) {
   const pathname = usePathname();
 
   // The fork shares Base's chainId, so the network label is derived from the
   // RPC target — chainId alone cannot tell a rehearsal from the real thing.
-  const isLocal = /localhost|127\.0\.0\.1/.test(RPC_URL);
+  const isLocal = mode === "local";
   const networkLabel = `${isLocal ? "BASE FORK" : "BASE"} · ${EXPECTED_CHAIN_ID}`;
 
   return (

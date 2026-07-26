@@ -2,7 +2,6 @@
 
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { EXPECTED_CHAIN_ID } from "@/lib/compose/constants";
-import { RPC_URL } from "@/lib/wagmi";
 
 export function ConnectButton() {
   const { address, chainId, isConnected, isConnecting, isReconnecting } =
@@ -21,7 +20,7 @@ export function ConnectButton() {
         )}
         <div className="text-right">
           <div className="font-mono text-[13px] text-text">{short(address)}</div>
-          <div className="text-[10px] text-muted-3">{RPC_URL}</div>
+          <div className="text-[10px] text-muted-3">{""}</div>
         </div>
         <button
           onClick={() => disconnect()}

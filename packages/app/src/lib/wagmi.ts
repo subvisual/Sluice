@@ -1,13 +1,16 @@
-import { cookieStorage, createConfig, createStorage, http } from "wagmi";
-import { base } from "wagmi/chains";
-import { injected } from "wagmi/connectors";
+import { cookieStorage, createStorage, http } from "wagmi";
+import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
+import { base } from "@reown/appkit/networks";
+import { rpcUrlFor, type RpcMode } from "./network";
 
 /**
- * Points at the venue: an anvil fork of Base at a pinned block by default.
- * Override with NEXT_PUBLIC_RPC_URL to talk to Base mainnet (step 2).
+ * Reown Cloud projectId. Public by design (NEXT_PUBLIC_). When absent, the
+ * header degrades to a note instead of a connect button — initAppKit no-ops —
+ * and the placeholder below keeps WagmiAdapter constructible; the modal is
+ * never opened without a real id.
  */
-export const RPC_URL =
-  process.env.NEXT_PUBLIC_RPC_URL ?? "http://127.0.0.1:8545";
+export const REOWN_PROJECT_ID =
+  process.env.NEXT_PUBLIC_REOWN_PROJECT_ID ?? "";
 
 /**
  * ⚠️ A Base fork reports chainId 8453, IDENTICAL to Base mainnet — same Aqua
@@ -15,16 +18,17 @@ export const RPC_URL =
  * chain check in this app catches a user on the wrong network; it is NOT a
  * mainnet guard and must never be described as one. What separates a rehearsal
  * from a real transaction is the anvil fork probe plus SLUICE_ALLOW_MAINNET,
- * on the side that actually signs.
+ * on the side that actually signs. The RpcMode toggle only picks which URL
+ * this app READS from.
  */
-export function getConfig() {
-  return createConfig({
-    chains: [base],
-    connectors: [injected()],
+export function getAdapter(mode: RpcMode) {
+  return new WagmiAdapter({
+    networks: [base],
+    projectId: REOWN_PROJECT_ID || "missing-project-id",
     ssr: true,
     storage: createStorage({ storage: cookieStorage }),
     transports: {
-      [base.id]: http(RPC_URL),
+      [base.id]: http(rpcUrlFor(mode)),
     },
   });
 }
