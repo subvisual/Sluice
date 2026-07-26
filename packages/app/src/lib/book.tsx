@@ -16,13 +16,12 @@ import { demoBook } from "./demo-book";
 import {
   joinBook,
   metaFromPosition,
-  pairFromTokens,
+  metaFromUiStrategy,
   positionFromMeta,
   type CachedStrategyMeta,
   type StrategyCache,
 } from "./join-book";
 import { revivePosition, type PositionDto } from "./position-dto";
-import { TOKENS } from "./tokens";
 import type { UiRecommendation } from "./compose/from-server";
 
 /**
@@ -273,29 +272,8 @@ export function BookProvider({ children }: { children: ReactNode }) {
   const refetch = useCallback(() => setRefetchTick((t) => t + 1), []);
 
   const recordShipped = useCallback((rec: UiRecommendation, hashes: Hex[]) => {
-    const pair = pairFromTokens(TOKENS);
     const entries: Array<[Hex, CachedStrategyMeta]> = rec.strategies.map(
-      (s, i) => [
-        hashes[i],
-        {
-          pair,
-          templateLabel: s.templateShort,
-          description: s.description,
-          bandKind: s.bandKind,
-          band: s.band,
-          bandNote: s.bandNote,
-          legs: s.legs.map(({ token, virtual }) => ({
-            token: token.address,
-            symbol: token.symbol,
-            decimals: token.decimals,
-            virtual,
-          })),
-          deadline: s.deadline,
-          risk: s.risk,
-          provenance: rec.provenance,
-          slots: s.slots,
-        },
-      ],
+      (s, i) => [hashes[i], metaFromUiStrategy(s, rec.provenance)],
     );
 
     setCache((prev) => {

@@ -1,5 +1,6 @@
 import type { Address, Hex } from "viem";
 import type { Position, Provenance, RiskRating, SlotRow } from "./book";
+import type { UiStrategy } from "./compose/from-server";
 
 /**
  * The pure JOIN: decoded on-chain positions (`/api/book`, which reads the
@@ -140,4 +141,36 @@ export function pairFromTokens(
     .sort((a, b) => b.decimals - a.decimals)
     .map((t) => t.symbol)
     .join(" / ");
+}
+
+/**
+ * One shipped strategy → the metadata this browser caches for it.
+ *
+ * The pair label comes from the strategy's OWN legs. It used to come from the
+ * whole selectable token list, which was indistinguishable from correct while
+ * that list held exactly two tokens and wrong the moment it held more — and
+ * strategies within one recommendation need not share a pair anyway.
+ */
+export function metaFromUiStrategy(
+  strategy: UiStrategy,
+  provenance: Provenance,
+): CachedStrategyMeta {
+  return {
+    pair: pairFromTokens(strategy.legs.map((l) => l.token)),
+    templateLabel: strategy.templateShort,
+    description: strategy.description,
+    bandKind: strategy.bandKind,
+    band: strategy.band,
+    bandNote: strategy.bandNote,
+    legs: strategy.legs.map(({ token, virtual }) => ({
+      token: token.address,
+      symbol: token.symbol,
+      decimals: token.decimals,
+      virtual,
+    })),
+    deadline: strategy.deadline,
+    risk: strategy.risk,
+    provenance,
+    slots: strategy.slots,
+  };
 }
