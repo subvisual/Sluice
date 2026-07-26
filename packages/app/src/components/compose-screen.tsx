@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
-import type { Address } from "viem";
+import { useQuery } from "@tanstack/react-query";
+import type { Address, PublicClient, WalletClient } from "viem";
 import { useAccount, usePublicClient, useWalletClient } from "wagmi";
 import { parseAmount } from "@/lib/amount";
 import { useBook } from "@/lib/book";
@@ -20,7 +21,7 @@ import {
 } from "@/lib/compose/from-server";
 import type { TokenSelection } from "@/lib/compose/types";
 import type { ServerComposeResult } from "@sluice/arbitration-sdk/serve";
-import { shipRecommendation } from "@/lib/ship";
+import { planShip, shipStrategies, type ShipPlan } from "@/lib/ship";
 import { TOKENS } from "@/lib/tokens";
 import { useTokenBalances } from "@/lib/use-token-balances";
 import { ProvenanceChip, RiskChip } from "./chips";
@@ -62,6 +63,11 @@ export function ComposeScreen() {
   const [composeError, setComposeError] = useState<string | null>(null);
   const [shipError, setShipError] = useState<string | null>(null);
   const [shipping, setShipping] = useState(false);
+  // Which of the recommendation's strategies the user chose to ship, by index
+  // into `rec.strategies` (and `rec.shipInputs` — compileRecommendation maps
+  // the two 1:1). Everything arrives selected: the set is what was validated,
+  // and unchecking is the deliberate act.
+  const [selected, setSelected] = useState<number[]>([]);
   // Any edit invalidates an in-flight or finished run — the request changed.
   const runRef = useRef(0);
 
@@ -69,8 +75,17 @@ export function ComposeScreen() {
     runRef.current += 1;
     setPhase("idle");
     setRec(null);
+    setSelected([]);
     setShipError(null);
   };
+
+  // Only the chosen strategies are shipped, exactly as they were recommended
+  // and validated — amounts are never rescaled to soak up the budget the
+  // unchosen ones would have used. Nothing rewrites a signed recommendation.
+  const selectedInputs = useMemo(
+    () => (rec ? selected.map((i) => rec.shipInputs[i]).filter(Boolean) : []),
+    [rec, selected],
+  );
 
   const malformed = useMemo(
     () =>
@@ -167,7 +182,9 @@ export function ComposeScreen() {
       }
       const result = (await res.json()) as ServerComposeResult;
       if (runRef.current !== run) return;
-      setRec(fromServer(result, nonce));
+      const ui = fromServer(result, nonce);
+      setRec(ui);
+      setSelected(ui.strategies.map((_, i) => i));
       setPhase("done");
     } catch (e) {
       if (runRef.current !== run) return;
@@ -178,8 +195,24 @@ export function ComposeScreen() {
     }
   };
 
-  const shipSet = async () => {
-    if (!rec || !rec.validation.ok || !address || !walletClient || !publicClient) {
+  // What signing the current selection costs, read from chain state before
+  // anything is sent — so "one signature" is a fact on screen, not a hope.
+  const { data: shipPlan } = useShipPlan({
+    inputs: selectedInputs,
+    account: address,
+    publicClient: publicClient as PublicClient | undefined,
+    walletClient,
+  });
+
+  const shipSelected = async () => {
+    if (
+      !rec ||
+      !rec.validation.ok ||
+      selectedInputs.length === 0 ||
+      !address ||
+      !walletClient ||
+      !publicClient
+    ) {
       return;
     }
     setShipError(null);
@@ -188,14 +221,18 @@ export function ComposeScreen() {
       // One wallet signature over the Multicall (F1 §2). recordShipped caches
       // the metadata this recommendation carries — keyed by the real
       // strategyHash — so the dashboard's join can render it before the
-      // subgraph has indexed the ship.
-      const { strategyHashes } = await shipRecommendation({
-        inputs: rec.shipInputs,
+      // subgraph has indexed the ship. Only the chosen strategies are cached:
+      // the rest were never shipped and have no on-chain hash to key on.
+      const { strategyHashes } = await shipStrategies({
+        inputs: selectedInputs,
         account: address,
         walletClient,
         publicClient,
       });
-      recordShipped(rec, strategyHashes);
+      recordShipped(
+        { ...rec, strategies: selected.map((i) => rec.strategies[i]) },
+        strategyHashes,
+      );
       refetch();
       router.push("/");
     } catch (e) {
@@ -293,14 +330,85 @@ export function ComposeScreen() {
       {phase === "done" && rec && (
         <RecommendationSet
           rec={rec}
+          selected={selected}
+          onToggle={(i) =>
+            setSelected((prev) =>
+              prev.includes(i)
+                ? prev.filter((k) => k !== i)
+                : [...prev, i].sort((a, b) => a - b),
+            )
+          }
           onDecline={invalidate}
-          onShip={shipSet}
+          onShip={shipSelected}
           shipping={shipping}
           shipError={shipError}
           canShip={canShip}
+          plan={shipPlan ?? null}
         />
       )}
     </div>
+  );
+}
+
+/**
+ * The allowance read behind the transaction count. Keyed on the selection, so
+ * unchecking a strategy that was the only reason a token needed approving
+ * updates the count too. `null` while it is in flight — the screen says
+ * "checking" rather than promising a number it has not read yet.
+ */
+function useShipPlan(args: {
+  inputs: UiRecommendation["shipInputs"];
+  account: Address | undefined;
+  publicClient: PublicClient | undefined;
+  walletClient: WalletClient | undefined;
+}) {
+  const { inputs, account, publicClient, walletClient } = args;
+  return useQuery<ShipPlan>({
+    queryKey: [
+      "ship-plan",
+      account,
+      Boolean(walletClient),
+      inputs.map((i) => i.strategyHash).join(","),
+    ],
+    enabled: Boolean(account && publicClient && inputs.length > 0),
+    queryFn: () =>
+      planShip({
+        inputs,
+        account: account!,
+        publicClient: publicClient!,
+        walletClient,
+      }),
+  });
+}
+
+/**
+ * The honest transaction count. Aqua pulls the maker's ERC20 only at fill time,
+ * so a first-time approval is not what makes `ship()` succeed — it is what makes
+ * the shipped position fillable — but it is still a signature, and saying "one
+ * signature" while queueing two would be a lie the user discovers in their
+ * wallet.
+ */
+function PlanNote({ plan }: { plan: ShipPlan | null }) {
+  if (!plan) {
+    return (
+      <p className="mt-[5px] text-xs text-muted-3">Checking allowances…</p>
+    );
+  }
+  if (plan.signatures === 1) {
+    return (
+      <p className="mt-[5px] text-xs text-muted-3">
+        {plan.atomic
+          ? "One transaction — the approval rides along in the same EIP-5792 batch."
+          : "One transaction — Aqua is already approved for these tokens."}
+      </p>
+    );
+  }
+  return (
+    <p className="mt-[5px] text-xs text-muted-3">
+      {plan.signatures} transactions — your wallet cannot batch, so{" "}
+      {plan.approvals.length === 1 ? "an approval" : `${plan.approvals.length} approvals`}{" "}
+      must be signed first. Aqua pulls the tokens only when a taker fills.
+    </p>
   );
 }
 
@@ -366,20 +474,27 @@ function ComposingCard({ step }: { step: number }) {
 
 function RecommendationSet({
   rec,
+  selected,
+  onToggle,
   onDecline,
   onShip,
   shipping,
   shipError,
   canShip,
+  plan,
 }: {
   rec: UiRecommendation;
+  selected: number[];
+  onToggle: (index: number) => void;
   onDecline: () => void;
   onShip: () => void;
   shipping: boolean;
   shipError: string | null;
   canShip: boolean;
+  plan: ShipPlan | null;
 }) {
   const n = rec.strategies.length;
+  const chosen = selected.length;
 
   return (
     <section className="mt-8 animate-fade">
@@ -390,8 +505,11 @@ function RecommendationSet({
           </h2>
           <p className="mt-[5px] text-[12.5px] text-muted">
             {rec.provenance === "ENCLAVE"
-              ? "Signed in the enclave and validated. Accept the set and it ships as one signature."
-              : `Composed from a template seed — ${rec.reason ?? "sealed inference did not produce this"}. Accept the set and it ships as one signature.`}
+              ? "Signed in the enclave and validated. "
+              : `Composed from a template seed — ${rec.reason ?? "sealed inference did not produce this"}. `}
+            {n === 1
+              ? "Ship it and it goes out as one signature."
+              : "Choose which ones to ship — whatever you keep goes out in one signature."}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -427,18 +545,35 @@ function RecommendationSet({
 
       <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(400px,1fr))]">
         {rec.strategies.map((s, i) => (
-          <RecommendationCard key={`${s.templateId}-${i}`} strategy={s} />
+          <RecommendationCard
+            key={`${s.templateId}-${i}`}
+            strategy={s}
+            selected={selected.includes(i)}
+            onToggle={() => onToggle(i)}
+            disabled={shipping}
+          />
         ))}
       </div>
 
       <div className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-[18px] border border-glass-line bg-card px-6 py-5 shadow-[var(--shadow-sm)]">
         <div>
           <p className="text-[13.5px] text-text-2">
-            {n === 1 ? "The strategy ships" : n === 2 ? "Both strategies ship" : `All ${n} strategies ship`}{" "}
-            in a single{" "}
-            <span className="font-mono text-[12.5px]">Multicall</span> — one
-            signature.
+            {chosen === 0 ? (
+              "Nothing selected — pick at least one strategy to ship."
+            ) : (
+              <>
+                {chosen === n
+                  ? chosen === 1
+                    ? "The strategy ships"
+                    : `All ${n} strategies ship`
+                  : `${chosen} of ${n} ship`}{" "}
+                in a single{" "}
+                <span className="font-mono text-[12.5px]">Multicall</span> — one
+                signature.
+              </>
+            )}
           </p>
+          {chosen > 0 && <PlanNote plan={plan} />}
           {/* Declining is a normal outcome — never styled as failure. */}
           <p className="mt-[5px] text-xs text-muted-3">
             Declining is a normal outcome; nothing has been sent anywhere yet.
@@ -470,10 +605,14 @@ function RecommendationSet({
           </button>
           <button
             onClick={onShip}
-            disabled={!rec.validation.ok || shipping || !canShip}
+            disabled={!rec.validation.ok || shipping || !canShip || chosen === 0}
             className="rounded-[10px] bg-ink px-6 py-[13px] text-[15px] font-medium text-white shadow-[var(--shadow)] transition-colors hover:bg-ink-2 disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted disabled:shadow-[inset_0_0_0_1px_var(--border)]"
           >
-            {shipping ? "Shipping…" : "Ship — 1 signature"}
+            {shipping
+              ? "Shipping…"
+              : chosen === 0
+                ? "Ship"
+                : `Ship ${chosen === n ? "" : `${chosen} `}— ${plan?.signatures ?? 1} signature${(plan?.signatures ?? 1) === 1 ? "" : "s"}`}
           </button>
         </div>
       </div>
@@ -481,13 +620,29 @@ function RecommendationSet({
   );
 }
 
-function RecommendationCard({ strategy }: { strategy: UiStrategy }) {
+function RecommendationCard({
+  strategy,
+  selected,
+  onToggle,
+  disabled,
+}: {
+  strategy: UiStrategy;
+  selected: boolean;
+  onToggle: () => void;
+  disabled: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="flex flex-col gap-4 rounded-[18px] border border-glass-line bg-card p-[22px] shadow-[var(--shadow-sm)]">
+    <div
+      className={`flex flex-col gap-4 rounded-[18px] border bg-card p-[22px] shadow-[var(--shadow-sm)] transition-colors ${
+        selected
+          ? "border-aqua-line ring-1 ring-aqua-line"
+          : "border-glass-line opacity-60"
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <div className="font-mono text-[11px] text-muted">
             {strategy.templateLabel}
           </div>
@@ -497,6 +652,22 @@ function RecommendationCard({ strategy }: { strategy: UiStrategy }) {
         </div>
         <RiskChip risk={strategy.risk} />
       </div>
+
+      {/* The choice itself. A strategy the user unchecks is simply not shipped
+          — its amounts are never moved onto the ones that are. */}
+      <button
+        onClick={onToggle}
+        disabled={disabled}
+        aria-pressed={selected}
+        className={`flex items-center gap-2.5 self-start rounded-lg border px-3 py-2 text-[12.5px] transition-colors disabled:cursor-not-allowed ${
+          selected
+            ? "border-aqua-line bg-aqua-soft text-aqua-text"
+            : "border-border bg-surface-2 text-muted hover:border-muted hover:text-text"
+        }`}
+      >
+        <span className="font-mono text-[11px]">{selected ? "✓" : "＋"}</span>
+        {selected ? "Selected to ship" : "Ship this one"}
+      </button>
 
       <div className="grid grid-cols-2 gap-3 border-t border-hairline pt-4">
         {strategy.facts.map((fact) => (
