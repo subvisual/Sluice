@@ -115,7 +115,7 @@ const POWERED_BY = [
 
 function PoweredBy() {
   return (
-    <div className="flex items-center gap-3 px-2">
+    <div className="mt-auto flex items-center gap-3 px-2">
       <span className="font-mono text-[9px] tracking-[0.12em] text-muted-3">
         POWERED BY
       </span>
