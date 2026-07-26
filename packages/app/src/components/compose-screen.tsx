@@ -20,6 +20,7 @@ import {
 } from "@/lib/compose/from-server";
 import type { TokenSelection } from "@/lib/compose/types";
 import type { ServerComposeResult } from "@sluice/arbitration-sdk/serve";
+import { availableTokens } from "@/lib/available-tokens";
 import { shipRecommendation } from "@/lib/ship";
 import { TOKENS } from "@/lib/tokens";
 import { useTokenBalances } from "@/lib/use-token-balances";
@@ -47,6 +48,14 @@ export function ComposeScreen() {
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
   const { balances, isLoading: balancesLoading } = useTokenBalances(address);
+  // The picker offers what this wallet can actually compose with. Hidden-on-zero
+  // is why `selections` must derive from `shown` and not from TOKENS: a token
+  // that drops to a confirmed zero after a refetch leaves the list, and its row
+  // state would otherwise keep it in the budget the user can no longer see.
+  const available = useMemo(
+    () => availableTokens(TOKENS, balances),
+    [balances],
+  );
   // Ship needs both clients to sign/send; `walletClient` in particular
   // resolves asynchronously right after connecting, so there's a real (if
   // short) window where a validated recommendation exists but shipping would
@@ -74,7 +83,7 @@ export function ComposeScreen() {
 
   const malformed = useMemo(
     () =>
-      TOKENS.filter((t) => {
+      available.shown.filter((t) => {
         const row = rows[t.address];
         return (
           row?.selected &&
@@ -82,13 +91,13 @@ export function ComposeScreen() {
           parseAmount(row.input, t.decimals) === null
         );
       }),
-    [rows],
+    [rows, available],
   );
 
   // Malformed rows are excluded — there is no bigint to carry them in.
   const selections: TokenSelection[] = useMemo(
     () =>
-      TOKENS.filter(
+      available.shown.filter(
         (t) =>
           rows[t.address]?.selected &&
           !malformed.some((m) => m.address === t.address),
@@ -96,7 +105,7 @@ export function ComposeScreen() {
         token: t.address,
         amount: parseAmount(rows[t.address]?.input ?? "", t.decimals) ?? 0n,
       })),
-    [rows, malformed],
+    [rows, malformed, available],
   );
 
   const built = useMemo(
@@ -108,9 +117,9 @@ export function ComposeScreen() {
         prompt,
         selections,
         balances,
-        tokens: TOKENS,
+        tokens: available.shown,
       }),
-    [address, chainId, prompt, selections, balances],
+    [address, chainId, prompt, selections, balances, available],
   );
 
   const issues: RequestIssue[] = useMemo(() => {
@@ -235,7 +244,10 @@ export function ComposeScreen() {
         />
 
         <TokenPicker
-          tokens={TOKENS}
+          tokens={available.shown}
+          hiddenZero={available.hiddenZero}
+          unknown={available.unknown}
+          isConnected={isConnected}
           rows={rows}
           balances={balances}
           balancesLoading={balancesLoading && isConnected}

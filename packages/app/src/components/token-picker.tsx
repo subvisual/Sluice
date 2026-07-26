@@ -9,12 +9,20 @@ export type PickerRow = { selected: boolean; input: string };
 
 export function TokenPicker({
   tokens,
+  hiddenZero,
+  unknown,
+  isConnected,
   rows,
   balances,
   balancesLoading,
   onChange,
 }: {
   tokens: TokenMeta[];
+  /** Read as exactly zero — named so the user knows why the list is short. */
+  hiddenZero: TokenMeta[];
+  /** Not observed. Shown, but the empty state must not blame the wallet. */
+  unknown: TokenMeta[];
+  isConnected: boolean;
   rows: Record<Address, PickerRow>;
   balances: Record<Address, bigint | undefined>;
   balancesLoading: boolean;
@@ -42,6 +50,12 @@ export function TokenPicker({
   // The first row-level problem, echoed in prose under the list.
   const rowError = derived.find((d) => d.problem)?.problem ?? null;
 
+  // Two tokens, and no more: one strategy is one pair, all the way down to
+  // swapvm's tokens: [string, string]. Checked rows stay clickable so swapping
+  // does not require clearing first.
+  const selectedCount = derived.filter((d) => d.row.selected).length;
+  const atCap = selectedCount >= 2;
+
   const rendered = derived.map(({ token, row, balance, problem }) => {
     const bad = problem !== null;
 
@@ -60,10 +74,11 @@ export function TokenPicker({
           <input
             type="checkbox"
             checked={row.selected}
+            disabled={atCap && !row.selected}
             onChange={(e) =>
               onChange(token.address, { ...row, selected: e.target.checked })
             }
-            className="h-4 w-4 cursor-pointer accent-aqua"
+            className="h-4 w-4 cursor-pointer accent-aqua disabled:cursor-not-allowed disabled:opacity-30"
           />
           <span className="flex items-center gap-2.5">
             <TokenIcon address={token.address} symbol={token.symbol} size={28} />
@@ -136,11 +151,32 @@ export function TokenPicker({
         and no further. Tokens never leave your wallet.
       </p>
 
-      <div className="flex flex-col gap-2.5">{rendered}</div>
-
-      {rowError && (
-        <p className="mt-3 text-xs text-danger">{rowError}</p>
+      {tokens.length === 0 ? (
+        <EmptyPicker
+          isConnected={isConnected}
+          hiddenZero={hiddenZero}
+          unknown={unknown}
+        />
+      ) : (
+        <div className="flex flex-col gap-2.5">{rendered}</div>
       )}
+
+      {atCap && (
+        <p className="mt-3 text-[11.5px] text-muted-2">
+          Two tokens per request — one strategy is one pair.
+        </p>
+      )}
+
+      {hiddenZero.length > 0 && tokens.length > 0 && (
+        <p className="mt-2 text-[11.5px] text-muted-2">
+          {hiddenZero.length} supported{" "}
+          {hiddenZero.length === 1 ? "token" : "tokens"} hidden — you hold none
+          of {hiddenZero.length === 1 ? "it" : "them"} (
+          {hiddenZero.map((t) => t.symbol).join(", ")}).
+        </p>
+      )}
+
+      {rowError && <p className="mt-3 text-xs text-danger">{rowError}</p>}
     </section>
   );
 }
@@ -156,4 +192,36 @@ function exactInput(balance: bigint, decimals: number) {
   const whole = s.slice(0, -decimals);
   const fraction = s.slice(-decimals).replace(/0+$/, "");
   return fraction ? `${whole}.${fraction}` : whole;
+}
+
+/**
+ * Nothing to offer — and which of three reasons it is, never a guess.
+ *
+ * "You hold none of these" and "we could not read your balances" are different
+ * statements, and only one of them is ever true at a time. Saying the first
+ * when the second is the case is the failure this whole filter is built to
+ * avoid.
+ */
+function EmptyPicker({
+  isConnected,
+  hiddenZero,
+  unknown,
+}: {
+  isConnected: boolean;
+  hiddenZero: TokenMeta[];
+  unknown: TokenMeta[];
+}) {
+  const message = !isConnected
+    ? "Connect a wallet to see what you can compose with."
+    : unknown.length > 0
+      ? "Could not read your balances — nothing is hidden, we just do not know yet. Check the RPC in the header."
+      : `None of the supported tokens are in this wallet: ${hiddenZero
+          .map((t) => t.symbol)
+          .join(", ")}.`;
+
+  return (
+    <div className="rounded-[10px] border border-dashed border-border px-4 py-6 text-center text-[12.5px] text-muted">
+      {message}
+    </div>
+  );
 }
