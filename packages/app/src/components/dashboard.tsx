@@ -51,7 +51,7 @@ export function Dashboard() {
         isLoading ? (
           <BookLoading />
         ) : (
-          <BookUnavailable />
+          <BookUnavailable onDemo={showDemo} />
         )
       ) : positions.length === 0 ? (
         <EmptyState onDemo={showDemo} />
@@ -242,8 +242,14 @@ function BookLoading() {
   );
 }
 
-/** The book subgraph read failed or has not run — unknown is not empty. */
-function BookUnavailable() {
+/**
+ * The book subgraph read failed, or nothing is connected — unknown is not
+ * empty. This is also the only state a disconnected wallet ever renders, so
+ * "Show demo positions" has to be reachable from here too, not only from the
+ * empty state: `demo-book.ts`'s whole purpose is showing every screen
+ * without depending on the real book (Task 6 review finding 1).
+ */
+function BookUnavailable({ onDemo }: { onDemo: () => void }) {
   return (
     <section className="rounded-[18px] border border-glass-line bg-card-2 p-8 shadow-[var(--shadow-sm)]">
       <p className="font-mono text-[11px] tracking-[0.1em] text-muted-2">
@@ -254,6 +260,12 @@ function BookUnavailable() {
         not the same as an empty one. Anything you have shipped is still live
         on-chain and unwinds at its deadline as normal.
       </p>
+      <button
+        onClick={onDemo}
+        className="mt-5 rounded-[10px] border border-glass-line bg-card-2 px-5 py-[13px] text-sm text-muted shadow-[var(--shadow-sm)] transition-colors hover:border-muted hover:text-text"
+      >
+        Show demo positions
+      </button>
     </section>
   );
 }

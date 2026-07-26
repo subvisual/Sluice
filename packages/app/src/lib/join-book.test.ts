@@ -165,6 +165,11 @@ test("joinBook produces a reduced Position for a live strategy with no cache mat
   assert.equal(p.strategyHash, HASH_B);
   assert.equal(p.templateLabel, "Aqua strategy");
   assert.equal(p.risk, null);
+  // Not "TEMPLATE_FALLBACK": a cache-miss position may be a legitimate
+  // ENCLAVE-verified strategy this browser simply has no local record of
+  // (shipped elsewhere, or before the cache existed) — never claim "not
+  // signed" for that (Task 6 review finding 2).
+  assert.equal(p.provenance, null);
   assert.deepEqual(p.slots, []);
   assert.equal(p.pair, "WETH");
   assert.equal(p.legs.length, 1);

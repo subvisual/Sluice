@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -44,8 +45,15 @@ import type { UiRecommendation } from "./compose/from-server";
 
 export type RiskRating = "low" | "medium" | "high";
 
-/** Who produced the recommendation this position came from — F2 §4. */
-export type Provenance = "ENCLAVE" | "TEMPLATE_FALLBACK";
+/**
+ * Who produced the recommendation this position came from — F2 §4.
+ * `null` is distinct from `"TEMPLATE_FALLBACK"`: it means this browser has no
+ * local record at all (a reduced/cache-miss position — shipped elsewhere, or
+ * before this browser cached it), not that the strategy is known to be
+ * unsigned. Never render `null` as "not signed" — that overclaims something
+ * we cannot check either way (Task 6 review finding 2).
+ */
+export type Provenance = "ENCLAVE" | "TEMPLATE_FALLBACK" | null;
 
 export type PositionLeg = {
   token: Address;
@@ -153,8 +161,18 @@ export function BookProvider({ children }: { children: ReactNode }) {
   // returns `{}` — no crash, just an empty cache until the client takes over.
   const [cache, setCache] = useState<StrategyCache>(() => loadCache());
 
-  const [fetchedBook, setFetchedBook] = useState<UserBook | null>(null);
-  const [fetchFailed, setFetchFailed] = useState(false);
+  // Tagged with the address it was resolved for — the join below only trusts
+  // this when `bookFetch.address === address`, so switching accounts can
+  // never show the previous account's positions (Task 6 review finding 3):
+  // the moment `address` changes, this is stale by construction and treated
+  // exactly like "not fetched yet", not like real data for the new address.
+  // `book: null` inside a resolved entry means the read failed (still
+  // distinct from "not fetched yet", which is `bookFetch` not matching
+  // `address` at all, or being `null`).
+  const [bookFetch, setBookFetch] = useState<{
+    address: Address;
+    book: UserBook | null;
+  } | null>(null);
   const [refetchTick, setRefetchTick] = useState(0);
 
   // Optimistic entries this session already knows about but the subgraph may
@@ -163,7 +181,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
   // the real read catches up the optimistic copy quietly disappears.
   const [optimistic, setOptimistic] = useState<Position[]>([]);
   // Local-only dock overlay; a real dock is out of scope for this build
-  // (Wiring §10) — `refetch` clears it rather than let it drift forever.
+  // (Wiring §10) — `refetch` resets it, and so does a genuine account switch.
   const [dockOverrides, setDockOverrides] = useState<Record<string, number>>({});
 
   // Persist on every change. The very first run just writes back whatever
@@ -177,13 +195,27 @@ export function BookProvider({ children }: { children: ReactNode }) {
     }
   }, [cache]);
 
+  // Tracks the address the CURRENT `optimistic`/`dockOverrides` state belongs
+  // to, purely to detect a genuine account switch inside the effect below
+  // (comparing a ref, not React state — this assignment is not a render-time
+  // side effect the `set-state-in-render` check cares about). Reset to
+  // `undefined` on disconnect so reconnecting — even to the same address —
+  // starts from a clean local overlay rather than assuming continuity.
+  const lastAddressRef = useRef<Address | undefined>(undefined);
+
   useEffect(() => {
     // Nothing to synchronize when there is no connected address — deliberately
     // no setState here. `positions`/`isLoading` below read `isConnected`
     // directly instead of needing this effect to reset stored state, which
     // keeps this branch a plain early return rather than state we'd otherwise
     // have to derive during render anyway.
-    if (!isConnected || !address) return;
+    if (!isConnected || !address) {
+      lastAddressRef.current = undefined;
+      return;
+    }
+
+    const isAccountSwitch = lastAddressRef.current !== address;
+    lastAddressRef.current = address;
 
     let cancelled = false;
 
@@ -193,19 +225,21 @@ export function BookProvider({ children }: { children: ReactNode }) {
     // for — as opposed to a top-level `setState` with nothing external behind
     // it, which the compiler's `set-state-in-effect` check (rightly) flags.
     const run = async () => {
-      setFetchFailed(false);
+      // Only on a genuine address change (not a same-address `refetch()`) —
+      // a different account's just-shipped/demo overlay must not bleed into
+      // this one (Task 6 review finding 3). `refetch()` alone must NOT clear
+      // `optimistic`: a just-shipped position needs to survive the refetch it
+      // itself triggers, before the subgraph has necessarily indexed it yet.
+      if (isAccountSwitch) setOptimistic([]);
       setDockOverrides({});
       try {
         const res = await fetch(`/api/book?maker=${address}`);
         if (!res.ok) throw new Error(`book fetch failed with status ${res.status}`);
         const book = (await res.json()) as UserBook;
-        if (!cancelled) setFetchedBook(book);
+        if (!cancelled) setBookFetch({ address, book });
       } catch {
         // Unavailable, not empty — `joinBook(null, …)` preserves that.
-        if (!cancelled) {
-          setFetchedBook(null);
-          setFetchFailed(true);
-        }
+        if (!cancelled) setBookFetch({ address, book: null });
       }
     };
     run();
@@ -217,12 +251,15 @@ export function BookProvider({ children }: { children: ReactNode }) {
     // changes on `refetch()` when `address`/`isConnected` have not.
   }, [address, isConnected, refetchTick]);
 
-  // Connected, no result yet, hasn't failed yet — i.e. the *first* read for
-  // this address is still in flight. A background refetch (after shipping)
-  // does not re-trigger this once `fetchedBook` is already populated, so it
-  // never flashes the loading state over positions already on screen.
+  // Only trust a `bookFetch` resolved for the address connected RIGHT NOW.
+  // `undefined` = nothing resolved yet for this exact address (first read in
+  // flight, or an address switch invalidated the previous one); `null` =
+  // resolved, but the read failed; a `UserBook` = resolved successfully.
+  const currentBook: UserBook | null | undefined =
+    address && bookFetch?.address === address ? bookFetch.book : undefined;
+
   const isLoading =
-    isConnected && Boolean(address) && fetchedBook === null && !fetchFailed;
+    isConnected && Boolean(address) && currentBook === undefined;
 
   const refetch = useCallback(() => setRefetchTick((t) => t + 1), []);
 
@@ -279,24 +316,35 @@ export function BookProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const positions = useMemo(() => {
-    // Not connected → nothing to read for; unavailable, same as a failed
-    // fetch. Checked directly rather than mirrored into stored state — a
-    // stale `fetchedBook` from a previous connection is simply ignored here.
-    if (!isConnected || !address) return null;
+    // Not connected, or connected but nothing resolved for this address yet
+    // (including "loading" and "an address switch invalidated the previous
+    // read") → nothing real to join. Checked directly rather than mirrored
+    // into stored state — a stale read from a previous address is simply
+    // ignored here, never surfaced under the new one (Task 6 review finding 3).
+    const bookForJoin = isConnected && address && currentBook !== undefined ? currentBook : null;
+    const joined = joinBook(bookForJoin, cache);
 
-    const joined = joinBook(fetchedBook, cache);
-    if (joined === null) return null;
+    // `joined === null` alone would mean "unavailable" — but the demo
+    // affordance and a just-shipped position both live in `optimistic`
+    // regardless of whether the real book could be read at all, and BOTH
+    // are reachable from the unavailable/disconnected states now (Task 6
+    // review finding 1: "Show demo positions" has to work from
+    // `BookUnavailable`, not only from the empty state). So an unavailable
+    // real book with something in the optimistic overlay is not "unknown"
+    // any more — it is exactly that overlay.
+    if (joined === null && optimistic.length === 0) return null;
 
-    const joinedHashes = new Set(joined.map((p) => p.strategyHash));
+    const joinedList = joined ?? [];
+    const joinedHashes = new Set(joinedList.map((p) => p.strategyHash));
     const extra = optimistic.filter((p) => !joinedHashes.has(p.strategyHash));
-    const merged = [...extra, ...joined];
+    const merged = [...extra, ...joinedList];
 
     return merged.map((p) =>
       dockOverrides[p.id] !== undefined
         ? { ...p, dockedAt: dockOverrides[p.id] }
         : p,
     );
-  }, [isConnected, address, fetchedBook, cache, optimistic, dockOverrides]);
+  }, [isConnected, address, currentBook, cache, optimistic, dockOverrides]);
 
   const value = useMemo(
     () => ({ positions, isLoading, refetch, recordShipped, dock, showDemo }),

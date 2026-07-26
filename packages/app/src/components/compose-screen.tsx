@@ -47,6 +47,12 @@ export function ComposeScreen() {
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
   const { balances, isLoading: balancesLoading } = useTokenBalances(address);
+  // Ship needs both clients to sign/send; `walletClient` in particular
+  // resolves asynchronously right after connecting, so there's a real (if
+  // short) window where a validated recommendation exists but shipping would
+  // silently no-op. The Ship button must not be clickable during that window
+  // (Task 6 review finding 4) — folded into `RecommendationSet`'s `disabled`.
+  const canShip = Boolean(walletClient && publicClient);
 
   const [prompt, setPrompt] = useState("");
   const [rows, setRows] = useState<Record<Address, PickerRow>>({});
@@ -292,6 +298,7 @@ export function ComposeScreen() {
           onShip={shipSet}
           shipping={shipping}
           shipError={shipError}
+          canShip={canShip}
         />
       )}
     </div>
@@ -364,12 +371,14 @@ function RecommendationSet({
   onShip,
   shipping,
   shipError,
+  canShip,
 }: {
   rec: UiRecommendation;
   onDecline: () => void;
   onShip: () => void;
   shipping: boolean;
   shipError: string | null;
+  canShip: boolean;
 }) {
   const n = rec.strategies.length;
 
@@ -439,6 +448,11 @@ function RecommendationSet({
               {shipError} — nothing was shipped.
             </p>
           )}
+          {rec.validation.ok && !canShip && !shipping && (
+            <p className="mt-[5px] text-xs text-muted-3">
+              Waiting for your wallet client to be ready…
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2.5">
           <button
@@ -450,7 +464,7 @@ function RecommendationSet({
           </button>
           <button
             onClick={onShip}
-            disabled={!rec.validation.ok || shipping}
+            disabled={!rec.validation.ok || shipping || !canShip}
             className="rounded-[10px] bg-ink px-6 py-[13px] text-[15px] font-medium text-white shadow-[var(--shadow)] transition-colors hover:bg-ink-2 disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted disabled:shadow-[inset_0_0_0_1px_var(--border)]"
           >
             {shipping ? "Shipping…" : "Ship — 1 signature"}

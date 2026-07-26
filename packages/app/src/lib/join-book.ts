@@ -111,10 +111,13 @@ export function toPosition(
     deadline: Math.floor(Date.now() / 1000) + UNKNOWN_DEADLINE_SECONDS,
     dockedAt: null,
     risk: null,
-    // Neither value is literally true (we have no signature to check either
-    // way); TEMPLATE_FALLBACK is the one that never overclaims enclave
-    // verification for a strategy we cannot vouch for.
-    provenance: "TEMPLATE_FALLBACK",
+    // `null`, not "TEMPLATE_FALLBACK": a cache-miss position may well be a
+    // legitimate ENCLAVE-verified strategy shipped from another device, or
+    // before this browser had a cache entry for it — that's routine, not
+    // rare. Claiming "TEMPLATE_FALLBACK" (rendered elsewhere as "not signed")
+    // would be a false claim about a strategy we simply have no local record
+    // of either way (Task 6 review finding 2).
+    provenance: null,
     slots: [],
   };
 }
