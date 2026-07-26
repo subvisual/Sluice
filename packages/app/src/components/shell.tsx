@@ -1,8 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { DEV_AUTOCONNECT } from "@/lib/dev-wallet";
 import type { RpcMode } from "@/lib/network";
 import { ConnectButton } from "./connect-button";
 import { NetworkToggle } from "./network-toggle";
@@ -39,7 +41,7 @@ export function AppShell({
               </span>
             </p>
             <div className="ml-auto flex items-center justify-end gap-3.5">
-              <NetworkToggle mode={mode} />
+              <NetworkToggle mode={mode} pinned={DEV_AUTOCONNECT} />
               <ConnectButton mode={mode} />
             </div>
           </header>
@@ -66,10 +68,14 @@ function Rail() {
   return (
     <aside className="box-border flex h-full w-[236px] min-h-0 flex-none flex-col gap-[22px] overflow-y-auto border-r border-glass-edge bg-glass-3 px-[14px] py-[22px]">
       <div className="flex items-center gap-2.5 pt-0.5 px-2">
-        {/* Placeholder tile for the real mark. */}
-        <div className="flex h-7 w-7 items-center justify-center rounded-[9px] bg-aqua text-sm text-white shadow-[var(--shadow-sm)]">
-          ≡
-        </div>
+        <Image
+          src="/logo.png"
+          alt="Sluice"
+          width={28}
+          height={28}
+          priority
+          className="h-7 w-7 rounded-[9px] shadow-[var(--shadow-sm)]"
+        />
         <span className="text-[17px] font-semibold tracking-[-0.02em] text-text">
           Sluice
         </span>
@@ -114,7 +120,7 @@ const POWERED_BY = [
 
 function PoweredBy() {
   return (
-    <div className="flex items-center gap-3 px-2">
+    <div className="mt-auto flex items-center gap-3 px-2">
       <span className="font-mono text-[9px] tracking-[0.12em] text-muted-3">
         POWERED BY
       </span>

@@ -28,6 +28,19 @@ export const DEV_ACCOUNT: Address | null = (() => {
 
 export const DEV_CONNECTOR_ID = "sluice-dev-fork";
 
+/**
+ * Connect that account on page load instead of waiting for a click, and show it
+ * in the header even when a Reown projectId would otherwise put the wallet modal
+ * there. For `scripts/demo-up.sh`, where the wallet is a given and the demo
+ * starts at the sentence — never for anything a real wallet touches, which is
+ * why it is a second, explicit variable rather than a consequence of the first.
+ */
+export const DEV_AUTOCONNECT =
+  DEV_ACCOUNT !== null &&
+  ["1", "true"].includes(
+    process.env.NEXT_PUBLIC_DEV_AUTOCONNECT?.trim().toLowerCase() ?? "",
+  );
+
 export function devWallet(params: { address: Address; rpcUrl: string }) {
   const { address, rpcUrl } = params;
 

@@ -26,8 +26,9 @@ subgraph/build/
 subgraph/generated/
 subgraph/tests/.bin/
 subgraph/tests/.latest.json
-# local fork stack artifacts (anvil.log is covered by *.log)
+# local fork stack artifacts (anvil.log and demo.log are covered by *.log)
 subgraph/local/.anvil.pid
+packages/app/.demo-app.pid
 subgraph/local/networks-local.json
 subgraph/subgraph.local.yaml
 

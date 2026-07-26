@@ -20,7 +20,13 @@ function applyMode(next: RpcMode) {
  * writes the cookie and reloads: the wagmi/AppKit config is built once per
  * page load, and rebuilding it live is a known source of stale-client bugs.
  */
-export function NetworkToggle({ mode }: { mode: RpcMode }) {
+export function NetworkToggle({
+  mode,
+  pinned = false,
+}: {
+  mode: RpcMode;
+  pinned?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -47,6 +53,21 @@ export function NetworkToggle({ mode }: { mode: RpcMode }) {
   };
 
   const current = MODES.find((m) => m.mode === mode) ?? MODES[0];
+
+  // Pinned (the demo): still say which venue, but offer no choice. Leaving the
+  // dropdown live would let a click write a cookie that layout.tsx then ignores
+  // — a control that looks broken is worse than one that isn't there.
+  if (pinned) {
+    return (
+      <span
+        title="Pinned to the local fork: the connected account only exists on anvil. Unset NEXT_PUBLIC_DEV_AUTOCONNECT to choose the venue."
+        className="flex items-center gap-2 rounded-[9px] border border-glass-line bg-card-2 px-2.5 py-[7px] font-mono text-[10px] tracking-[0.06em] text-text shadow-[var(--shadow-sm)]"
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-aqua" />
+        <span>{current.label}</span>
+      </span>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2.5">

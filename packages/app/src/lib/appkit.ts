@@ -1,6 +1,7 @@
 import { createAppKit } from "@reown/appkit/react";
 import { base } from "@reown/appkit/networks";
 import type { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
+import { DEV_AUTOCONNECT } from "./dev-wallet";
 import { rpcUrlFor, type RpcMode } from "./network";
 import { REOWN_PROJECT_ID } from "./wagmi";
 
@@ -14,10 +15,12 @@ let initialized = false;
  * was set). The latched server instance keeps the first request's mode, fine
  * because no SSR'd markup depends on AppKit's mode-specific internals. Without a
  * projectId this no-ops; the header renders a note instead of a connect button
- * (connect-button.tsx), so AppKit hooks are never reached.
+ * (connect-button.tsx), so AppKit hooks are never reached. Autoconnect no-ops it
+ * for the same reason — the header is the fork account's — which spares the demo
+ * an AppKit polling WalletConnect for a wallet it was never told about.
  */
 export function initAppKit(adapter: WagmiAdapter, mode: RpcMode): void {
-  if (initialized || !REOWN_PROJECT_ID) {
+  if (initialized || !REOWN_PROJECT_ID || DEV_AUTOCONNECT) {
     return;
   }
   initialized = true;

@@ -70,7 +70,6 @@ export const SWAPVM_ROUTER_VERSION = TABLE.routerVersion;
 export const SWAPVM_ROUTER = TABLE.router;
 
 export const OP: Readonly<Record<string, number>> = Object.freeze({ ...TABLE.opcodes });
-export const ARG_WIDTHS: Readonly<Record<string, number>> = Object.freeze({ ...TABLE.argWidths });
 
 /// 1e9 = 100%. Not 1e4 — 0.3% is 3_000_000.
 export const FEE_BPS_ONE = TABLE.feeBpsOne;

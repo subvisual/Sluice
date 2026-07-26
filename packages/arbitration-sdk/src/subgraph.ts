@@ -18,9 +18,9 @@ export const DEFAULT_BASE_SUBGRAPH =
 	"https://api.studio.thegraph.com/query/1756952/aqua-base/version/latest";
 
 // The local self-hosted graph-node against an anvil Base fork (subgraph/local,
-// `make fork-up`). Only this one sees positions WE ship on the fork.
-export const LOCAL_FORK_SUBGRAPH =
-	"http://localhost:8000/subgraphs/name/sluice/aqua-local";
+// `make fork-up`) is the only one that sees positions WE ship on the fork. Pass
+// it in via SLUICE_SUBGRAPH_URL — no constant, nothing here may branch on it:
+//   http://localhost:8000/subgraphs/name/sluice/aqua-local
 
 // Resolve the endpoint: SLUICE_SUBGRAPH_URL overrides, else deployed Base.
 export function subgraphUrl(): string {

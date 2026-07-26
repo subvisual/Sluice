@@ -1,20 +1,31 @@
 "use client";
 
 import { useAppKit } from "@reown/appkit/react";
+import { useEffect, useRef } from "react";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { EXPECTED_CHAIN_ID } from "@/lib/compose/constants";
-import { DEV_ACCOUNT, DEV_CONNECTOR_ID } from "@/lib/dev-wallet";
+import {
+  DEV_ACCOUNT,
+  DEV_AUTOCONNECT,
+  DEV_CONNECTOR_ID,
+} from "@/lib/dev-wallet";
 import { rpcUrlFor, type RpcMode } from "@/lib/network";
 import { REOWN_PROJECT_ID } from "@/lib/wagmi";
 
 export function ConnectButton({ mode }: { mode: RpcMode }) {
+  // Every branch here turns on module constants, so the choice is fixed for the
+  // life of the page and the hooks below it never reorder.
+  //
+  // Autoconnect wins over the modal deliberately: the demo script has already
+  // decided which account this is, so offering a wallet chooser would only be a
+  // way to pick the wrong one.
+  if (DEV_ACCOUNT && (DEV_AUTOCONNECT || !REOWN_PROJECT_ID)) {
+    return <DevConnectButton mode={mode} />;
+  }
   // Degraded header, not a crash: without a projectId createAppKit never ran,
   // and useAppKit would throw — so the AppKit-using component is never mounted.
-  // The rehearsal connector does not need AppKit at all, so it still works.
   if (!REOWN_PROJECT_ID) {
-    return DEV_ACCOUNT ? (
-      <DevConnectButton mode={mode} />
-    ) : (
+    return (
       <span className="text-xs text-muted">
         NEXT_PUBLIC_REOWN_PROJECT_ID missing — wallet connect disabled
       </span>
@@ -25,10 +36,22 @@ export function ConnectButton({ mode }: { mode: RpcMode }) {
 
 /** Fork rehearsal: connect the anvil-held account, no modal. See dev-wallet.ts. */
 function DevConnectButton({ mode }: { mode: RpcMode }) {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, status } = useAccount();
   const { connect, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
   const connector = connectors.find((c) => c.id === DEV_CONNECTOR_ID);
+
+  // Once per mount, and never while wagmi is still restoring a connection from
+  // the cookie — two connects racing would leave the header flickering between
+  // the two accounts they each resolved. A user who clicks Disconnect stays
+  // disconnected: the ref is what keeps this from immediately undoing them.
+  const attempted = useRef(false);
+  useEffect(() => {
+    if (!DEV_AUTOCONNECT || attempted.current) return;
+    if (!connector || isConnected || status === "reconnecting") return;
+    attempted.current = true;
+    connect({ connector });
+  }, [connect, connector, isConnected, status]);
 
   if (isConnected && address) {
     return (

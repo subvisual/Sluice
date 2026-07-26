@@ -3,13 +3,13 @@ import { REQUEST_DEFAULTS } from "./constants";
 import type { RecommendationRequest, TokenMeta, TokenSelection } from "./types";
 
 /**
- * Building the request envelope from what the Compose screen collected, plus
- * the checks the CLIENT can honestly make.
+ * Building the request envelope (F2 §5) from what the Compose screen collected,
+ * plus the checks the CLIENT can honestly make.
  *
- * These are not the validator. Gate 1 (I1–I12) runs over the *model's output*
- * against this request; everything here runs over the *input* before anything
- * is sent, to avoid spending an inference round trip on a request that cannot
- * be satisfied.
+ * These are not the validator. Gate 1 (F2 §6, I1–I12) runs over the *model's
+ * output* against this request; everything here runs over the *input* before
+ * anything is sent, and exists only to stop us spending an inference round trip
+ * on a request that cannot be satisfied.
  */
 
 export type RequestIssue = {
@@ -101,10 +101,10 @@ export function buildRecommendationRequest(draft: RequestDraft): BuildResult {
       });
       continue;
     }
-    // Amount inputs are bounded by the wallet balance — a product affordance,
-    // NOT invariant I2. The budget is a ceiling the user declared; the live
-    // balance is a separate number checked at observedBlock. An unread balance
-    // (undefined) never blocks.
+    // Wiring §6: "amount inputs bounded by the wallet balance". This is a
+    // product affordance, NOT invariant I2 — the budget is a ceiling the user
+    // declared, and the live balance is a separate number checked at
+    // observedBlock. An unread balance (undefined) never blocks.
     const balance = draft.balances[sel.token];
     if (balance !== undefined && sel.amount > balance) {
       issues.push({
@@ -135,30 +135,6 @@ export function buildRecommendationRequest(draft: RequestDraft): BuildResult {
       budget,
       ...REQUEST_DEFAULTS,
     },
-  };
-}
-
-/**
- * JSON-safe view of the request, for display and for the record.
- *
- * `bigint` through `JSON.stringify` throws, and coercing to a JS number is a
- * silent correctness bug — amounts are decimal strings everywhere they leave
- * this process.
- */
-export function serializeRequest(request: RecommendationRequest) {
-  return {
-    user: request.user,
-    chainId: request.chainId,
-    prompt: request.prompt,
-    budget: Object.fromEntries(
-      Object.entries(request.budget).map(([token, amount]) => [
-        token,
-        amount.toString(),
-      ]),
-    ),
-    maxStrategies: request.maxStrategies,
-    maxDeadlineSec: request.maxDeadlineSec,
-    maxInferenceRetries: request.maxInferenceRetries,
   };
 }
 

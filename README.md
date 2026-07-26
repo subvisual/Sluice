@@ -82,6 +82,28 @@ Monorepo (npm workspaces):
 
 ## Running it
 
+One command brings up the whole thing — a Base fork at the pinned block, a graph-node indexing
+it, a wallet funded with 100 ETH / 10 WETH / 1000 USDC / 1 cbBTC and pre-approved to Aqua, and
+the app at [localhost:3000](http://localhost:3000) with that wallet already connected:
+
+```sh
+scripts/demo-up.sh          # needs foundry, docker compose v2, node, jq
+scripts/demo-down.sh        # stops all three: app, fork, index
+```
+
+Ctrl-C stops only the app and leaves the fork and the index up, so what you shipped survives a
+restart of the UI. `demo-down.sh` stops the lot, from any shell.
+
+Composition needs `ZG_PRIVATE_KEY` in `packages/app/.envrc` and a funded 0G ledger — without
+either it still answers, labelled `TEMPLATE_FALLBACK`. To make a shipped strategy actually fill,
+drive a taker over it:
+
+```sh
+node scripts/fork-take.mjs --maker <address> --in USDC --amount 200
+```
+
+Or run the pieces directly:
+
 ```sh
 npm install
 
