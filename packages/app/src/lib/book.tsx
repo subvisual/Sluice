@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Address, Hex } from "viem";
-import { useConnection } from "wagmi";
+import { useAccount } from "wagmi";
 import type { UserBook } from "@sluice/arbitration-sdk/subgraph";
 import { demoBook } from "./demo-book";
 import {
@@ -152,7 +152,7 @@ function loadCache(): StrategyCache {
 }
 
 export function BookProvider({ children }: { children: ReactNode }) {
-  const { address, isConnected } = useConnection();
+  const { address, isConnected } = useAccount();
 
   // Lazily hydrated from localStorage on first render, not in an effect: this
   // runs once per mount, and on the client (where the initializer actually

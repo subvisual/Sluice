@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import type { Address } from "viem";
-import { useConnection, usePublicClient, useWalletClient } from "wagmi";
+import { useAccount, usePublicClient, useWalletClient } from "wagmi";
 import { parseAmount } from "@/lib/amount";
 import { useBook } from "@/lib/book";
 import { EXPECTED_CHAIN_ID, REQUEST_DEFAULTS } from "@/lib/compose/constants";
@@ -43,7 +43,7 @@ type Phase = "idle" | "composing" | "done";
 export function ComposeScreen() {
   const router = useRouter();
   const { recordShipped, refetch } = useBook();
-  const { address, chainId, isConnected } = useConnection();
+  const { address, chainId, isConnected } = useAccount();
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
   const { balances, isLoading: balancesLoading } = useTokenBalances(address);

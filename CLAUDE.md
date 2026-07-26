@@ -102,7 +102,10 @@ Monorepo (npm workspaces):
   the serve facade behind `/api/compose`, the F3 subgraph book reader, and the
   `infer`/`compose`/`subgraph`/`fund` CLIs
 - **`packages/app`** — Next.js compose screen + `POST /api/compose` (bundles the SDK; the 0G key
-  stays server-side)
+  stays server-side). Wallet connect is **Reown AppKit**, which pins the app to **wagmi 2.x** (the
+  adapter does not support wagmi 3 — don't bump it). The header dropdown switches the **read path**
+  between the local fork and Base mainnet via a `sluice-rpc` cookie (server-readable — SSR and
+  client must agree); it is **not a mainnet guard**
 - **`contracts/`** — Foundry only (no Hardhat): `SluiceStrategy.sol`, `Ship.s.sol`/`Take.s.sol`,
   three fork test suites. The taker is `contracts/script/Take.s.sol` driving a funded EOA —
   deliberately **no taker contract**

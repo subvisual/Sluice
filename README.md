@@ -53,7 +53,9 @@ Running so far:
   suites against the deployed Aqua/SwapVM.
 - The **Next.js app** (`packages/app`): the compose screen behind a real `POST /api/compose` —
   signed `ENCLAVE` recommendations when the server holds a funded 0G key, `TEMPLATE_FALLBACK`
-  otherwise. (Risk rating itself arrives with the deferred reviewer agent.)
+  otherwise. (Risk rating itself arrives with the deferred reviewer agent.) Wallet connect is
+  **Reown AppKit** (multi-wallet), and a header dropdown switches the app's read path between the
+  local fork and Base mainnet — a read-path selector only, never the mainnet guard.
 
 The venue is a **Base fork** sharing Base's chainId, so a wrong-network mistake looks perfectly
 correct — guarded by a fork probe plus an explicit `SLUICE_ALLOW_MAINNET` opt-in, with addresses

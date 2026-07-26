@@ -8,16 +8,18 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/lib/compose/from-server.test.ts src/lib/ship.test.ts src/lib/join-book.test.ts"
+    "test": "tsx --test src/lib/compose/from-server.test.ts src/lib/network.test.ts src/lib/ship.test.ts src/lib/join-book.test.ts"
   },
   "dependencies": {
+    "@reown/appkit": "^1.8.23",
+    "@reown/appkit-adapter-wagmi": "^1.8.23",
     "@sluice/arbitration-sdk": "*",
     "@tanstack/react-query": "^5.101.4",
     "next": "16.2.11",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "viem": "^2.55.8",
-    "wagmi": "^3.7.4"
+    "wagmi": "^2.19.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

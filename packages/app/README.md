@@ -15,11 +15,34 @@ Nothing is signed or written to a chain yet. The screen stops at the recommendat
 npm run dev
 ```
 
-From the repo root. Reads `NEXT_PUBLIC_RPC_URL` (see `.env.example`); defaults to
-`http://127.0.0.1:8545`, i.e. an anvil fork of Base at the pinned block.
+From the repo root. Env lives in `.envrc` (see `.env.example` for the shape).
 
-Balances read through that RPC, so without a fork running the picker shows
+Balances read through the selected RPC, so without a fork running the picker shows
 "balance unknown" — which never blocks building a request, deliberately.
+
+## Wallet & network
+
+Wallet connection is **Reown AppKit** (multi-wallet modal: extension wallets +
+WalletConnect QR) behind `NEXT_PUBLIC_REOWN_PROJECT_ID` — absent, the header shows
+a note instead of a connect button and everything else still works. AppKit's
+adapter requires **wagmi 2.x**; don't bump wagmi to 3 until AppKit supports it
+(`next.config.ts` carries two build workarounds pinned to this, each commented
+with its delete-when condition).
+
+The header dropdown switches the app's **read path** between the local anvil fork
+(`NEXT_PUBLIC_RPC_URL`, default `http://127.0.0.1:8545`) and Base mainnet
+(`NEXT_PUBLIC_BASE_RPC_URL`, default `https://mainnet.base.org`). The choice
+persists in a `sluice-rpc` cookie — a cookie, not localStorage, because the
+server needs it too (`layout.tsx` builds the wagmi config for
+`cookieToInitialState`, and the rail's network label is SSR'd) — and switching
+reloads the page: the wagmi/AppKit config is built once per load, deliberately.
+
+Both modes are chainId **8453** (the fork shares Base's chainId), so the dropdown
+is **not a mainnet guard** — that stays with the anvil probe +
+`SLUICE_ALLOW_MAINNET` on whatever signs. Two caveats in fork mode, surfaced in
+the UI: an injected wallet signs via its *own* Base RPC entry (repoint it at the
+anvil URL to rehearse against the fork), and WalletConnect/mobile wallets cannot
+reach `127.0.0.1` — fork mode is extension-only.
 
 ## Layout
 
