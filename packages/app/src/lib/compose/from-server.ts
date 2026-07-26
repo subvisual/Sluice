@@ -1,8 +1,7 @@
-import type { Hex } from "viem";
 import type { ServerComposeResult } from "@sluice/arbitration-sdk/serve";
 import { TEMPLATES } from "@sluice/arbitration-sdk/grammar";
 import { displayFrac, formatFixed, parseAmount } from "../amount";
-import type { Position, Provenance, RiskRating, SlotRow } from "../book";
+import type { Provenance, RiskRating, SlotRow } from "../book";
 import { formatDayShort, formatDeadlineAbs } from "../time";
 import { tokenBy } from "../tokens";
 import type { TokenMeta } from "./types";
@@ -59,6 +58,14 @@ export type UiRecommendation = {
   } | null;
   validation: { ok: boolean; violations: Array<{ code: string; message: string }> };
   strategies: UiStrategy[];
+  shipInputs: ParsedShipInput[];
+};
+
+export type ParsedShipInput = {
+  strategyHash: `0x${string}`;
+  strategy: `0x${string}`;
+  tokens: `0x${string}`[];
+  amounts: bigint[];
 };
 
 // bandBps/feeBps are out of 1e9 (FEE_BPS_ONE) — see config/opcodes.8453.json.
@@ -84,6 +91,12 @@ export function fromServer(
       : null,
     validation: res.validation,
     strategies: res.recommendation.strategies.map(toUiStrategy),
+    shipInputs: res.shipInputs.map((s) => ({
+      strategyHash: s.strategyHash as `0x${string}`,
+      strategy: s.strategy as `0x${string}`,
+      tokens: s.tokens as `0x${string}`[],
+      amounts: s.amounts.map((a) => BigInt(a)),
+    })),
   };
 }
 
@@ -196,53 +209,4 @@ function shortLabel(label: string | undefined, templateId: string): string {
   if (!label) return templateId;
   const after = label.split("·")[1]?.trim();
   return after || label;
-}
-
-/**
- * What "Ship — 1 signature" turns the accepted set into. The real path signs
- * one `Multicall` and reads positions back from the book subgraph; neither is
- * wired, so the positions are built locally with a placeholder hash (a real
- * `strategyHash` is `keccak256(strategy bytes)` and needs the compiler).
- */
-export function toPositions(
-  rec: UiRecommendation,
-  tokens: TokenMeta[],
-): Position[] {
-  const pair = [...tokens]
-    .sort((a, b) => b.decimals - a.decimals)
-    .map((t) => t.symbol)
-    .join(" / ");
-
-  return rec.strategies.map((s) => {
-    const hash = placeholderHash();
-    return {
-      id: hash,
-      strategyHash: hash,
-      pair,
-      templateLabel: s.templateShort,
-      description: s.description,
-      bandKind: s.bandKind,
-      band: s.band,
-      bandNote: s.bandNote,
-      legs: s.legs.map(({ token, virtual }) => ({
-        token: token.address,
-        symbol: token.symbol,
-        decimals: token.decimals,
-        virtual,
-        consumed: 0n,
-      })),
-      fills: [],
-      deadline: s.deadline,
-      dockedAt: null,
-      risk: s.risk,
-      provenance: rec.provenance,
-      slots: s.slots,
-    };
-  });
-}
-
-function placeholderHash(): Hex {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return `0x${Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")}`;
 }

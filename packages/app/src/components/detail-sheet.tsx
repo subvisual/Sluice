@@ -194,9 +194,14 @@ export function DetailSheet({
                 <span className="text-aqua-text">✓</span> hash matches on-chain
                 commitment
               </span>
-            ) : (
+            ) : position.provenance === "TEMPLATE_FALLBACK" ? (
               <span className="text-[11.5px] text-muted">
                 not signed — no on-chain commitment to check
+              </span>
+            ) : (
+              <span className="text-[11.5px] text-muted">
+                shipped elsewhere, or before this browser cached it — no local
+                record of how it was produced
               </span>
             )}
             {/* Points at the future trace view (nav: Trace & audit · SOON). */}

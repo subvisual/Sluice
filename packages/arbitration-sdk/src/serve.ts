@@ -13,14 +13,26 @@ import { ethers } from "ethers";
 import { loadConfig, type Config } from "./config.ts";
 import { initBroker, type ChatMessage, type ZGBroker } from "./inference.ts";
 import { chainStateFor, compose, PROMPT_VERSION } from "./compose.ts";
+import { compileRecommendation, deriveSaltSeed } from "./compile.ts";
 import { liveContext, stubContext, type MarketContext } from "./context.ts";
-import { FALLBACK_SOURCE, templateFallback, type RecommendationSource } from "./fallback.ts";
+import {
+	FALLBACK_SOURCE,
+	templateFallback,
+	type RecommendationSource,
+} from "./fallback.ts";
 import type {
 	RecommendationRequest,
 	StrategyRecommendation,
 	TokenBudget,
 } from "./recommendation.ts";
 import { validate, type ChainState, type Violation } from "./validate.ts";
+
+export type WireShipInput = {
+	strategyHash: string;
+	strategy: string;
+	tokens: string[];
+	amounts: string[]; // decimal base-unit strings (bigint is not JSON-safe)
+};
 
 export type ServerBudgetEntry = {
 	address: string;
@@ -63,6 +75,7 @@ export type ServerComposeResult = {
 	} | null;
 	validation: { ok: boolean; violations: Violation[] };
 	attempts: number;
+	shipInputs: WireShipInput[];
 	/**
 	 * Where the BOOK context came from (F3 job 1): "subgraph" = the user's live
 	 * book; "stub" = the subgraph was unavailable, or nothing was fetched at all
@@ -123,14 +136,41 @@ function verdict(
 	return { ok: violations.length === 0, violations };
 }
 
+// Compiles a recommendation to wire-safe ship inputs: bigint amounts are not
+// JSON-safe, so this is the one place they become decimal strings.
+function shipInputsFor(
+	rec: StrategyRecommendation,
+	maker: string,
+	signedText: string | null,
+): WireShipInput[] {
+	const seed = deriveSaltSeed(rec, signedText);
+	return compileRecommendation(rec, maker, seed).map((s) => ({
+		strategyHash: s.strategyHash,
+		strategy: s.strategy,
+		tokens: s.tokens,
+		amounts: s.amounts.map((a) => a.toString()),
+	}));
+}
+
 function fallbackResult(
 	req: RecommendationRequest,
 	reason: string,
 	now: number,
+	maker: string,
 ): ServerComposeResult {
 	const ctx = nowContext(now);
 	const rec = templateFallback(req, ctx);
 	const { ok, violations } = verdict(rec, req, ctx, now);
+	// compileRecommendation throws on a token outside the SDK's hardcoded
+	// TOKENS map (compile.ts's decimalsOf) — a budget token we can't compile
+	// still degrades to a labelled fallback, never a throw; shipInputs is
+	// just empty rather than the request failing outright.
+	let shipInputs: WireShipInput[];
+	try {
+		shipInputs = shipInputsFor(rec, maker, null);
+	} catch {
+		shipInputs = [];
+	}
 	return {
 		source: FALLBACK_SOURCE,
 		reason,
@@ -139,6 +179,7 @@ function fallbackResult(
 		proof: null,
 		validation: { ok, violations },
 		attempts: 0,
+		shipInputs,
 		contextSource: "stub",
 		promptVersion: PROMPT_VERSION,
 	};
@@ -170,6 +211,7 @@ export async function composeForApp(
 			req,
 			"ZG_PRIVATE_KEY is not configured — deterministic template seed; nothing was sent to 0G",
 			now,
+			input.user,
 		);
 	}
 
@@ -225,12 +267,17 @@ export async function composeForApp(
 				: null,
 			validation,
 			attempts: result.attempts,
+			shipInputs: shipInputsFor(
+				rec,
+				input.user,
+				fromEnclave ? result.raw.signedText : null,
+			),
 			contextSource: ctx.source,
 			promptVersion: PROMPT_VERSION,
 		};
 	} catch (e) {
 		brokerPromise = null; // do not poison later requests
 		const msg = e instanceof Error ? e.message : String(e);
-		return fallbackResult(req, `inference failed: ${msg}`, now);
+		return fallbackResult(req, `inference failed: ${msg}`, now, input.user);
 	}
 }
