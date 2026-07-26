@@ -1,7 +1,5 @@
 # F1 — Aqua & the Strategy VM
 
-**Source of truth:** [F1 — Aqua & the Strategy VM (1inch Aqua + SwapVM)](https://app.notion.com/p/3a8caae5863181459491dcb6e7e25a1b)
-
 1inch Aqua + SwapVM. F1 owns **the venue, the strategy language, and what fills what we ship**:
 a **Base mainnet fork** at a pinned block running the *real, already-deployed* Aqua/SwapVM,
 the **slot grammar** an LLM can safely fill (settled — Q2 closed 2026-07-25, G3-proven; the
@@ -15,8 +13,7 @@ contract**, because a fork has no organic takers.
 
 It does **not** own the recommendation itself (F2), the data behind it (F3), or the request flow.
 
-Fetch the Notion page before planning work here. This file holds only what is local:
-addresses, config paths, commands.
+This file holds only what is local: addresses, config paths, commands.
 
 ## Local
 

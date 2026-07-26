@@ -17,7 +17,7 @@ const erc20Abi = parseAbi(ERC20_ABI);
 export class ForkGuardError extends Error {}
 
 // One ship() call per input, wrapped in the Aqua contract's own multicall so
-// msg.sender stays the maker (Multicall3 would not — F1 §2).
+// msg.sender stays the maker (Multicall3 would not).
 export function assembleShipMulticall(inputs: ParsedShipInput[]): Hex {
   if (inputs.length === 0) throw new Error("ship: nothing to ship");
   const calls = inputs.map((s) =>
@@ -34,12 +34,12 @@ export function assembleShipMulticall(inputs: ParsedShipInput[]): Hex {
   });
 }
 
-// Wiring §0, on the side that signs. anvil_nodeInfo answers on a fork and
+// Fork guard on the side that signs. anvil_nodeInfo answers on a fork and
 // errors on real Base; only an explicit opt-in lets a non-fork through.
 async function assertVenue(publicClient: PublicClient): Promise<void> {
   try {
     // anvil_nodeInfo is an anvil-only RPC method, absent from viem's EIP1193
-    // method union — the cast is unavoidable, not a type-safety shortcut.
+    // union — the cast is unavoidable, not a type-safety shortcut.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await publicClient.request({ method: "anvil_nodeInfo" } as any);
     return; // fork — proceed

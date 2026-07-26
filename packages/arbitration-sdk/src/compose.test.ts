@@ -1,9 +1,8 @@
 // Tests for the validator-driven reject-and-re-infer loop (Issue 6).
 //
-// compose() is exercised through an injected fake inference function, so no 0G
-// broker, network, or signature round-trip is touched. The fake both scripts
-// the model's replies and records the messages it was sent, which lets us assert
-// that a rejection's feedback is actually handed back on the next attempt.
+// compose() runs through an injected fake infer fn — no 0G broker, network, or
+// signature round-trip. The fake scripts replies and records the messages sent,
+// so we can assert a rejection's feedback is handed back on the next attempt.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -35,8 +34,7 @@ const REQ: RecommendationRequest = {
 };
 
 // A well-formed recommendation drawing `amount` USDC. Echoes the context's
-// block/time so the freshness (I12) and deadline (I7) checks pass — those are
-// the model's to get right, not what these tests are probing.
+// block/time so the freshness (I12) and deadline (I7) checks pass.
 function rec(amount: string) {
 	return {
 		schema: "sluice.recommendation/1",
@@ -89,10 +87,8 @@ const BROKER = {} as unknown as ZGBroker;
 const CFG = {} as unknown as Config;
 
 test("the prompt states the concrete chain id, block, and deadline window", () => {
-	// Without these the 7B model invents chainId 1 and a training-era deadline —
-	// rejected by I4/I7 on every attempt. The prompt must hand it the values to
-	// echo. (See the 0G probe: this is what turns the validator loop from
-	// always-fallback into a first-attempt ENCLAVE result.)
+	// Without these the 7B model invents chainId 1 and a training-era deadline,
+	// rejected by I4/I7 on every attempt; the prompt must hand it the values to echo.
 	const [, userMsg] = buildComposeMessages(REQ, CTX);
 	const now = CTX.observedAt;
 	const deadlineMax = now + REQ.maxDeadlineSec;
@@ -180,10 +176,10 @@ test("the composer never mutates the request or context", async () => {
 
 // ---- The Tier 0 "echo, don't compute" blocks (#24, #25, #26) --------------
 //
-// Each block exists because the alternative is a 7B model deriving the value
-// itself: classifying the user's risk wording, dividing a budget by a mid
-// price across two decimal scales, or picking band widths from a volatility.
-// These assert the derived values actually reach the prompt.
+// Each block exists so a 7B model doesn't derive the value itself — classifying
+// risk wording, dividing a budget by a mid price across two decimal scales, or
+// picking band widths from a volatility. These assert the derived values reach
+// the prompt.
 
 const PAIR_REQ: RecommendationRequest = {
 	prompt: "market-make WETH/USDC, keep it safe",
@@ -227,8 +223,8 @@ test("the prompt carries band tiers, with the appetite applied", () => {
 });
 
 test("blocks are omitted, never faked, when their inputs are absent", () => {
-	// A single-token budget has no second side to pair against: no pairing block
-	// rather than an invented counterpart. (REQ is USDC-only.)
+	// A single-token budget (REQ is USDC-only) has no second side to pair against:
+	// no pairing block rather than an invented counterpart.
 	const [, single] = buildComposeMessages(REQ, CTX);
 	assert.ok(!single.content.includes("REFERENCE PAIRING"));
 
@@ -241,8 +237,8 @@ test("blocks are omitted, never faked, when their inputs are absent", () => {
 });
 
 test("the tier block never outlives its stub label", () => {
-	// Pair data is a stub end to end (F3 job 2). The tiers are derived from it,
-	// so they must inherit the label — the same rule contextPromptBlock follows.
+	// Pair data is a stub end to end, and the tiers are derived from it, so they
+	// must inherit the label.
 	const [, user] = buildComposeMessages(PAIR_REQ, CTX);
 	const tierBlock = user.content.slice(user.content.indexOf("SUGGESTED BAND TIERS"));
 	assert.match(tierBlock, /STUB/);

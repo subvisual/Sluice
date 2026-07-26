@@ -11,11 +11,11 @@ This subgraph indexes the 1inch Aqua protocol (shared liquidity layer) on Ethere
 - **Per-maker committed totals:** `MakerTokenBook.committedVirtual` sums live strategy balances, enabling over-commitment visibility
 - **Fills:** SwapVM `Swapped` events linked back to their originating Aqua strategy (when the swap's `orderHash` matches a known `strategyHash`)
 
-> **Scope:** this is the **generic Aqua protocol subgraph** (F3 §2's shipped artifact), keyed by
-> `strategyHash`. It is a *different* subgraph from F3's **Sluice-keyed deliverable** (F3 §7 — the
+> **Scope:** this is the **generic Aqua protocol subgraph** (F3's shipped artifact), keyed by
+> `strategyHash`. It is a *different* subgraph from F3's **Sluice-keyed deliverable** (the
 > `Recommendation`/`Template`/`UserTokenBook` join and the populated `MarketContext`), which is not
 > in this package. The "over-commitment"/`committedVirtual` language below is the generic protocol
-> signal Notion F3 §2 sanctions for *this* subgraph — **not** the parked whole-balance
+> signal F3 sanctions for *this* subgraph — **not** the parked whole-balance
 > "over-committed book / fillability" framing of the Sluice product (see CLAUDE.md); it must not
 > leak into the product docs.
 

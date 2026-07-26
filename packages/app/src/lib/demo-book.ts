@@ -5,15 +5,14 @@ import { TOKENS } from "./tokens";
 import { formatDayShort, formatDeadlineAbs } from "./time";
 
 /**
- * ⚠️ DEMO fixtures — positions from the design prototype
- * (`docs/design_handoff_sluice_redesign`), covering every card and sheet
- * state: live, live-near-deadline, expired with no risk rating, and docked.
+ * ⚠️ DEMO fixtures — positions from the design prototype, covering every card
+ * and sheet state: live, live-near-deadline, expired with no risk rating, and
+ * docked.
  *
- * Seeded by the "Show demo positions" button in the dashboard's empty state.
- * The handoff had dropped that affordance; it was reinstated deliberately so
- * every screen can be shown without waiting on the real book (F3). Deadlines
- * and fill times are derived from "now" so each fixture stays in its intended
- * state whenever it is loaded. Nothing here is, or claims to be, on-chain.
+ * Seeded by the "Show demo positions" button in the dashboard's empty state, so
+ * every screen can be shown without the real book. Deadlines and fill times are
+ * derived from "now" so each fixture stays in its intended state whenever it is
+ * loaded. Nothing here is, or claims to be, on-chain.
  *
  * Shapes follow the settled SDK grammar (the four seed templates over the
  * deployed router), and labels/slot rows mirror how `from-server.ts` renders a
@@ -22,10 +21,10 @@ import { formatDayShort, formatDeadlineAbs } from "./time";
  */
 /**
  * Demo-only tokens, deliberately NOT in `config/addresses.8453.json` — that
- * file is the product's supported-token list and feeds the budget picker.
- * These exist only so fixture positions show pair variety. Base addresses
- * where the token is deployed there (USDT, DAI); canonical mainnet addresses
- * for AAVE/UNI, whose art the icon lookup finds via its `ethereum` fallback.
+ * file is the product's supported-token list and feeds the budget picker. These
+ * exist only so fixture positions show pair variety. Base addresses where
+ * deployed (USDT, DAI); canonical mainnet addresses for AAVE/UNI, whose art the
+ * icon lookup finds via its `ethereum` fallback.
  */
 const DEMO_TOKENS = {
   USDT: { symbol: "USDT", address: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2", decimals: 6 },
@@ -266,9 +265,9 @@ const BPS_ONE = 1_000_000_000;
 const pct = (bps: number) => `${((bps / BPS_ONE) * 100).toFixed(2)}%`;
 
 /**
- * The same four rows, in the same order and wording, that `from-server.ts`
- * builds for a real recommendation — a demo sheet must not render a slot
- * assignment the real path never would.
+ * The same four rows, in the same order and wording `from-server.ts` builds for
+ * a real recommendation — a demo sheet must not render a slot assignment the
+ * real path never would.
  */
 function slotRows(opts: { bandBps?: number; feeBps?: number; deadline: number }) {
   return [

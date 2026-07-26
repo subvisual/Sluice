@@ -15,7 +15,7 @@ from composed hosted DEX/price subgraphs and is not built here.
     npm run subgraph -- meta
     npm run subgraph -- book 0x471e8aad77a1a29335081850b4e34fa7863f762a
 
-The endpoint is a **config value, never a code assumption** (F3 §2): it defaults to the deployed
+The endpoint is a **config value, never a code assumption**: it defaults to the deployed
 Studio **Base** subgraph (real Aqua data, no local stack) and swaps to the local fork `graph-node`
 (`subgraph/local`, `make fork-up`) via `SLUICE_SUBGRAPH_URL` or `--url <endpoint>`. Only the local
 fork node sees positions **we** ship on the fork.
@@ -28,9 +28,10 @@ the enclave signs. Run it end-to-end with `--maker`:
 
 Without `--maker` the composer uses the stub context, exactly as before.
 
-**Scope:** read-only, job 1 only. The market half of the context (pool depth / realised vol) is
-**still a labelled stub** — job 2, F3 Open Q2 (which price subgraph). The `Recommendation`/`Template`
-join (Notion F3 §3) does not exist — there is no on-chain record of recommendations to index.
+**Scope:** read-only, book context only. The market half of the context (pool depth / realised vol)
+is **still a labelled stub** (which price subgraph to use is an open question). The
+`Recommendation`/`Template` join does not exist — there is no on-chain record of recommendations to
+index.
 
 Modules: `subgraph.ts` (client + pure shaping), `subgraph-cli.ts`, `context.ts` (`liveContext` /
 `bookToContext`).
@@ -54,7 +55,7 @@ compose loop** (PR #20): every well-formed attempt is gated, a violating output 
 failing invariants back as rejection feedback and re-inferred, bounded by `MAX_COMPOSE_ATTEMPTS`
 **total attempts** (currently 2); when the attempts are spent the run falls through to the
 deterministic `TEMPLATE_FALLBACK` — labelled, never presented as a model output. Book context
-(F3 job 1) is live via `--maker`; without it, or when the subgraph is down, the labelled stub is
+is live via `--maker`; without it, or when the subgraph is down, the labelled stub is
 used. Still true: this path does **not** compile or ship the recommendation, nothing is committed
 on-chain or persisted, and the enclave signature is recovered and surfaced (signer, `verified`,
 proof URL) but **not enforced** — no registered-signer assertion, no failure on an unverified

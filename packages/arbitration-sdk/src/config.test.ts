@@ -1,4 +1,4 @@
-// The address book is the ONE place a chain-specific value lives (F1 §1), and
+// The address book is the ONE place a chain-specific value lives, and
 // it has three sections that describe the same tokens three ways: `tokens`
 // (flat, parsed by Forge), `tokenList` (display metadata for the app's picker)
 // and `chainlinkFeeds` (the USD feed each mid is derived from). Nothing at

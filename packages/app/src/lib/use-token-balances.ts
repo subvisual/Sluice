@@ -7,11 +7,11 @@ import { TOKENS } from "./tokens";
 /**
  * Live balances for every selectable token.
  *
- * Read straight from the chain rather than from an index — the portfolio header
- * has to stay correct even when the subgraph lags (Wiring §10, failure drills).
+ * Read straight from the chain rather than an index — the portfolio header has
+ * to stay correct even when the subgraph lags.
  *
- * `undefined` for a token means "not read yet", which is deliberately different
- * from `0n`. Nothing may block on a balance we have not actually observed.
+ * `undefined` for a token means "not read yet", deliberately different from
+ * `0n`. Nothing may block on a balance we have not actually observed.
  */
 export function useTokenBalances(owner: Address | undefined) {
   const query = useReadContracts({

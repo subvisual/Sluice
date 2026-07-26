@@ -22,16 +22,14 @@ import { tokenBy } from "./tokens";
  * program decode pulls in ethers, which must not reach the client bundle).
  *
  * Everything here is read back from the chain: the ceiling is `initialVirtual`
- * from the ship-funding event, consumed is `totalPulled`, and the deadline and
- * slot rows come from decoding `strategyData` itself. What cannot be read back
- * — risk rating, provenance, the recommendation's wording — is null or
- * labelled as unavailable, never invented.
+ * from the ship-funding event, consumed is `totalPulled`, deadline and slot rows
+ * come from decoding `strategyData`. What cannot be read back — risk rating,
+ * provenance, the recommendation's wording — is null, never invented.
  */
 
-// Each template's exact instruction sequence, as the compiler emits it
-// (swapvm.ts fullRange/banded/…). A program is only labelled with a template
-// when it matches one of these exactly — anything else is a foreign program
-// and says so.
+// Each template's exact instruction sequence, as the compiler emits it. A
+// program is labelled with a template only when it matches one exactly —
+// anything else is a foreign program and says so.
 const TEMPLATE_SEQUENCES: Record<string, string> = {
   "SALT,DEADLINE,XYC_SWAP_XD": "full-range",
   "SALT,DEADLINE,FLAT_FEE_AMOUNT_IN_XD,XYC_SWAP_XD": "full-range-fee",
@@ -88,8 +86,8 @@ function decode(strategyData: string): Decoded {
   try {
     instructions = decodeProgram(decodeOrder(fromHex(strategyData)).program);
   } catch {
-    // Bytes that are not abi.encode(Order) or hold a malformed program: still
-    // a real position (real ceilings, real fills) — shown with what we know.
+    // Bytes that are not abi.encode(Order) or hold a malformed program: still a
+    // real position (real ceilings, real fills) — shown with what we know.
     return {
       deadline: null,
       slots: [
@@ -172,11 +170,10 @@ function toLegs(row: MakerPosition): PositionLegDto[] {
   return row.balances.map((bal) => {
     const meta = tokenBy(bal.tokenAddress as Address);
     const initial = BigInt(bal.initialVirtual);
-    // Live/expired: consumed = ceiling − current remaining, net of pushes —
-    // a fill that pushed this token back in has un-consumed it. Docked: the
-    // remaining balance was zeroed by the dock refund, not by fills, so use
-    // net pulls instead. Clamped to [0, ceiling] either way: the display bar
-    // is a fraction of the ceiling, never more.
+    // Live/expired: consumed = ceiling − current remaining, net of pushes — a
+    // fill that pushed this token back in has un-consumed it. Docked: the
+    // remaining balance was zeroed by the dock refund, not by fills, so use net
+    // pulls instead. Clamped to [0, ceiling] either way.
     const raw =
       row.status === "DOCKED"
         ? BigInt(bal.totalPulled) - BigInt(bal.totalPushed)

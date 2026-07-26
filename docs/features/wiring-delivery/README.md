@@ -1,13 +1,10 @@
 # Wiring & Delivery
 
-**Source of truth:** [Wiring & Delivery — how the three features connect](https://app.notion.com/p/3a8caae58631816d9aa0eb077e013ffe)
-
 The only shared context across F1–F3: the ubiquitous language, the **per-user request flow**
 (no tick loop — the app runs on a user action, not a timer), the **transaction shape**, the
 gates and build tracks, and the demo script.
 
-Anything that changes how features connect belongs here and on the Notion page — not
-duplicated into F1–F3.
+Anything that changes how features connect belongs here — not duplicated into F1–F3.
 
 > **Current build (2026-07-26):** the loop is live end to end — *prompt → validated recommendation
 > → compiled strategies → the user's ship `Multicall`* (PR #34), with the book read back through

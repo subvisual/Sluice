@@ -48,18 +48,16 @@ interface IXYCConcentrate {
 }
 
 /// @title A composed strategy ships and actually fills — G3
-/// @notice F1 §7 item 2, the hard gate: if a fill never lands the project pivots.
+/// @notice The hard gate: if a fill never lands the project pivots.
 ///
-///         The bytes shipped here are NOT assembled in Solidity. They come from
+///         The bytes shipped here are NOT assembled in Solidity — they come from
 ///         config/fixtures/strategies.json, written by the same TypeScript encoder the
-///         composer runs — so this proves the artifact we actually ship will fill, rather
-///         than proving it about a second implementation that never leaves the repo.
+///         composer runs, so this proves the artifact we actually ship will fill.
 ///
-///         USDC/USDe, both dollar-denominated, so a constant-product curve shipped with
-///         equal nominal value on each side prices near 1:1 around the middle. The
-///         decimals differ (USDC 6dp, USDe 18dp) and that is handled entirely by the
-///         virtual amounts — `_xycSwapXD` divides raw balances, so shipping 10_000e6
-///         against 10_000e18 IS the 1:1 price. There is no decimals field anywhere.
+///         USDC/USDe, both dollar-denominated, so a constant-product curve with equal
+///         nominal value on each side prices near 1:1. The decimals differ (USDC 6dp, USDe
+///         18dp) and virtual amounts handle it entirely: `_xycSwapXD` divides raw balances,
+///         so shipping 10_000e6 against 10_000e18 IS the 1:1 price. No decimals field.
 ///
 ///         Run:  npm --prefix ../packages/arbitration-sdk run fixtures
 ///               cd contracts && forge test --match-contract StablePairStrategy -vv
@@ -91,9 +89,8 @@ contract StablePairStrategyTest is Test {
     }
 
     /// @notice Solidity's abi.encode(order) agrees with the TypeScript encoder.
-    /// @dev The one place the two languages still have to meet. If they ever disagree the
-    ///      balances key to a hash no swap can reach, and the only symptom is a fill that
-    ///      reverts — so this is asserted before anything touches the chain.
+    /// @dev If they disagree the balances key to a hash no swap can reach, and the only
+    ///      symptom is a reverting fill — so assert it before anything touches the chain.
     function test_fixtureEncodingAgreesWithSolidity() public view {
         Fixtures.Strategy memory plain = Fixtures.load("usdc-usde-full-range");
         Fixtures.assertSelfConsistent(plain);
@@ -110,9 +107,8 @@ contract StablePairStrategyTest is Test {
     }
 
     /// @notice Ship a fixture's bytes and fill them from a funded taker EOA.
-    /// @dev Shared by both template tests: every template in the grammar goes through
-    ///      this exact gate. A template that has not been shipped and filled here does
-    ///      not belong in TEMPLATES — that is the membership rule, enforced by usage.
+    /// @dev Every template in the grammar goes through this exact gate. A template not
+    ///      shipped and filled here does not belong in TEMPLATES — the membership rule.
     function _shipAndFill(string memory name) internal returns (uint256 filledOut) {
         Fixtures.Strategy memory fixture = Fixtures.load(name);
         Fixtures.assertSelfConsistent(fixture);
@@ -148,7 +144,7 @@ contract StablePairStrategyTest is Test {
         vm.startPrank(taker);
         IERC20(usdc).approve(router, type(uint256).max);
 
-        // Quote immediately before the swap and record both. F1 §3 job 2.
+        // Quote immediately before the swap and record both.
         (, uint256 quotedOut,) = ISwapVM(router).quote(fixture.order, usdc, usde, amountIn, takerTraits);
 
         uint256 filledIn;
@@ -168,7 +164,7 @@ contract StablePairStrategyTest is Test {
         assertLt(filledOut, 100e18, "output exceeded 1:1 - the curve is not doing what we think");
         assertGt(filledOut, 98e18, "output far below 1:1 - check the virtual amounts");
 
-        // The tokens really moved. This is what the bounty asks be shown on stage.
+        // The tokens really moved.
         assertEq(IERC20(usde).balanceOf(taker), filledOut, "taker did not receive USDe");
         assertEq(IERC20(usdc).balanceOf(maker), fixture.amounts[0] + filledIn, "maker did not receive USDC");
     }
@@ -180,8 +176,7 @@ contract StablePairStrategyTest is Test {
 
     /// @notice The fee template ships and fills, and the fee demonstrably bites.
     /// @dev 0.05% input-side fee: the curve prices on 99.95 USDC instead of 100, so the
-    ///      output must land strictly below the no-fee fill of the same size. This is the
-    ///      test the grammar's "proven to fill" claim for full-range-fee rests on.
+    ///      output must land strictly below the no-fee fill of the same size.
     function test_G3_shipAndFill_feeTemplate() public {
         uint256 noFeeOut = 99009900990099009900; // the plain template's fill, asserted above
         uint256 feeOut = _shipAndFill("usdc-usde-full-range-fee");
@@ -189,12 +184,10 @@ contract StablePairStrategyTest is Test {
     }
 
     /// @notice The banded template ships and fills, and the concentration bites.
-    /// @dev Same commitment as full-range, concentrated into a 1% geometric band: the
-    ///      quoted depth is ~200x, so a 100 USDC fill slips ~0.005% instead of ~1%. The
-    ///      exact value cross-checks bandDeltas in swapvm.ts against the deployed
-    ///      concentratedBalance arithmetic — if the two ever disagree, this is where it
-    ///      shows. This is the test the grammar's "proven to fill" claim for banded
-    ///      rests on.
+    /// @dev Same commitment as full-range, concentrated into a 1% geometric band: quoted
+    ///      depth is ~200x, so a 100 USDC fill slips ~0.005% instead of ~1%. The exact value
+    ///      cross-checks bandDeltas in swapvm.ts against the deployed concentratedBalance
+    ///      arithmetic — if the two disagree, this is where it shows.
     function test_G3_shipAndFill_bandedTemplate() public {
         uint256 fullRangeOut = 99009900990099009900; // the full-range fill, asserted above
         uint256 bandedOut = _shipAndFill("usdc-usde-banded");
@@ -234,9 +227,8 @@ contract StablePairStrategyTest is Test {
 
     /// @notice A draw past the band edge reverts: virtual amounts are a ceiling, and the
     ///         band's real inventory is exactly drained at the edge.
-    /// @dev The grown curve happily QUOTES the oversized fill; what stops it is Aqua's
-    ///      pull exceeding the shipped virtual amount. This is the discontinuity the
-    ///      composer must size for, demonstrated rather than asserted in prose.
+    /// @dev The grown curve happily QUOTES the oversized fill; what stops it is Aqua's pull
+    ///      exceeding the shipped virtual amount. The composer must size for this.
     function test_bandedDrawPastTheBandEdgeReverts() public {
         Fixtures.Strategy memory fixture = Fixtures.load("usdc-usde-banded");
         _shipAndFill("usdc-usde-banded");

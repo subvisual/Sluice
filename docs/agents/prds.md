@@ -6,25 +6,25 @@ How the building skills should find and write PRDs and issue files.
 
 ## Feature slugs
 
-One PRD per feature, named with the slug of the Notion feature it implements (`wiring-delivery`
+One PRD per feature, named with the feature's slug (`wiring-delivery`
 is the shared-context area, not a fourth feature, but it carries a PRD like the others):
 
-| Slug | Notion page |
+| Slug | Feature |
 | --- | --- |
 | `f1-aqua-strategy-vm` | F1 — Aqua & the Strategy VM (1inch Aqua + SwapVM) |
 | `f2-private-recommendations` | F2 — Private Recommendations (0G) |
 | `f3-market-book-context` | F3 — Market & Book Context (The Graph) |
 | `wiring-delivery` | Wiring & Delivery |
 
-URLs are in `CLAUDE.md` and in each `docs/features/<slug>/README.md`.
+Each feature's local index is in `docs/features/<slug>/README.md`.
 
-Work that doesn't fit one of these four is a signal to check Notion — either it belongs to a
-feature under a name you haven't read yet, or the feature split needs updating there first.
+Work that doesn't fit one of these four is a signal to reconsider the feature split — either it
+belongs to a feature under a name you haven't read yet, or the split needs updating first.
 
 ## How each skill uses this
 
-- **`/write-a-prd`** writes its output to `docs/prds/<slug>.md`. Read the feature's Notion
-  page first — the PRD refines it for implementation, it does not restate it.
+- **`/write-a-prd`** writes its output to `docs/prds/<slug>.md`. Read the feature's local
+  README first — the PRD refines it for implementation, it does not restate it.
 - **`/prd-to-issues`** writes its output to `docs/prds/<slug>-issues.md`. If multiple PRDs
   exist, ask the user which one.
 - **`/issue-worker`** reads the issues file from `docs/prds/*-issues.md`. If multiple issues

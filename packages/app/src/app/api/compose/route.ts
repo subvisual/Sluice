@@ -7,13 +7,13 @@ import { parseComposeBody } from "@/lib/compose/parse-body";
  * The one key-bearing endpoint. The body carries only what the user chose
  * (their words, their budget); limits are server policy (REQUEST_DEFAULTS),
  * never client input. Everything downstream of validation is the SDK facade,
- * which answers even without an enclave key — labelled TEMPLATE_FALLBACK,
- * never an error page (design decision 3).
+ * which answers even without an enclave key — labelled TEMPLATE_FALLBACK, never
+ * an error page.
  */
 
 export const runtime = "nodejs";
-// TEE inference is the slow path: up to 2 attempts at a few seconds each,
-// plus the subgraph read. Vercel Hobby caps lower; Pro honours this.
+// TEE inference is the slow path: up to 2 attempts at a few seconds each, plus
+// the subgraph read. Vercel Hobby caps lower; Pro honours this.
 export const maxDuration = 60;
 
 export async function POST(request: Request) {

@@ -1,9 +1,9 @@
-// Real market mid from Chainlink USD feeds on Base (F3 job 2 — mid only).
+// Real market mid from Chainlink USD feeds on Base (mid only).
 //
 // Reads run against REAL Base, never the pinned fork: the fork's feeds are
 // frozen at the fork block, so a mid read off the fork is meaningless. This is
 // read-only price data, so there is NO fork guard here — the guard stays scoped
-// to signing (Wiring §0).
+// to signing.
 //
 // The mid for a pair token0/token1 is usd(token0) / usd(token1) — "token1 per
 // token0, human units", matching PairContext.midPrice. USDC/USDT ~ $1, but we

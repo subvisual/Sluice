@@ -1,8 +1,8 @@
-// Recommendation -> shippable Aqua inputs. THE bridge from a validated
+// Recommendation -> shippable Aqua inputs. Bridges a validated
 // StrategyRecommendation to the fork-proven swapvm builders: it owns the salt
-// and the amount scaling; swapvm.ts owns the byte order. Every strategy it
-// emits must be byte-identical to what the builders themselves produce for
-// the same salt/params (compile.test.ts).
+// and the amount scaling, swapvm.ts owns the byte order. Every strategy it emits
+// must be byte-identical to what the builders produce for the same salt/params
+// (compile.test.ts).
 import { keccak256, toUtf8Bytes, AbiCoder } from "ethers";
 import type {
 	StrategyRecommendation,
@@ -39,8 +39,8 @@ function decimalsOf(address: string): number {
 }
 
 // decimal string -> raw base units, exact (no float). The model's amounts are
-// already <= budget and truncated to the token's decimals upstream, so extra
-// fraction digits here are a bug, not a user input — reject them.
+// already truncated to the token's decimals upstream, so extra fraction digits
+// here are a bug — reject them.
 export function toBaseUnits(amount: string, decimals: number): bigint {
 	const [whole, frac = ""] = amount.split(".");
 	if (frac.length > decimals)

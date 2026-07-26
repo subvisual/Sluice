@@ -34,32 +34,29 @@ interface ISwapVMH {
 
 /// @title Does the strategyHash include the maker, or not? Both — at different layers.
 /// @notice Settles the question raised on PR #14 (comment 5080104656): our encoder hashes
-///         abi.encode(Order) which CONTAINS the maker, while CLAUDE.md/F3 §3 say the hash
-///         has NO maker in the preimage and collides across makers. Both are right:
+///         abi.encode(Order) which CONTAINS the maker, while CLAUDE.md says the hash has NO
+///         maker in the preimage and collides across makers. Both are right:
 ///
 ///         AQUA LAYER — no maker in the preimage. `ship()` computes keccak256(strategy)
-///         over the raw bytes; identical bytes shipped by two different makers return the
-///         IDENTICAL strategyHash (test 2). Nothing collides destructively because the
-///         balance rows are keyed [msg.sender][app][hash][token] — the namespacing, not
-///         the hash, is what separates makers. So "key on (maker, app, strategyHash)"
-///         (F3 §3) stands.
+///         over the raw bytes; identical bytes shipped by two makers return the IDENTICAL
+///         strategyHash (test 2). Nothing collides destructively: the balance rows are
+///         keyed [msg.sender][app][hash][token], so the namespacing separates makers, not
+///         the hash. So "key on (maker, app, strategyHash)" stands.
 ///
 ///         SWAPVM-ORDER LAYER — the maker is inside the bytes. An Aqua-mode strategy's
 ///         bytes are abi.encode(Order{maker, traits, data}), so two makers composing the
-///         IDENTICAL program produce DIFFERENT bytes and therefore different hashes
-///         (test 1). For well-formed orders the cross-maker collision never arises.
+///         IDENTICAL program produce DIFFERENT bytes and different hashes (test 1). For
+///         well-formed orders the cross-maker collision never arises.
 ///
-///         And the embedded maker is load-bearing, not incidental: `swap()` reads
-///         `order.maker` from the order to pick both the Aqua row and the wallet to pull
-///         from. Ship bytes naming someone else and the position is stranded — the fill
-///         path can only ever see the named maker's row (test 3).
+///         The embedded maker is load-bearing: `swap()` reads `order.maker` to pick both
+///         the Aqua row and the wallet to pull from. Ship bytes naming someone else and the
+///         position is stranded — the fill path only sees the named maker's row (test 3).
 contract StrategyHashSemanticsTest is Test {
     string internal constant PUBLIC_BASE_RPC = "https://mainnet.base.org";
 
     /// @dev MakerTraits bit 254 (Aqua mode) with the receiver (= maker) in the low 160
-    ///      bits. Constructed locally because this test deliberately probes protocol
-    ///      semantics with orders our encoder would never emit (test 3's mismatched
-    ///      maker); the production encoder lives in swapvm.ts alone.
+    ///      bits. Constructed locally because this test probes semantics with orders our
+    ///      encoder would never emit (test 3's mismatched maker).
     uint256 internal constant USE_AQUA = 1 << 254;
 
     address internal aqua;
@@ -108,9 +105,8 @@ contract StrategyHashSemanticsTest is Test {
     }
 
     /// @notice Identical PROGRAM, different makers -> different bytes -> different hashes.
-    /// @dev This is why the cross-maker collision never arises for well-formed SwapVM
-    ///      orders: the maker sits in the hashed bytes twice (Order.maker, and as the
-    ///      receiver in the low bits of traits).
+    /// @dev The maker sits in the hashed bytes twice (Order.maker, and as the receiver in
+    ///      the low bits of traits), so the cross-maker collision never arises.
     function test_identicalProgramDifferentMakers_hashesDiffer() public {
         _fundAndApprove(maker1);
         _fundAndApprove(maker2);
@@ -152,10 +148,9 @@ contract StrategyHashSemanticsTest is Test {
         IAquaH(aqua).dock(router, h1, tokens);
         (a1,) = IAquaH(aqua).safeBalances(maker1, router, h1, usdc, usde);
         assertEq(a1, amounts[0], "maker1's row must survive maker2's dock");
-        // For maker2 the same query now REVERTS — safeBalances refuses inactive
-        // strategies outright (SafeBalancesForTokenNotInActiveStrategy) rather than
-        // returning zeros. Same hash, same app, opposite answers per maker: the
-        // namespacing could not be more explicit.
+        // For maker2 the same query now REVERTS — safeBalances refuses inactive strategies
+        // (SafeBalancesForTokenNotInActiveStrategy) rather than returning zeros. Same hash,
+        // same app, opposite answers per maker.
         vm.expectRevert();
         IAquaH(aqua).safeBalances(maker2, router, h1, usdc, usde);
         vm.prank(maker2);
@@ -180,9 +175,9 @@ contract StrategyHashSemanticsTest is Test {
         deal(usdc, taker, amountIn);
         vm.startPrank(taker);
         IERC20H(usdc).approve(router, type(uint256).max);
-        // There is exactly ONE order these bytes decode to, and it names maker1. There is
-        // no order a taker could construct that reaches maker2's row under this hash:
-        // changing the maker field changes the bytes, and therefore the hash.
+        // These bytes decode to exactly ONE order, naming maker1. No order a taker could
+        // construct reaches maker2's row under this hash: changing the maker field changes
+        // the bytes, and the hash.
         (uint256 fIn, uint256 fOut,) = ISwapVMH(router).swap(
             _order(maker1), usdc, usde, amountIn, abi.encodePacked(SluiceStrategy.TAKER_EOA_EXACT_IN)
         );

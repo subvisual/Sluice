@@ -1,7 +1,7 @@
 import type { SlotRow } from "@/lib/book";
 
 /**
- * The "Why this" slot-assignment table — the proof that the model's output is
+ * The "Why this" slot-assignment table — proof that the model's output is
  * structured selection, never free-form bytecode. Unused optional slots render
  * "— not used" rather than being hidden.
  */

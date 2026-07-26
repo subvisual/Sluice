@@ -7,14 +7,13 @@ import type { Position } from "@/lib/book";
 import { CONFIG_CHAIN_ID, tokenBySymbol } from "@/lib/tokens";
 
 /**
- * A token mark from the Trust Wallet assets repo, which keys art the same way
- * this app keys tokens: per chain, by that chain's address. Nothing is
- * vendored — pointing the app at another chain's `addresses.<chainId>.json`
- * resolves that chain's art with no asset changes here.
+ * A token mark from the Trust Wallet assets repo, keyed the same way this app
+ * keys tokens: per chain, by that chain's address. Nothing is vendored —
+ * pointing the app at another chain's `addresses.<chainId>.json` resolves that
+ * chain's art with no changes here.
  *
  * Falls back to the dashed placeholder circle when the chain is unmapped, the
- * token has no art, or the network is down — so a missing icon degrades to
- * exactly the placeholder the design specifies, it doesn't break.
+ * token has no art, or the network is down.
  */
 
 /** Trust Wallet's directory names for the chains this app can point at. */
@@ -26,8 +25,8 @@ const CHAIN_SLUG: Record<number, string> = {
 /**
  * Candidate art URLs, most-specific first: the configured chain's directory,
  * then `ethereum` — the repo's L2 directories are sparse, and a token's
- * canonical L1 deployment usually carries the art. A miss on every candidate
- * lands on the placeholder.
+ * canonical L1 deployment usually carries the art. A miss lands on the
+ * placeholder.
  */
 export function tokenIconUrls(address: Address, chainId: number): string[] {
   let checksummed: Address;
@@ -47,10 +46,10 @@ export function tokenIconUrls(address: Address, chainId: number): string[] {
 }
 
 /**
- * A position's pair as two overlapped marks — the same representation on the
- * dashboard cards and the detail sheet. A pair token isn't always a committed
- * leg (a limit sell commits only the token it sells), so resolution tries the
- * position's own legs first, then the address book.
+ * A position's pair as two overlapped marks — the same on dashboard cards and
+ * the detail sheet. A pair token isn't always a committed leg (a limit sell
+ * commits only the token it sells), so resolution tries the position's own legs
+ * first, then the address book.
  */
 export function PairIcons({
   position,
@@ -109,8 +108,8 @@ export function TokenIcon({
       alt={`${symbol} mark`}
       width={size}
       height={size}
-      // Served as-is: 30px marks gain nothing from the optimizer, and
-      // bypassing it keeps remote images out of the optimizer's allowlist.
+      // Served as-is: 30px marks gain nothing from the optimizer, and bypassing
+      // it keeps remote images out of the optimizer's allowlist.
       unoptimized
       onError={() => setAttempt((a) => a + 1)}
       // Hairline outline so overlapped marks separate cleanly on white cards.

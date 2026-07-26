@@ -21,8 +21,7 @@ const DEADLINE = NOW + 604_800; // now + maxDeadlineSec — the inclusive upper 
 
 function strat(tokens: string[], amounts: string[]): SlotAssignment {
 	// A grammar-valid strategy: known template, the one curve on this venue, a
-	// deadline inside the request bound. Individual tests override a field to
-	// exercise a specific grammar invariant.
+	// deadline inside the request bound. Tests override a field to break one invariant.
 	return {
 		templateId: "full-range",
 		slots: {
@@ -89,7 +88,7 @@ test("I2 — the boundary is inclusive: sum exactly equal to budget is allowed",
 
 test("I2 — decimal sums are exact, not floating point (0.1+0.1+0.1 <= 0.3)", () => {
 	// In IEEE-754, 0.1+0.1+0.1 == 0.30000000000000004 > 0.3 — a Number-based
-	// check would wrongly flag this. The validator must not.
+	// check would wrongly flag this.
 	const q: RecommendationRequest = {
 		...req,
 		budget: [{ symbol: "WETH", address: WETH, amount: "0.3" }],
@@ -197,7 +196,7 @@ test("validate never mutates its inputs", () => {
 	assert.equal(JSON.stringify({ r, q, fresh }), before);
 });
 
-// ---- Grammar invariants (I5, I7, I8, I10, I11), against the real F1 menu ----
+// ---- Grammar invariants (I5, I7, I8, I10, I11), against the real menu ----
 
 test("I5 — a curve that is not on this venue is rejected", () => {
 	const bad = strat([WETH], ["2"]);
@@ -306,8 +305,7 @@ test("the fully-valid fixture emits no grammar violations", () => {
 
 test("never emits an N/A invariant — I6, I9", () => {
 	// I6 (partial-fill⇒invalidation) and I9 (oracle⇒feed) have NO opcode on this
-	// router. A maximally-broken recommendation must still only fire in-scope
-	// codes.
+	// router, so a maximally-broken recommendation must still only fire in-scope codes.
 	const broken = strat([USDC, WETH], ["0"]); // bad order + zero amount + short amounts
 	broken.templateId = "nope";
 	broken.slots.curve = { instruction: "DECAY_XD" };
@@ -345,9 +343,8 @@ test("never emits an N/A invariant — I6, I9", () => {
 
 // ---- Every message names the fix, wherever the fix is deterministic --------
 //
-// The rejection feedback IS the next prompt (compose.ts), and there is exactly
-// one retry. These assert the corrective VALUE is in the text — not merely the
-// rule the model already broke once.
+// The rejection feedback IS the next prompt (compose.ts), with one retry. These
+// assert the corrective VALUE is in the text, not merely the rule broken once.
 
 const msg = (
 	r: StrategyRecommendation,

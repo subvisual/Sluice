@@ -1,22 +1,17 @@
-// Risk appetite, read from the user's own words (T0.1 / issue #24).
+// Risk appetite, read from the user's own words (issue #24).
 //
-// Users say how much risk they want in the sentence they type ("keep it safe",
-// "max yield, I can take the hit"), and the prompt used to carry none of that
-// signal. Classifying it is deliberately NOT the model's job: mixing a
-// classification task into a JSON-emission task raises the malformed-output
-// rate, and the composer gets one retry before the deterministic fallback takes
-// over. So we classify here, and the prompt hands the model a fact to condition
-// on rather than a judgement to make.
+// Classifying it is deliberately NOT the model's job: mixing a classification
+// task into a JSON-emission task raises the malformed-output rate. So we
+// classify here, and the prompt hands the model a fact to condition on rather
+// than a judgement to make.
 //
-// What this DOESN'T do: rate the risk of a recommendation. That is Gate 2's
-// job (F2 §4, deferred) and the app says "risk rating unavailable" until it
-// ships. This only reads what the user asked for.
+// What this DOESN'T do: rate the risk of a recommendation (Gate 2's job,
+// deferred). This only reads what the user asked for.
 
 export type RiskAppetite = "conservative" | "neutral" | "aggressive";
 
 // Word-boundary matched, lowercased. Multi-word phrases are matched as written.
-// Deliberately small: every entry is a phrase users actually type, and a
-// lexicon nobody can hold in their head is one nobody can debug on stage.
+// Deliberately small: every entry is a phrase users actually type.
 const CONSERVATIVE = [
 	"safe",
 	"safely",
@@ -63,14 +58,13 @@ function countMatches(haystack: string, needles: string[]): number {
 /**
  * Classify the risk appetite a prompt expresses.
  *
- * The rule is deliberately blunt — more conservative hits than aggressive ones
- * means conservative, and vice versa; a tie or no hits means neutral. It must
- * stay explainable in one sentence.
+ * Deliberately blunt: more conservative hits than aggressive means conservative,
+ * and vice versa; a tie or no hits means neutral.
  *
- * KNOWN LIMITATION: no negation handling, so "not too risky" reads as
- * aggressive. Acceptable, because the output only shifts which band widths are
- * SUGGESTED — it never touches the budget, never overrides a validator
- * invariant, and the user reviews the recommendation before signing anything.
+ * KNOWN LIMITATION: no negation handling, so "not too risky" reads as aggressive.
+ * Acceptable, because the output only shifts which band widths are SUGGESTED —
+ * it never touches the budget or overrides a validator invariant, and the user
+ * reviews the recommendation before signing.
  */
 export function classifyRiskAppetite(prompt: string): RiskAppetite {
 	const conservative = countMatches(prompt, CONSERVATIVE);

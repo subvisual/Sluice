@@ -29,16 +29,16 @@ interface ISwapVMTake {
 }
 
 /// @title Drive a fill against a shipped strategy
-/// @notice A fork has no organic takers, so every fill in this project is one we produce.
-///         The taker is a funded EOA plus one approval — NOT a contract, and NOT
-///         ITakerCallbacks. See SluiceStrategy.TAKER_USE_TRANSFER_FROM_AND_AQUA_PUSH.
+/// @notice A fork has no organic takers, so every fill here is one we produce. The taker is
+///         a funded EOA plus one approval — NOT a contract, and NOT ITakerCallbacks. See
+///         SluiceStrategy.TAKER_USE_TRANSFER_FROM_AND_AQUA_PUSH.
 ///
 ///           forge script script/Take.s.sol --rpc-url http://127.0.0.1:8545 \
 ///             --broadcast --private-key $SLUICE_TAKER_KEY
 ///
-///         The order comes from the same fixture Ship.s.sol used, so there is nothing to
-///         keep in sync by hand — reconstructing it from parameters is exactly how the
-///         hash drifts and the fill reverts for an unrelated-looking reason.
+///         The order comes from the same fixture Ship.s.sol used, so nothing is kept in
+///         sync by hand: reconstructing it from parameters is how the hash drifts and the
+///         fill reverts for an unrelated-looking reason.
 contract TakeScript is Script {
     function run() external {
         string memory cfg = vm.readFile("../config/addresses.8453.json");
@@ -60,8 +60,7 @@ contract TakeScript is Script {
         vm.startBroadcast();
         IERC20Take(tokenIn).approve(router, type(uint256).max);
 
-        // Quote immediately before the swap and record both, so a divergence is visible
-        // rather than inferred. F1 §3 job 2.
+        // Quote immediately before the swap and record both, so a divergence is visible.
         (, uint256 quotedOut,) = ISwapVMTake(router).quote(f.order, tokenIn, tokenOut, amountIn, takerTraits);
         (uint256 filledIn, uint256 filledOut,) =
             ISwapVMTake(router).swap(f.order, tokenIn, tokenOut, amountIn, takerTraits);

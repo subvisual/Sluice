@@ -31,8 +31,7 @@ test("every bandBps is an encodable integer in (0, FEE_BPS_ONE)", () => {
 });
 
 test("appetite shifts the set tighter without changing the count", () => {
-	// Below the clamp ceiling, every tier tightens strictly with appetite — the
-	// "suggest 5/7/9 instead of 3/5/7" behaviour, expressed in band width.
+	// Below the clamp ceiling, every tier tightens strictly with appetite.
 	const conservative = bandTiers(5, WEEK, "conservative");
 	const neutral = bandTiers(5, WEEK, "neutral");
 	const aggressive = bandTiers(5, WEEK, "aggressive");
@@ -46,9 +45,8 @@ test("appetite shifts the set tighter without changing the count", () => {
 
 test("appetite never LOOSENS a tier, even where the clamp flattens it", () => {
 	// Under a volatility high enough to pin the widest bands to the encodable
-	// ceiling they come out equal rather than ordered. That is honest — nothing
-	// is wider than "wider than any move" — but appetite must never hand a
-	// conservative user a TIGHTER band than a degen one.
+	// ceiling they come out equal rather than ordered, but appetite must never
+	// hand a conservative user a TIGHTER band than a degen one.
 	const c = bandTiers(400, WEEK, "conservative");
 	const n = bandTiers(400, WEEK, "neutral");
 	const a = bandTiers(400, WEEK, "aggressive");
@@ -67,9 +65,8 @@ test("a shorter horizon gives tighter bands — vol is scaled by sqrt(time)", ()
 
 test("the neutral mid tier is the horizon-scaled volatility itself", () => {
 	// 58% annualised over one week is 58 * sqrt(7/365) ≈ 8.03%, and the neutral
-	// mid multiplier is 1 — so the mid tier IS the move the pair is expected to
-	// make over the strategy's life. Sane market-making bands; the un-scaled
-	// reading would put this at ±58%.
+	// mid multiplier is 1 — so the mid tier IS the expected move over the
+	// strategy's life. The un-scaled reading would put this at ±58%.
 	const [, mid] = bandTiers(VOL, WEEK, "neutral");
 	const expectedPct = VOL * Math.sqrt(WEEK / YEAR);
 	assert.equal(mid.bandBps, Math.round((expectedPct / 100) * FEE_BPS_ONE));

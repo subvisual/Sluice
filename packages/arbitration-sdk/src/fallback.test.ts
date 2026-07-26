@@ -66,8 +66,8 @@ test("selectTemplate routes fee/spread intent to the fee template", () => {
 
 test("selectTemplate routes band intent to the banded templates", () => {
 	assert.equal(selectTemplate("make a tight market around the current price").id, "banded");
-	// Fee + band compose: "rangebound" was the old tight-clmm intent verbatim,
-	// and now the venue can actually express it.
+	// Fee + band compose: "rangebound" was the old tight-clmm intent, now
+	// expressible on this venue.
 	assert.equal(selectTemplate("earn fees on ETH/USDC, rangebound this week").id, "banded-fee");
 });
 
@@ -88,9 +88,9 @@ test("a banded fallback carries the band slot with bandBps, and still parses", (
 test("an intent this venue cannot express falls back to the plain curve", () => {
 	// "sell if it hits X, all at once" is a price level executed all-or-nothing.
 	// The deployed router has no LimitSwap and no oracle adjuster, so there is
-	// nothing to aim at — the honest outcome is the plain curve, not a template
-	// that pretends to honour the level. The old grammar answered this with T3
-	// (_limitSwapOnlyFull1D + _oraclePriceAdjuster1D), which has no opcode.
+	// nothing to aim at — the honest outcome is the plain curve. The old grammar
+	// answered this with T3 (_limitSwapOnlyFull1D + _oraclePriceAdjuster1D), which
+	// has no opcode.
 	assert.equal(
 		selectTemplate("sell my ETH if it hits 3500, all at once").id,
 		"full-range",

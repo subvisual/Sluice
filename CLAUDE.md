@@ -25,38 +25,22 @@ and refusals stay on the record.
 Three load-bearing integrations — remove any and the project stops making sense:
 **1inch Aqua + SwapVM** (the venue, the strategy grammar, the compiler, the taker), **0G**
 (private signed recommendations), **The Graph** (the user's book + market context,
-derived off-chain). The concept page is the argument and holds no implementation detail —
-feature pages do.
+derived off-chain). The concept holds no implementation detail — the feature docs do.
 
-## Source of truth
+## Documentation
 
-**Notion is the source of truth for the concept, the plan, and every schema.** This repo is
-the implementation. When a local document and Notion disagree, **Notion wins** — fix the
-local document, don't argue with it in code.
+The concept, the plan, and every schema live in `docs/`; this repo is the implementation.
+Read the relevant feature doc **before** planning, designing, or grilling anything.
 
-Read the relevant Notion page **before** planning, designing, or grilling anything. Use the
-Notion MCP (`notion-fetch` with the page URL). Don't work from a summary in this repo when
-the page itself is one fetch away.
-
-| Page | Covers |
+| Doc | Covers |
 | --- | --- |
-| [Sluice — Strategy Composer for 1inch Aqua](https://app.notion.com/p/3a7caae5863181e685dec2690a6eed83) | The concept and the argument. Start here. |
-| [F1 — Aqua & the Strategy VM](https://app.notion.com/p/3a8caae5863181459491dcb6e7e25a1b) | 1inch Aqua + SwapVM: the fork venue, the slot grammar, the compiler, the taker. |
-| [F2 — Private Recommendations](https://app.notion.com/p/3a8caae5863181609acbcfd69a5db06b) | 0G: sealed TEE inference, signed recommendations, validator + reviewer. |
-| [F3 — Market & Book Context](https://app.notion.com/p/3a8caae58631812cadd9df083e8d0dd9) | The Graph: the user's own book subgraph + composed market context. |
-| [Wiring & Delivery](https://app.notion.com/p/3a8caae58631816d9aa0eb077e013ffe) | Shared vocabulary, per-user request flow, transaction shape, gates, demo. |
-| [Prize Strategy](https://app.notion.com/p/3a7caae5863181209c77ca7d889bbb64) | Sponsor targeting and prize math. |
-| [Build Spec §0](https://app.notion.com/p/3a7caae5863181428dbfdcb0225923d3) | Protocol mechanics from the Aqua source. **§0 only** — the rest is superseded. |
-
-Two rules that follow:
-
-- **Don't restate Notion here.** Local docs link to a page and add only what is
-  implementation-specific (file paths, addresses, local commands).
-- **Decisions made while building go back to Notion**, on the feature page they belong to —
-  not only into a local ADR. A decision that exists only in this repo will be missed.
+| [F1 — Aqua & the Strategy VM](docs/features/f1-aqua-strategy-vm/README.md) | 1inch Aqua + SwapVM: the fork venue, the slot grammar, the compiler, the taker. |
+| [F2 — Private Recommendations](docs/features/f2-private-recommendations/README.md) | 0G: sealed TEE inference, signed recommendations, validator + reviewer. |
+| [F3 — Market & Book Context](docs/features/f3-market-book-context/README.md) | The Graph: the user's own book subgraph + composed market context. |
+| [Wiring & Delivery](docs/features/wiring-delivery/README.md) | Shared vocabulary, per-user request flow, transaction shape, gates, demo. |
 
 The three features are independent enough to build in parallel. The only shared context
-lives on the Wiring page.
+lives on the Wiring & Delivery doc.
 
 ## Vocabulary that has already burned this project
 
@@ -75,7 +59,7 @@ lives on the Wiring page.
 ## Protocol facts, read from source
 
 From [1inch/aqua](https://github.com/1inch/aqua). Each is easy to get wrong by inference; detail is
-on Notion F1.
+in the F1 doc.
 
 - **`strategyHash = keccak256(strategy)`** (`Aqua.sol:41`) — but the `strategy` bytes we ship **are
   `abi.encode(Order{maker, traits, program})`**, so effectively `keccak256(abi.encode(order))`; the

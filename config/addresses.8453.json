@@ -1,10 +1,10 @@
 {
   "chainId": 8453,
   "forkBlock": 49100000,
-  "_forkBlock": "Pinned so the venue does not drift between rehearsal and demo. F1 §1.",
+  "_forkBlock": "Pinned so the venue does not drift between rehearsal and demo.",
 
   "aqua": "0x499943e74fb0ce105688beee8ef2abec5d936d31",
-  "_aqua": "AquaRouter = Aqua + Simulator + Multicall + Rescuable. Canonical across 12 chains. Source: 1inch/aqua README. There is no swap() on this — swaps go through the SwapVM router below. F1 §3.",
+  "_aqua": "AquaRouter = Aqua + Simulator + Multicall + Rescuable. Canonical across 12 chains. Source: 1inch/aqua README. There is no swap() on this — swaps go through the SwapVM router below.",
 
   "swapVMRouter": "0x8fdd04dbf6111437b44bbca99c28882434e0958f",
   "swapVMRouterVersion": "1.0.0",

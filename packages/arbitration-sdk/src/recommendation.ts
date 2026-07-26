@@ -1,10 +1,9 @@
 // The recommendation payload types and a LIGHT structural parse.
 //
-// Scope: this checks the model's output is well-FORMED (parseable, right shape,
-// decimal-string amounts, tokens within the stated budget). It is NOT the F2
-// I1–I12 validator and makes no claim about grammar-correctness, compilability,
-// or safety — those are out of scope. Unknown opcode names are surfaced as
-// soft notes, not hard failures, because the F1 grammar itself is provisional.
+// Checks the model's output is well-FORMED (parseable, right shape,
+// decimal-string amounts, tokens within the stated budget). It is NOT the
+// I1–I12 validator and makes no claim about grammar-correctness, compilability
+// or safety. Unknown opcode names are surfaced as soft notes, not hard failures.
 
 import { BAND_OPTIONS, CURVE_OPTIONS, WRAPPER_OPTIONS, GUARD_OPTIONS } from "./grammar.ts";
 
@@ -127,10 +126,8 @@ export function parseRecommendation(
 		}
 
 		// Soft notes. Names outside the menu are surfaced rather than rejected —
-		// this is a structural parse, not the F2 validator. But a name that is not
-		// on the menu is now a real problem rather than a provisional one: the menu
-		// is the complete instruction set of the deployed router, so anything else
-		// cannot be compiled at all.
+		// this is a structural parse. But the menu is the complete instruction set
+		// of the deployed router, so a name off it cannot be compiled at all.
 		const curve = s?.slots?.curve?.instruction;
 		if (curve && !CURVE_OPTIONS.includes(curve))
 			notes.push(`${at}: curve "${curve}" is not a curve on this venue`);

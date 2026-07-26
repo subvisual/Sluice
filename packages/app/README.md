@@ -1,10 +1,9 @@
 # @sluice/app
 
-The Compose screen — [Wiring §6](https://app.notion.com/p/3a8caae58631816d9aa0eb077e013ffe).
-Connect a wallet, type a sentence, set a per-token budget, and get back an
+The Compose screen. Connect a wallet, type a sentence, set a per-token budget, and get back an
 Aqua/SwapVM strategy recommendation from the enclave path (`/api/compose`) — real
 when the server holds a funded 0G key, labelled `TEMPLATE_FALLBACK` otherwise.
-Risk ratings arrive with the deferred reviewer (F2 Gate 2); until then the UI
+Risk ratings arrive with the deferred reviewer; until then the UI
 shows "risk rating unavailable".
 
 Accepting a recommendation builds the ship `Multicall` the user signs (PR #34);
@@ -20,7 +19,7 @@ strategies are legs of a portfolio, not variants of the same idea. Each card is
 therefore selected by default and can be dropped; drop everything but one and only
 that one ships, **with the amounts it was recommended and validated with**. Nothing
 is rescaled to soak up the budget a dropped strategy would have used: the signed
-recommendation is never rewritten (F2 §4).
+recommendation is never rewritten.
 
 Whatever survives goes out as a single `Multicall` on the Aqua router — one
 transaction, one signature, `msg.sender` still you. The one thing that can add a
@@ -96,18 +95,18 @@ command — see the root README.
 | `src/lib/compose/` | The request envelope: building it from user input, the client-side checks that run before it, and mapping the server's response onto what the screen renders. **No React**. Prompt assembly itself lives server-side, in the SDK's `buildComposeMessages` behind `/api/compose` (below) — not here. |
 | `src/lib/compose/request.ts` | `buildRecommendationRequest` — the request envelope and the checks the client can honestly make before spending a round trip. |
 | `src/lib/compose/from-server.ts` | Maps `ServerComposeResult` onto the UI shapes. Labels resolve through the SDK's own `TEMPLATES` so the two sides cannot drift. |
-| `src/lib/compose/types.ts` | `RecommendationRequest`, F2 §5. |
+| `src/lib/compose/types.ts` | `RecommendationRequest`. |
 | `src/components/` | The screen. |
 
 Token addresses come from `config/addresses.8453.json` at the repo root — one file,
-shared by the fork and by mainnet (F1 §1). Adding a token is a JSON edit.
+shared by the fork and by mainnet. Adding a token is a JSON edit.
 
 ## Not wired
 
 Sealed inference and the deterministic gate are wired via `/api/compose` (below):
 real, signed `ENCLAVE` recommendations when the server holds a key, otherwise the
 deterministic `TEMPLATE_FALLBACK` seed. Still not wired: market/pair context beyond
-the user's own book (F3 job 2). `nonce` is a fixed field of the recommendation
+the user's own book. `nonce` is a fixed field of the recommendation
 payload schema.
 
 Worth knowing when the choice UI looks thin: the deterministic fallback emits

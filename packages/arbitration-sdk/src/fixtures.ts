@@ -1,15 +1,10 @@
 // Strategy fixtures: the bridge that keeps ONE encoder.
 //
 // The contracts do not assemble strategies. This module builds them with the
-// same code the composer uses, and writes the resulting bytes to
+// same code the composer uses and writes the bytes to
 // config/fixtures/strategies.json for the Foundry tests and scripts to ship
-// verbatim.
-//
-// That inversion matters for more than tidiness. When Solidity had its own
-// encoder, the fork test proved that SOLIDITY's bytes fill — but production
-// ships the composer's bytes, so the thing we actually ship was never exercised
-// on chain. Reading the fixture makes the test prove the real claim: these exact
-// bytes, the ones the composer emits, ship and fill.
+// verbatim, so the fork test proves the bytes we actually ship fill (rather than
+// a separate Solidity encoder's).
 //
 // Regenerate with:  npm run fixtures
 // Staleness is caught by fixtures.test.ts, which rebuilds from the recorded
@@ -26,8 +21,8 @@ const CONFIG_DIR = resolve(HERE, "../../../config");
 export const FIXTURES_PATH = resolve(CONFIG_DIR, "fixtures/strategies.json");
 const ADDRESSES_PATH = resolve(CONFIG_DIR, "addresses.8453.json");
 
-/// The inputs are recorded alongside the outputs so the fixture can be rebuilt
-/// and compared without anyone having to remember what produced it.
+/// Inputs are recorded alongside outputs so the fixture can be rebuilt and
+/// compared without remembering what produced it.
 export type StrategyFixture = {
 	name: string;
 	description: string;
@@ -46,7 +41,7 @@ export type StrategyFixture = {
 
 /// Deterministic, so regenerating produces no diff. Real recommendations vary
 /// the salt per recommendation — a docked hash is burned permanently and amounts
-/// are not in the preimage, so a fixed salt would collide on re-ship. F1 §2.
+/// are not in the preimage, so a fixed salt would collide on re-ship.
 function fixtureSalt(name: string): bigint {
 	let h = 0n;
 	for (const ch of name) h = (h * 131n + BigInt(ch.charCodeAt(0))) % (1n << 64n);
@@ -58,7 +53,7 @@ export function buildFixtures(): { routerVersion: string; strategies: StrategyFi
 	const usdc: string = addresses.tokens.USDC;
 	const usde: string = addresses.tokens.USDe;
 
-	// A fixed maker and deadline keep the fixture reproducible. The Foundry test
+	// Fixed maker and deadline keep the fixture reproducible. The Foundry test
 	// pranks this address; the scripts override both from the environment.
 	const maker = "0x00000000000000000000000000000000000f1152";
 	const deadline = 1800000000; // 2027-01-15, comfortably past any rehearsal
@@ -199,9 +194,9 @@ export function buildFixtures(): { routerVersion: string; strategies: StrategyFi
 	return { routerVersion: SWAPVM_ROUTER_VERSION, strategies };
 }
 
-/// Returns only the payload. The `_generated` / `_why` keys are documentation for
-/// anyone who opens the file, so they are dropped here — otherwise the staleness
-/// check would compare prose against a freshly built object and always fail.
+/// Returns only the payload. The `_generated` / `_why` keys are file
+/// documentation, dropped here so the staleness check doesn't compare prose
+/// against a freshly built object and always fail.
 export function readFixtures(): { routerVersion: string; strategies: StrategyFixture[] } {
 	const { routerVersion, strategies } = JSON.parse(readFileSync(FIXTURES_PATH, "utf8"));
 	return { routerVersion, strategies };

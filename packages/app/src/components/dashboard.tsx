@@ -16,7 +16,6 @@ import { PairIcons } from "./token-icon";
 
 /**
  * Dashboard — "what do I have live right now, and how is it doing?"
- *
  * Everything on a card is a committed ceiling the user authorised, never a
  * balance. De-emphasis of non-live cards is a tint, never opacity (opacity
  * drags the small captions below AA).
@@ -246,10 +245,9 @@ function BookLoading() {
 
 /**
  * The book subgraph read failed, or nothing is connected — unknown is not
- * empty. This is also the only state a disconnected wallet ever renders, so
- * "Show demo positions" has to be reachable from here too, not only from the
- * empty state: `demo-book.ts`'s whole purpose is showing every screen
- * without depending on the real book (Task 6 review finding 1).
+ * empty. This is also the only state a disconnected wallet renders, so "Show
+ * demo positions" must be reachable from here too: `demo-book.ts`'s whole
+ * purpose is showing every screen without depending on the real book.
  */
 function BookUnavailable({ onDemo }: { onDemo: () => void }) {
   return (
@@ -295,8 +293,8 @@ function EmptyState({ onDemo }: { onDemo: () => void }) {
           >
             New strategy
           </Link>
-          {/* Demo affordance, kept at the team's request (the handoff had
-              dropped it): seeds the session book with the fixture positions. */}
+          {/* Demo affordance, kept at the team's request: seeds the session
+              book with the fixture positions. */}
           <button
             onClick={onDemo}
             className="rounded-[10px] border border-glass-line bg-card-2 px-5 py-[13px] text-sm text-muted shadow-[var(--shadow-sm)] transition-colors hover:border-muted hover:text-text"

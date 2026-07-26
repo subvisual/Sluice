@@ -7,11 +7,8 @@ import { SluiceStrategy } from "./SluiceStrategy.sol";
 /// @title Read strategies produced by the TypeScript encoder
 /// @notice The contracts do not build strategies. `npm run fixtures` writes the composer's
 ///         own bytes to config/fixtures/strategies.json and this reads them back, so what
-///         gets shipped on the fork is byte-identical to what a user would sign.
-///
-///         Deserialization only — there is deliberately no assembly here. If this file
-///         ever starts computing a program or an order, the single-source-of-truth
-///         property is gone.
+///         ships on the fork is byte-identical to what a user would sign. Deserialization
+///         only: no assembly here, or the single-source-of-truth property is gone.
 library Fixtures {
     Vm private constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
@@ -27,8 +24,8 @@ library Fixtures {
     }
 
     /// @notice Load one fixture by name.
-    /// @dev Reverts if the name is absent rather than returning an empty strategy, because
-    ///      a silently empty program would ship fine and only fail at fill time.
+    /// @dev Reverts if the name is absent rather than returning an empty strategy: a
+    ///      silently empty program would ship fine and only fail at fill time.
     function load(string memory name) internal view returns (Strategy memory s) {
         string memory json = vm.readFile(PATH);
         string memory base = string.concat(".strategies[?(@.name == '", name, "')]");
@@ -50,9 +47,9 @@ library Fixtures {
     }
 
     /// @notice The order carried in the fixture really does hash to the recorded hash.
-    /// @dev This is the check that catches a drift between the TypeScript abi.encode and
-    ///      Solidity's. If these ever disagree the fill fails for a reason that looks
-    ///      nothing like the cause, so it is worth asserting up front.
+    /// @dev Catches a drift between the TypeScript abi.encode and Solidity's. If they
+    ///      disagree the fill fails for a reason that looks nothing like the cause, so
+    ///      assert it up front.
     function assertSelfConsistent(Strategy memory s) internal pure {
         require(keccak256(s.strategy) == s.strategyHash, "Fixtures: strategyHash != keccak256(strategy)");
         require(

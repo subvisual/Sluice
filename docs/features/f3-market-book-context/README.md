@@ -1,7 +1,5 @@
 # F3 — Market & Book Context
 
-**Source of truth:** [F3 — Market & Book Context (The Graph)](https://app.notion.com/p/3a8caae58631812cadd9df083e8d0dd9)
-
 The Graph. F3 builds the shared `MarketContext` object that F2's prompt consumes and the app's
 portfolio view renders, from two jobs: **the user's own book** (`Position`/`Fill` indexed by a
 net-new subgraph over Aqua's events — there is no existing Aqua subgraph) and **the market**
@@ -9,14 +7,13 @@ net-new subgraph over Aqua's events — there is no existing Aqua subgraph) and 
 old contention metrics are **parked**: most of what the old design derived was pressure for a
 daemon that no longer exists.
 
-Fetch the Notion page before planning work here. This file holds only what is local:
-addresses, config paths, commands.
+This file holds only what is local: addresses, config paths, commands.
 
 ## Local
 
 - PRD / issues / ADRs: not yet written (`docs/prds/f3-market-book-context.md`,
   `docs/prds/f3-market-book-context-issues.md`, and `adr/` here do not exist yet).
-- **Generic Aqua subgraph** (Notion §2's shipped artifact): `subgraph/` — deployed to Graph
+- **Generic Aqua subgraph** (the shipped artifact): `subgraph/` — deployed to Graph
   Studio on Ethereum mainnet and Base (v0.1.2, Studio-only, not on the decentralized network).
   Endpoints, deployment IDs, entity model: `subgraph/README.md`.
 - **Local fork indexing stack**: `subgraph/local/` (graph-node + IPFS + Postgres against an
@@ -25,8 +22,7 @@ addresses, config paths, commands.
 - **SDK reader (job 1)**: `packages/arbitration-sdk/src/subgraph.ts` (+ `subgraph-cli.ts`) —
   defaults to the deployed Studio Base endpoint; `SLUICE_SUBGRAPH_URL` swaps it to the local
   fork node. Feeds `MarketContext.userBook` via `context.ts` (`source: "stub" | "subgraph"`).
-  Job 2 (pair context — `realizedVol` etc.) is still a labelled hardcoded stub, blocked on
-  Notion Open Q2.
+  Job 2 (pair context — `realizedVol` etc.) is still a labelled hardcoded stub.
 
 Subgraphs index successful transactions only. Reverts emit no logs, so any pressure metric is
 **derived/inferred**, never indexed — label it as such. `liveBalance` comes from a live `eth_call`

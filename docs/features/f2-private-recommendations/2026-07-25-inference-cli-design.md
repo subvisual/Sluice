@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-25 · **Branch:** `pf/f2-inference-cli` · **Feature:** [F2 — Private Recommendations](./README.md)
 
-> **Note (post-write):** F2's Notion page later pivoted (decisions→recommendations,
+> **Note (post-write):** F2 later pivoted (decisions→recommendations,
 > agent→user-as-maker). This
 > spec describes the **inference CLI**, which is framing-agnostic and was built as designed; the
 > downstream references below ("Issue 2", the framing codec, the old registry) belong to the old,
@@ -17,9 +17,7 @@ runs it through a live 0G Compute provider, and prints the model's answer alongs
 recovers to, and an independent proof URL). Running it successfully also satisfies the core
 assertion of **Gate 0 / Issue 1** — a stable enclave signer — so it doubles as the gate.
 
-Source of truth for the concept and schemas is Notion
-([F2 page](https://app.notion.com/p/3a8caae5863181609acbcfd69a5db06b)); this doc is the local,
-implementation-specific design for this one step.
+This doc is the local, implementation-specific design for this one step.
 
 ## Goal
 
@@ -136,9 +134,9 @@ acceptance:
 - `npm run infer -- "…"` prints a non-empty result and `verified ✓` against a live provider.
 - The printed proof URL, fetched independently, returns the same `{text, signature}`, and
   `ethers.verifyMessage` on them recovers the same signer across ≥3 runs (the Gate 0 assertion).
-- Record the recovered signer and first latency back into the F2 plan / Notion, per Gate 0.
+- Record the recovered signer and first latency back into the F2 plan, per Gate 0.
 
 ## Follow-ups (out of scope here, noted for the plan)
 
-- Feed the recovered signer + latency into `docs/prds/f2-private-recommendations.md` and Notion.
+- Feed the recovered signer + latency into `docs/prds/f2-private-recommendations.md`.
 - Later issues build the recommendation codec and validator atop this module.

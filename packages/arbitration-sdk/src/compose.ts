@@ -1,17 +1,16 @@
 // Sealed composition: prompt + budget + context -> a grammar-shaped
 // StrategyRecommendation, produced by a live 0G inference call.
 //
-// Scope: this is the "just get a recommendation" path. It reuses the Gate 0
-// round-trip (inferChat), which fetches the enclave signature and recovers its
-// signer (the provenance surfaced to the caller); nothing is persisted.
+// Reuses the inferChat round-trip, which fetches the enclave signature and
+// recovers its signer (the provenance surfaced to the caller); nothing is
+// persisted.
 //
-// The loop is validator-driven (F2 §4: "nothing is ever edited. Violations
-// reject and re-infer"). Each attempt is parsed for shape and then run through
-// the deterministic validator; a malformed OR violating output is fed back as
-// rejection feedback and re-inferred, up to MAX_COMPOSE_ATTEMPTS. When the
-// attempts are spent, the deterministic TEMPLATE_FALLBACK (Wiring §4 step 5b)
-// takes over so a run always yields a well-formed recommendation — labelled,
-// never presented as a model output.
+// The loop is validator-driven: nothing is ever edited, violations reject and
+// re-infer. Each attempt is parsed for shape then run through the deterministic
+// validator; a malformed OR violating output is fed back as rejection feedback
+// and re-inferred, up to MAX_COMPOSE_ATTEMPTS. When attempts are spent, the
+// deterministic TEMPLATE_FALLBACK takes over so a run always yields a
+// well-formed recommendation — labelled, never presented as a model output.
 
 import type { Config } from "./config.ts";
 import { inferChat, type ChatMessage, type ZGBroker } from "./inference.ts";
@@ -34,8 +33,7 @@ import {
 import { validate, type ChainState, type Violation } from "./validate.ts";
 
 // Matches SlotAssignment in recommendation.ts — the slots that exist on the
-// deployed router, nothing else. (An earlier draft described the old six-slot
-// grammar here; the model dutifully produced unparseable output shaped like it.)
+// deployed router, nothing else.
 const OUTPUT_SCHEMA = `Return ONLY a JSON object (no markdown fences, no prose), shaped exactly:
 {
   "schema": "sluice.recommendation/1",
@@ -57,11 +55,8 @@ const OUTPUT_SCHEMA = `Return ONLY a JSON object (no markdown fences, no prose),
   ]
 }`;
 
-// F2 §9: promptVersion is recorded with every result. When the composer behaves
-// differently at hour 30 than at hour 14, "we edited the prompt" is the most
-// likely answer — unanswerable unless the version is recorded. Version 1 was
-// the app-side six-section contract deleted in PR #30; this builder succeeds
-// it. Bump on ANY change to the framing below, grammarPromptBlock(),
+// promptVersion is recorded with every result so a behaviour change traces to a
+// prompt version. Bump on ANY change to the framing below, grammarPromptBlock(),
 // contextPromptBlock(), or the appetite/pairing/tier blocks.
 //
 // /3 adds the Tier 0 "echo, don't compute" blocks: risk appetite (appetite.ts),
@@ -76,9 +71,8 @@ const OUTPUT_SCHEMA = `Return ONLY a JSON object (no markdown fences, no prose),
 // of the pair, and a rule that teaches base units is wrong even when unused.
 export const PROMPT_VERSION = "sluice.compose/4";
 
-// How many band tiers a tiered recommendation carries — see tiers.ts. A request
-// that allows fewer strategies than this gets no tier block at all rather than
-// a truncated one.
+// How many band tiers a tiered recommendation carries. A request that allows
+// fewer strategies than this gets no tier block rather than a truncated one.
 const TIER_COUNT = 3;
 
 export function buildComposeMessages(
@@ -102,16 +96,13 @@ export function buildComposeMessages(
 		.join("\n");
 
 	// Concrete values the model must ECHO, not invent. Without these a small model
-	// fabricates a chainId (it defaulted to 1) and a deadline off some training-era
-	// "now" — both rejected by the validator (I4, I7) on every attempt. State them.
+	// fabricates a chainId and a deadline, both rejected by the validator (I4, I7).
 	const now = ctx.observedAt;
 	const deadlineMax = now + req.maxDeadlineSec;
 
-	// Everything the model would otherwise have to DERIVE, derived here instead:
-	// what the user's words say about risk, the pairing arithmetic, and the band
-	// widths. Each block is omitted rather than faked when its inputs are absent
-	// — a budget that does not hold both sides of the pair gets no pairing block,
-	// and a request that cannot carry three strategies gets no tier block.
+	// Everything the model would otherwise DERIVE, derived here instead: risk from
+	// the user's words, the pairing arithmetic, the band widths. Each block is
+	// omitted rather than faked when its inputs are absent.
 	const appetite = classifyRiskAppetite(req.prompt);
 	const tiered = req.maxStrategies >= TIER_COUNT;
 	const pairing = pairingPlan(ctx, req, tiered ? TIER_COUNT : 1);
@@ -119,9 +110,8 @@ export function buildComposeMessages(
 		? tiersPromptBlock(
 				bandTiers(ctx.pair.realizedVol7dPct, req.maxDeadlineSec, appetite),
 				{
-					// Pair data (F3 job 2) is a stub for every context we can build
-					// today — contextPromptBlock states the same thing the same way.
-					// Both flip together when F3 Open Q2 settles the price source.
+					// Pair data is a stub for every context we can build today;
+					// contextPromptBlock states the same thing the same way.
 					stubVol: true,
 					maxStrategies: req.maxStrategies,
 					hasPairing: pairing !== null,
@@ -166,18 +156,15 @@ export type ComposeResult = {
 	attempts: number;
 	// The validator verdict on the LAST model attempt. Empty when an ENCLAVE
 	// result was accepted; on TEMPLATE_FALLBACK it records the invariants the
-	// final model output violated — the reason the run fell back.
+	// final model output violated.
 	violations: Violation[];
-	// How the returned recommendation was produced. ENCLAVE = the model's
-	// output; TEMPLATE_FALLBACK = the deterministic seed used because inference
-	// never produced a well-formed, valid one. Never blurred — see fallback.ts.
+	// How the returned recommendation was produced. ENCLAVE = the model's output;
+	// TEMPLATE_FALLBACK = the deterministic seed. Never blurred — see fallback.ts.
 	source: RecommendationSource;
-	// The messages actually used for the LAST inference attempt (the retry's,
-	// if there was one) — never rebuilt after the fact, so a caller cannot
-	// present a first-attempt reconstruction as "what was sent" when the real
-	// last attempt carried the rejection-feedback suffix. Something was always
-	// sent by the time this is populated, including on the internal
-	// TEMPLATE_FALLBACK below (the retries were exhausted, not skipped).
+	// The messages used for the LAST inference attempt (the retry's, if there was
+	// one) — never rebuilt after the fact, so "what was sent" always reflects the
+	// real last attempt including its rejection-feedback suffix. Populated on the
+	// internal TEMPLATE_FALLBACK too (retries were exhausted, not skipped).
 	messages: ChatMessage[];
 };
 
@@ -186,8 +173,7 @@ export type ComposeResult = {
 export const BASE_CHAIN_ID = 8453;
 
 // One infer + parse + validate round is one attempt. Bounded so a model that
-// cannot produce a valid output falls through to the deterministic fallback
-// rather than looping — every retry is a round trip the user waits on.
+// cannot produce valid output falls through to the fallback rather than looping.
 export const MAX_COMPOSE_ATTEMPTS = 2;
 
 // The inference seam. Real runs use inferChat (the 0G round-trip); tests inject
@@ -199,9 +185,9 @@ export type InferFn = (
 ) => Promise<InferResult>;
 
 // The live chain facts the validator needs, derived from the context the
-// composer already holds: the snapshot's block is the freshness reference and
-// its time bounds the deadline. chainId is the venue we ship to, not the 0G
-// inference chain. Pure — no chain read.
+// composer holds: the snapshot's block is the freshness reference, its time
+// bounds the deadline. chainId is the venue we ship to, not the 0G inference
+// chain. Pure — no chain read.
 export function chainStateFor(
 	ctx: MarketContext,
 	chainId: number = BASE_CHAIN_ID,
@@ -244,14 +230,13 @@ export async function compose(
 		if (violations.length === 0) {
 			return { parse, raw, attempts, violations, source: "ENCLAVE", messages };
 		}
-		// Rejected, never rewritten (F2 §4): feed the invariants back and re-infer.
+		// Rejected, never rewritten: feed the invariants back and re-infer.
 		feedback = violations.map((v) => `${v.code}: ${v.message}`).join("; ");
 	}
 
-	// Attempts spent and the last model output was still malformed or violating:
-	// deterministic template fallback, clearly labelled — never a model output.
-	// `raw`, `violations` and `messages` keep the last rejected attempt on
-	// the record.
+	// Attempts spent, last model output still malformed or violating: deterministic
+	// template fallback, clearly labelled — never a model output. `raw`,
+	// `violations` and `messages` keep the last rejected attempt on the record.
 	const rec = templateFallback(req, ctx);
 	parse = parseRecommendation(JSON.stringify(rec), req);
 	return { parse, raw, attempts, violations, source: FALLBACK_SOURCE, messages };

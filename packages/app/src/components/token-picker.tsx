@@ -182,9 +182,9 @@ export function TokenPicker({
 }
 
 /**
- * "Max" must round-trip exactly: the string we put in the box has to parse back
- * to the same base-units value. `formatAmount` is lossy on purpose (it trims
- * for readability), so it must not be used here.
+ * "Max" must round-trip exactly: the string in the box has to parse back to the
+ * same base-units value. `formatAmount` is lossy on purpose (it trims for
+ * readability), so it must not be used here.
  */
 function exactInput(balance: bigint, decimals: number) {
   if (decimals === 0) return balance.toString();

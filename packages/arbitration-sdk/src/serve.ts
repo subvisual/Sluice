@@ -1,13 +1,11 @@
-// Server-only facade for the app (design: docs/superpowers/specs/
-// 2026-07-25-app-server-compose-design.md). The app's ONE import from this
-// package on the server. Owns: env config, a broker singleton, live-book
-// context, the request's wall clock, and compose() — whose re-infer loop runs
-// the deterministic gate on the clock this facade supplies; the facade itself
-// validates only the deterministic fallbacks it builds.
-// It NEVER funds the ledger — funding
-// is `npm run fund`, out-of-band — and every failure returns a labelled
-// TEMPLATE_FALLBACK instead of throwing, so a missing key or a 0G outage is
-// a degraded answer, not a dead screen.
+// Server-only facade for the app: the app's ONE server-side import from this
+// package. Owns env config, a broker singleton, live-book context, the request's
+// wall clock, and compose() — whose re-infer loop runs the deterministic gate on
+// the clock this facade supplies; the facade itself validates only the
+// deterministic fallbacks it builds. It NEVER funds the ledger (funding is
+// `npm run fund`, out-of-band), and every failure returns a labelled
+// TEMPLATE_FALLBACK instead of throwing, so a missing key or a 0G outage is a
+// degraded answer, not a dead screen.
 
 import { ethers } from "ethers";
 import { loadConfig, type Config } from "./config.ts";
@@ -62,12 +60,11 @@ export type ServerComposeResult = {
 	reason: string | null;
 	recommendation: StrategyRecommendation;
 	/**
-	 * The exact messages used for the LAST inference attempt (the retry's, if
-	 * there was one) — never a reconstruction. Non-null whenever something was
-	 * actually sent to the enclave, including the SDK-internal
-	 * TEMPLATE_FALLBACK (inference was attempted and rejected — something WAS
-	 * sent). Null only when nothing was ever sent: no `ZG_PRIVATE_KEY`, or the
-	 * request failed before any call went out.
+	 * The messages used for the LAST inference attempt (the retry's, if there
+	 * was one) — never a reconstruction. Non-null whenever something was sent to
+	 * the enclave, including the SDK-internal TEMPLATE_FALLBACK. Null only when
+	 * nothing was ever sent: no `ZG_PRIVATE_KEY`, or the request failed before
+	 * any call went out.
 	 */
 	messages: ChatMessage[] | null;
 	/** Enclave proof material; null unless source is ENCLAVE. */
@@ -83,13 +80,12 @@ export type ServerComposeResult = {
 	attempts: number;
 	shipInputs: WireShipInput[];
 	/**
-	 * Where the BOOK context came from (F3 job 1): "subgraph" = the user's live
-	 * book; "stub" = the subgraph was unavailable, or nothing was fetched at all
-	 * (the no-key path). Surfaced so the UI can say so — F3's rule is
-	 * stub-labelled end-to-end, and this response is the end.
+	 * Where the BOOK context came from: "subgraph" = the user's live book;
+	 * "stub" = the subgraph was unavailable, or nothing was fetched at all (the
+	 * no-key path). Surfaced so the UI can label a stub book end-to-end.
 	 */
 	contextSource: MarketContext["source"];
-	/** The prompt contract that produced this — F2 §9. */
+	/** The prompt contract that produced this. */
 	promptVersion: string;
 };
 
@@ -129,10 +125,9 @@ function nowContext(
 // The validator clock. observedAt/observedBlock are SNAPSHOT facts the model
 // echoes; `now` is the server's wall clock, computed once per request.
 // Validating on the snapshot's own clock (chainStateFor's default) can never
-// catch a stale or degenerate snapshot — a lagging indexer, a null _meta
-// timestamp — because the bound and the value share a source. headBlock still
-// equals the snapshot block (a real head read needs a Base RPC this facade
-// does not hold), so I12 stays inert here; I7 is the guard that becomes real.
+// catch a stale snapshot, because the bound and the value share a source.
+// headBlock still equals the snapshot block (a real head read needs a Base RPC
+// this facade lacks), so I12 stays inert here; I7 is the guard that becomes real.
 function wallChainState(ctx: MarketContext, now: number): ChainState {
 	return { ...chainStateFor(ctx), now };
 }
@@ -211,9 +206,8 @@ export async function composeForApp(
 		maxDeadlineSec: input.maxDeadlineSec,
 	};
 
-	// One wall clock per request: the prompt's snapshot may lag it slightly
-	// (that is what observedAt is for), but every VALIDATION bound in this
-	// request derives from this single number.
+	// One wall clock per request: the prompt's snapshot may lag it slightly (that
+	// is what observedAt is for), but every VALIDATION bound derives from this.
 	const now = Math.floor(Date.now() / 1000);
 
 	// No key: short-circuit BEFORE any network call so this path is offline.
@@ -226,9 +220,9 @@ export async function composeForApp(
 		);
 	}
 
-	// Live book (F3 job 1); the subgraph being down degrades the context, not
-	// the request — the prompt admits a stub book rather than inventing one,
-	// and `contextSource` carries the degradation into the response.
+	// Live book; the subgraph being down degrades the context, not the request —
+	// the prompt admits a stub book rather than inventing one, and
+	// `contextSource` carries the degradation into the response.
 	let ctx: MarketContext;
 	try {
 		ctx = await liveContext(input.user, {
@@ -242,18 +236,16 @@ export async function composeForApp(
 		const cfg = loadConfig();
 		const broker = await getBroker(cfg);
 		const result = await compose(broker, cfg, req, ctx, {
-			// Override the loop's default snapshot clock with the wall clock, so
-			// the gate that ACCEPTS inside compose() is the same gate this facade
-			// answers for — one clock, no accept-then-reject drift.
+			// Override the loop's default snapshot clock with the wall clock, so the
+			// gate that ACCEPTS inside compose() is the one this facade answers for.
 			chainState: wallChainState(ctx, now),
 		});
 		// compose() guarantees a well-formed parse (its own fallback re-parses).
 		const rec = result.parse.recommendation!;
 		const fromEnclave = result.source === "ENCLAVE";
 		// compose() runs the deterministic gate inside its re-infer loop: an
-		// ENCLAVE result is already gate-approved (empty violations), and
-		// result.violations records what the LAST rejected model attempt
-		// violated. The deterministic fallback rec compose() returns instead is
+		// ENCLAVE result is already gate-approved (empty violations). The
+		// deterministic fallback rec compose() returns instead is
 		// validated on its own merits here — the model attempt's violations
 		// belong in `reason`, not in the verdict on what the user is shown.
 		const validation = fromEnclave

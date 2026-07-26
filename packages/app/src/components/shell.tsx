@@ -11,7 +11,6 @@ import { NetworkToggle } from "./network-toggle";
 
 /**
  * The persistent shell: one floating rounded panel on a blue "desk" gradient.
- *
  * The panel's `backdrop-filter` makes it the containing block for the
  * `position:fixed` detail sheet — intentional: the sheet is clipped by the
  * shell's radius.
@@ -110,8 +109,8 @@ function Rail() {
 
 /**
  * The three load-bearing integrations, credited where sponsors will look.
- * Marks are inlined and filled with `currentColor` so all three sit in the
- * same monochrome tint instead of their clashing brand palettes.
+ * Marks are inlined and filled with `currentColor` so all three share one
+ * monochrome tint instead of their clashing brand palettes.
  */
 const POWERED_BY = [
   { name: "1inch Aqua", href: "https://1inch.io", Mark: OneInchMark },
