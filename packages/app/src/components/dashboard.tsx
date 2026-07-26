@@ -21,7 +21,7 @@ import { PairIcons } from "./token-icon";
  * drags the small captions below AA).
  */
 export function Dashboard() {
-  const { positions, isLoading, dock, showDemo } = useBook();
+  const { positions, isConnected, isLoading, dock, showDemo } = useBook();
   const [openId, setOpenId] = useState<string | null>(null);
   const now = useNow();
 
@@ -35,7 +35,7 @@ export function Dashboard() {
             Positions
           </h1>
           <p className="mt-1.5 text-[13px] text-muted">
-            {summary(positions, now, isLoading)}
+            {summary(positions, now, isLoading, isConnected)}
           </p>
         </div>
         <Link
@@ -49,8 +49,10 @@ export function Dashboard() {
       {positions === null ? (
         isLoading ? (
           <BookLoading />
-        ) : (
+        ) : isConnected ? (
           <BookUnavailable onDemo={showDemo} />
+        ) : (
+          <NoWallet onDemo={showDemo} />
         )
       ) : positions.length === 0 ? (
         <EmptyState onDemo={showDemo} />
@@ -112,8 +114,16 @@ function useNow() {
   return now;
 }
 
-function summary(positions: Position[] | null, now: number, isLoading: boolean) {
-  if (positions === null) return isLoading ? "Loading your book…" : "Book unavailable";
+function summary(
+  positions: Position[] | null,
+  now: number,
+  isLoading: boolean,
+  isConnected: boolean,
+) {
+  if (positions === null) {
+    if (isLoading) return "Loading your book…";
+    return isConnected ? "Book unavailable" : "Connect a wallet to see your book";
+  }
   if (positions.length === 0) return "Nothing live yet";
   const counts = { Live: 0, Expired: 0, Docked: 0 };
   for (const p of positions) counts[positionStatus(p, now)] += 1;
@@ -244,10 +254,12 @@ function BookLoading() {
 }
 
 /**
- * The book subgraph read failed, or nothing is connected — unknown is not
- * empty. This is also the only state a disconnected wallet renders, so "Show
- * demo positions" must be reachable from here too: `demo-book.ts`'s whole
- * purpose is showing every screen without depending on the real book.
+ * The book subgraph read failed — unknown is not empty. A small card rather
+ * than the board below: this is a failure the user cannot act on, and a
+ * full-width pitch would read as selling instead of admitting we could not
+ * read their book. "Show demo positions" must be reachable from here too:
+ * `demo-book.ts`'s whole purpose is showing every screen without depending on
+ * the real book.
  */
 function BookUnavailable({ onDemo }: { onDemo: () => void }) {
   return (
@@ -270,12 +282,29 @@ function BookUnavailable({ onDemo }: { onDemo: () => void }) {
   );
 }
 
-function EmptyState({ onDemo }: { onDemo: () => void }) {
+/**
+ * The board a user lands on with nothing to show: no wallet, or a wallet whose
+ * book is genuinely empty. One layout for both — it is the same moment in the
+ * product, "there is nothing here, here is what this is for".
+ *
+ * The words are what must differ. An unread book is not an empty one, so the
+ * eyebrow names which state this is and `lead` says what would change it;
+ * neither variant claims the user has no positions when we have not looked.
+ */
+function BoardHero({
+  eyebrow,
+  lead,
+  onDemo,
+}: {
+  eyebrow: string;
+  lead?: string;
+  onDemo: () => void;
+}) {
   return (
     <section className="rounded-[20px] border border-glass-line bg-card-2 px-14 py-16 shadow-[var(--shadow)]">
       <div className="max-w-[640px]">
         <p className="font-mono text-[11px] tracking-[0.1em] text-aqua-text">
-          NO POSITIONS YET
+          {eyebrow}
         </p>
         <h2 className="mt-[18px] text-[34px] leading-[42px] font-semibold tracking-[-0.03em] text-pretty">
           Describe a strategy in a sentence. Ship it in one signature.
@@ -286,6 +315,11 @@ function EmptyState({ onDemo }: { onDemo: () => void }) {
           signed, so you can check where the advice came from. Your tokens
           never leave your wallet.
         </p>
+        {lead && (
+          <p className="mt-3.5 text-[15px] leading-[1.65] text-muted text-pretty">
+            {lead}
+          </p>
+        )}
         <div className="mt-7 flex items-center gap-3.5">
           <Link
             href="/compose"
@@ -308,5 +342,24 @@ function EmptyState({ onDemo }: { onDemo: () => void }) {
         </p>
       </div>
     </section>
+  );
+}
+
+function EmptyState({ onDemo }: { onDemo: () => void }) {
+  return <BoardHero eyebrow="NO POSITIONS YET" onDemo={onDemo} />;
+}
+
+/**
+ * No wallet — so the book is unknown, not empty, and the copy says exactly
+ * that. Composing is still open: a sentence and a budget need no wallet, and
+ * the signature is only asked for at the ship step.
+ */
+function NoWallet({ onDemo }: { onDemo: () => void }) {
+  return (
+    <BoardHero
+      eyebrow="NO WALLET CONNECTED"
+      lead="Connect a wallet — top right — to see your own book. Nothing is listed until then: a book we have not read is not an empty one. You can still compose without one; a wallet is only needed to ship."
+      onDemo={onDemo}
+    />
   );
 }

@@ -30,9 +30,10 @@ import type { UiRecommendation } from "./compose/from-server";
  * The real source is the book subgraph (`GET /api/book`), read for the
  * connected address: every strategy, ANY status, with the program already
  * decoded server-side (deadline, slot rows, template match). `null` means
- * "unknown" (the subgraph read failed, or nothing is connected) — the dashboard
- * renders that as unavailable, never as "no positions". `[]` means the read
- * succeeded and genuinely found nothing.
+ * "unknown" (the subgraph read failed, or nothing is connected) — never "no
+ * positions"; `isConnected` below says which of the two it is, and the
+ * dashboard shows a different board for each. `[]` means the read succeeded
+ * and genuinely found nothing.
  *
  * The chain alone cannot say how a strategy was recommended: risk rating,
  * wording and band terms live only in the signed recommendation. So this module
@@ -111,7 +112,14 @@ export function positionStatus(p: Position, nowSec: number): PositionStatus {
 type BookValue = {
   /** `null` = book unknown (subgraph unavailable, or nothing connected). */
   positions: Position[] | null;
-  /** True while an `/api/book` read is in flight. */
+  /**
+   * Which of those two unknowns it is. Neither may be rendered as "no
+   * positions", but they are not the same state: one is answered by connecting
+   * a wallet, the other is a failed read the user can do nothing about — so the
+   * dashboard shows a different board for each.
+   */
+  isConnected: boolean;
+  /** True while an `/api/book` read is in flight, or a wallet is reconnecting. */
   isLoading: boolean;
   /** Re-reads `/api/book` for the connected address; also clears the local dock overlay. */
   refetch: () => void;
@@ -154,7 +162,7 @@ function loadCache(): StrategyCache {
 }
 
 export function BookProvider({ children }: { children: ReactNode }) {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, status } = useAccount();
 
   // Lazily hydrated from localStorage on first render, not in an effect: on the
   // client that first render IS the hydration. SSR's `window` reference throws
@@ -246,8 +254,13 @@ export function BookProvider({ children }: { children: ReactNode }) {
   const currentBook: Position[] | null | undefined =
     address && bookFetch?.address === address ? bookFetch.book : undefined;
 
+  // "Reconnecting" is wagmi restoring the cookie-stored connection on load, and
+  // it reads as disconnected while it runs. Counting it as loading is what stops
+  // every reload flashing the no-wallet board at someone who has a wallet.
   const isLoading =
-    isConnected && Boolean(address) && currentBook === undefined;
+    status === "connecting" ||
+    status === "reconnecting" ||
+    (isConnected && Boolean(address) && currentBook === undefined);
 
   const refetch = useCallback(() => setRefetchTick((t) => t + 1), []);
 
@@ -308,8 +321,24 @@ export function BookProvider({ children }: { children: ReactNode }) {
   }, [isConnected, address, currentBook, cache, optimistic, dockOverrides]);
 
   const value = useMemo(
-    () => ({ positions, isLoading, refetch, recordShipped, dock, showDemo }),
-    [positions, isLoading, refetch, recordShipped, dock, showDemo],
+    () => ({
+      positions,
+      isConnected,
+      isLoading,
+      refetch,
+      recordShipped,
+      dock,
+      showDemo,
+    }),
+    [
+      positions,
+      isConnected,
+      isLoading,
+      refetch,
+      recordShipped,
+      dock,
+      showDemo,
+    ],
   );
 
   return <BookContext.Provider value={value}>{children}</BookContext.Provider>;
