@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { RPC_COOKIE, type RpcMode } from "@/lib/network";
 
+// Default first: the cookie-less mode is "mainnet" (see lib/network.ts), so the
+// fallback below lands on the same venue layout.tsx resolved.
 const MODES: { mode: RpcMode; label: string }[] = [
-  { mode: "local", label: "LOCAL FORK" },
   { mode: "mainnet", label: "BASE MAINNET" },
+  { mode: "local", label: "LOCAL FORK" },
 ];
 
 /** Client-only: persist the mode and reload into the rebuilt config. */

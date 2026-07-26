@@ -50,13 +50,15 @@ adapter requires **wagmi 2.x**; don't bump wagmi to 3 until AppKit supports it
 (`next.config.ts` carries two build workarounds pinned to this, each commented
 with its delete-when condition).
 
-The header dropdown switches the app's **read path** between the local anvil fork
-(`NEXT_PUBLIC_RPC_URL`, default `http://127.0.0.1:8545`) and Base mainnet
-(`NEXT_PUBLIC_BASE_RPC_URL`, default `https://mainnet.base.org`). The choice
-persists in a `sluice-rpc` cookie — a cookie, not localStorage, because the
-server needs it too (`layout.tsx` builds the wagmi config for
-`cookieToInitialState`, and the rail's network label is SSR'd) — and switching
-reloads the page: the wagmi/AppKit config is built once per load, deliberately.
+The header dropdown switches the app's **read path** between Base mainnet
+(`NEXT_PUBLIC_BASE_RPC_URL`, default `https://mainnet.base.org`) and the local
+anvil fork (`NEXT_PUBLIC_RPC_URL`, default `http://127.0.0.1:8545`). **Mainnet is
+the default**: a first-time visitor has no anvil on `127.0.0.1`, so defaulting to
+the fork read as a broken app. The choice persists in a `sluice-rpc` cookie — a
+cookie, not localStorage, because the server needs it too (`layout.tsx` builds
+the wagmi config for `cookieToInitialState`, and the rail's network label is
+SSR'd) — and switching reloads the page: the wagmi/AppKit config is built once
+per load, deliberately.
 
 Both modes are chainId **8453** (the fork shares Base's chainId), so the dropdown
 is **not a mainnet guard** — that stays with the anvil probe +
@@ -81,9 +83,10 @@ scripts/fork-fund.sh maker   # tokens + the Aqua approval that makes a ship fill
 Adding `NEXT_PUBLIC_DEV_AUTOCONNECT=1` goes one step further: the account is
 connected on load rather than on a click, its header replaces the wallet modal
 even when a projectId is set, and the read path is **pinned** to the fork —
-because that account exists nowhere else, and a leftover `sluice-rpc=mainnet`
-cookie would otherwise leave the page reading Base with nothing on screen saying
-so. The network chip then shows `LOCAL FORK` and stops being a dropdown.
+because that account exists nowhere else, and the read path otherwise defaults to
+Base (or carries a stale `sluice-rpc` cookie), leaving the page reading mainnet
+with nothing on screen saying so. The network chip then shows `LOCAL FORK` and
+stops being a dropdown.
 
 `scripts/demo-up.sh` sets all of that up (fork, index, funded wallet, app) in one
 command — see the root README.
