@@ -43,6 +43,10 @@
  * go/no-go go to Notion F2 §9, and promptVersion bumps if adopted.
  */
 
+// Entrypoint, so it loads .env itself — config.ts deliberately does not (PR #30
+// moved dotenv to the entrypoints so the library is importable from the app's
+// server runtime, which supplies env its own way). Same line as every CLI here.
+import "dotenv/config";
 import { ethers } from "ethers";
 import { loadConfig } from "../src/config.ts";
 import {
@@ -256,6 +260,10 @@ export type RunResult = {
 	accepted: boolean;
 	malformedAttempts: number;
 	violationCodes: string[];
+	/** Why the run ended without an accepted answer. Null when it was accepted. */
+	failureKind: "malformed" | "violation" | null;
+	/** The last rejection text, for eyeballing what the model actually did. */
+	lastError: string | null;
 	parrot: boolean | null;
 	echo: EchoCheck | null;
 	latencyMs: number;
@@ -303,6 +311,8 @@ async function runOne(
 				accepted: true,
 				malformedAttempts,
 				violationCodes: [],
+				failureKind: null,
+				lastError: null,
 				parrot: isParrot(parse.recommendation, item.req),
 				echo: echoChecks(parse.recommendation, item.req),
 				latencyMs,
@@ -320,6 +330,8 @@ async function runOne(
 		accepted: false,
 		malformedAttempts,
 		violationCodes: violations.map((v) => v.code),
+		failureKind: violations.length > 0 ? "violation" : "malformed",
+		lastError: feedback ?? null,
 		parrot: null,
 		echo: null,
 		latencyMs,
@@ -397,6 +409,27 @@ function report(rows: RunResult[]): void {
 			? "=> ADOPT (then bump promptVersion, and record on Notion F2 §9)"
 			: "=> DO NOT ADOPT (record the numbers on the issue and Notion F2 §9)",
 	);
+	// WHY runs failed. Without this the report says 75% fell back and gives
+	// nobody a lead — and a spike that cannot say what broke is just an
+	// expensive way to feel informed.
+	for (const arm of ["control", "baseline"] as const) {
+		const failed = rows.filter((r) => r.arm === arm && !r.accepted);
+		if (failed.length === 0) continue;
+		const codes = new Map<string, number>();
+		for (const r of failed) {
+			const keys =
+				r.failureKind === "malformed" ? ["(malformed)"] : [...new Set(r.violationCodes)];
+			for (const k of keys) codes.set(k, (codes.get(k) ?? 0) + 1);
+		}
+		const hist = [...codes.entries()]
+			.sort((a, b) => b[1] - a[1])
+			.map(([k, n]) => `${k}x${n}`)
+			.join("  ");
+		console.log(`\n${arm} failures (${failed.length}): ${hist}`);
+		const sample = failed.find((r) => r.lastError);
+		if (sample) console.log(`  e.g. ${sample.id}\n       ${sample.lastError?.slice(0, 300)}`);
+	}
+
 	console.log(
 		"\nNOTE: token counts are chars/4 ESTIMATES — comparable between arms, not exact.",
 	);
@@ -518,7 +551,10 @@ async function main() {
 			rows.push(r);
 			console.log(
 				`${arm.padEnd(8)} ${r.accepted ? "ok  " : "FELL"} ${String(r.attempts)}x ` +
-					`${r.parrot ? "PARROT " : "       "}${r.id}`,
+					`${r.parrot ? "PARROT " : "       "}${r.id}` +
+					(r.accepted
+						? ""
+						: `  [${r.failureKind === "malformed" ? "malformed" : r.violationCodes.join(",")}]`),
 			);
 		}
 	}
