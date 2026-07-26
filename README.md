@@ -60,6 +60,28 @@ The venue is a **Base fork** sharing Base's chainId, so a wrong-network mistake 
 correct — guarded by a fork probe plus an explicit `SLUICE_ALLOW_MAINNET` opt-in, with addresses
 pinned in `config/addresses.8453.json`.
 
+## Run it
+
+One command brings up the whole thing — a Base fork at the pinned block, a
+graph-node indexing it, a wallet funded with 100 ETH / 10 WETH / 1000 USDC /
+1 cbBTC and pre-approved to Aqua, and the app at
+[localhost:3000](http://localhost:3000) with that wallet already connected:
+
+```bash
+scripts/demo-up.sh          # needs foundry, docker compose v2, node, jq
+scripts/demo-down.sh        # stops all three: app, fork, index
+```
+
+Ctrl-C stops only the app and leaves the fork and the index up, so what you
+shipped survives a restart of the UI. `demo-down.sh` stops the lot, and works
+from any shell — `demo-up.sh` leaves the app's pid in a file for it, the same
+way `fork-up.sh` leaves anvil's.
+Composition needs `ZG_PRIVATE_KEY` in `packages/app/.envrc` and a funded 0G
+ledger — without either it still answers, labelled `TEMPLATE_FALLBACK`.
+
+To make a shipped strategy actually fill, drive a taker over it:
+`node scripts/fork-take.mjs --maker <address> --in USDC --amount 200`.
+
 ## Documentation
 
 **Notion is the source of truth** for the concept, the plan and every schema; this repo is

@@ -128,7 +128,9 @@ make fork-reset   # full teardown + fresh start — REQUIRED after any anvil res
 make fork-down    # stop everything, wipe index state
 ```
 
-Query endpoint: `http://localhost:8000/subgraphs/name/sluice/aqua-local`. Override the upstream RPC with `BASE_RPC_URL=...` (defaults to the public `https://mainnet.base.org`).
+Query endpoint: `http://localhost:8000/subgraphs/name/sluice/aqua-local`. Override the upstream RPC with `BASE_RPC_URL=...` (defaults to the public `https://mainnet.base.org`), and the block anvil forks at with `FORK_BLOCK=<n>` (defaults to the chain head; `scripts/demo-up.sh` passes the pinned block from `config/addresses.8453.json`).
+
+`scripts/demo-up.sh` runs `fork-up.sh` and then funds a wallet and starts the app against it — the whole demo in one command; `scripts/demo-down.sh` is its `fork-down.sh`, stopping the app before delegating here.
 
 Rules that keep it honest (see the F3 wiring page for why):
 - The local subgraph indexes **from the fork block onward** — local activity only, never the 10M-block Base history (that path never catches up through anvil). Market/history context stays on the hosted Studio endpoints.

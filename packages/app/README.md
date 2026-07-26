@@ -76,13 +76,18 @@ simply stops working. Absent the variable, none of it is constructed.
 
 ```bash
 anvil --fork-url $SLUICE_RPC_URL --fork-block-number 49100000
-cast send 0x4200000000000000000000000000000000000006 "deposit()" --value 5ether \
-  --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
-  --rpc-url http://127.0.0.1:8545
+scripts/fork-fund.sh maker   # tokens + the Aqua approval that makes a ship fillable
 ```
 
-For USDC (no faucet on a fork) write the balance slot directly:
-`cast rpc anvil_setStorageAt $USDC $(cast index address $ACCOUNT 9) $(cast to-uint256 25000000000)`.
+Adding `NEXT_PUBLIC_DEV_AUTOCONNECT=1` goes one step further: the account is
+connected on load rather than on a click, its header replaces the wallet modal
+even when a projectId is set, and the read path is **pinned** to the fork —
+because that account exists nowhere else, and a leftover `sluice-rpc=mainnet`
+cookie would otherwise leave the page reading Base with nothing on screen saying
+so. The network chip then shows `LOCAL FORK` and stops being a dropdown.
+
+`scripts/demo-up.sh` sets all of that up (fork, index, funded wallet, app) in one
+command — see the root README.
 
 ## Layout
 

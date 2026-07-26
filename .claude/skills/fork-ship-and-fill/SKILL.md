@@ -32,6 +32,21 @@ npm --prefix packages/arbitration-sdk run fund
 `ledger available: 3.0 OG` (or similar) means inference will run. `ledger: none
 yet` means it creates one — **that moves testnet funds, so ask the user first.**
 
+## 1–3 in one command
+
+```bash
+scripts/demo-up.sh
+```
+
+Fork at the pinned block, the local index over it, the demo wallet funded and
+approved, the app up with that wallet connected — steps 1 to 3 below, in the one
+order that works, plus §6's index. Use it unless you need a step changed; the
+rest of this file is what it does and why. Ctrl-C stops only the app;
+`scripts/demo-down.sh` stops the app, the fork and the index together.
+
+Then add the taker, which the demo wallet alone cannot be:
+`scripts/fork-fund.sh taker`. Skip to §4.
+
 ## 1. Fork
 
 ```bash
@@ -45,17 +60,25 @@ below shares this state.
 ## 2. Fund both sides
 
 ```bash
-scripts/fork-fund.sh maker
+scripts/fork-fund.sh maker    # or `demo`: 100 ETH, 10 WETH, 1000 USDC, 1 cbBTC
 scripts/fork-fund.sh taker
 ```
 
 Maker is anvil account 0 (ships), taker is account 1 (fills) — deliberately
-different addresses. WETH comes from wrapping ETH; USDC has no faucet on a fork,
-so its balance slot is written directly.
+different addresses. `demo` is the maker address again with a fuller sheet; a
+role here names a balance sheet, not a wallet. No token has a faucet on a fork,
+so balances are written into the balance slot, and every amount is a target: run
+it twice and you hold what it says, not double.
 
 This also approves Aqua for the maker's tokens. **That approval is what makes a
 shipped position fillable** — Aqua pulls the real ERC20 only at fill time. See
 the troubleshooting note; it is the failure you will actually hit.
+
+Worth knowing before it costs you an afternoon: **anvil's accounts 0 and 1 carry
+an EIP-7702 delegation on real Base** — their keys are public, someone set one,
+and a fork inherits it. They have CODE. `WETH.withdraw()` pays out through a
+2300-gas `transfer`, the stipend runs the delegate, and it reverts with a bare
+`0x`: these accounts can wrap but never unwrap.
 
 ## 3. App
 
@@ -69,6 +92,12 @@ there is no connect button at all.
 set -a; . ./packages/app/.envrc; set +a
 npm run dev
 ```
+
+Add `NEXT_PUBLIC_DEV_AUTOCONNECT=1` (what `demo-up.sh` does) to connect on load
+instead of on a click and to **pin the read path to the fork**. Without the pin,
+a `sluice-rpc=mainnet` cookie left in the browser from any earlier session sends
+the page to Base — empty wallet, someone else's book, both venues chainId 8453,
+nothing on screen admitting it.
 
 ## 4. Walk the UI
 
@@ -133,9 +162,10 @@ real fill the card still reads `consumed 0` — not a bug, and not evidence of
 anything. To make it move you need a subgraph indexing *this* fork.
 
 Do this **before** the walkthrough — it indexes from the fork block forward.
+`scripts/demo-up.sh` already has (both of these steps), so skip ahead.
 
 ```bash
-subgraph/local/fork-up.sh
+subgraph/local/fork-up.sh          # FORK_BLOCK=<n> pins it; default is the head
 ```
 
 Then point the app at it (the whole app, not just the route):
