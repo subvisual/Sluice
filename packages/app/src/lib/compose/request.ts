@@ -19,6 +19,8 @@ export type RequestIssue = {
     | "WRONG_CHAIN"
     | "EMPTY_PROMPT"
     | "NO_TOKENS"
+    | "NEED_TWO_TOKENS"
+    | "TOO_MANY_TOKENS"
     | "ZERO_AMOUNT"
     | "OVER_BALANCE"
     /**
@@ -68,10 +70,26 @@ export function buildRecommendationRequest(draft: RequestDraft): BuildResult {
     });
   }
 
+  // Exactly two. Every layer below is single-pair: swapvm takes
+  // tokens: [string, string], MarketContext carries one pair, and pairingPlan
+  // splits that one pair. A one-token budget also has no pair to derive, and
+  // full-range's price IS the ratio of the shipped amounts — so one token ships
+  // a position with no price. NO_TOKENS keeps meaning *none*: the screen filters
+  // on that code when a row is malformed.
   if (draft.selections.length === 0) {
     issues.push({
       code: "NO_TOKENS",
-      message: "Select at least one token and set an amount.",
+      message: "Select two tokens and set their amounts.",
+    });
+  } else if (draft.selections.length === 1) {
+    issues.push({
+      code: "NEED_TWO_TOKENS",
+      message: "Pick a second token — a strategy is a pair.",
+    });
+  } else if (draft.selections.length > 2) {
+    issues.push({
+      code: "TOO_MANY_TOKENS",
+      message: "Two tokens per request — one strategy is one pair.",
     });
   }
 
