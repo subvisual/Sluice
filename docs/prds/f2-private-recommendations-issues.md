@@ -91,7 +91,9 @@ invariant that is in scope for the recommendation path **and** meaningful on the
   strategies ≤ budget — exact decimal-string maths, not floating point), I3
   (`strategies.length ∈ [1, maxStrategies]`), I4 (chain match).
 - **Grammar (per strategy):** I5 (slots use only offered instructions — `curve ∈ CURVE_OPTIONS`,
-  `fee ∈ WRAPPER_OPTIONS` with `feeBps ∈ [0, 1e9)`, `guards ∈ GUARD_OPTIONS`), I7 (deadline within
+  `fee ∈ WRAPPER_OPTIONS` with `feeBps ∈ [1, 1e9)` — 0 excluded since #44: it compiles to a
+  `FLAT_FEE_AMOUNT_IN_XD` that charges nothing, which is what the no-fee templates are for —
+  `guards ∈ GUARD_OPTIONS`), I7 (deadline within
   `(now, now + maxDeadlineSec]`), I8 (known `templateId`), I10 (canonical ascending token order —
   catches the token0/token1 inversion), I11 (each virtualAmount a decimal string, strictly > 0).
 - **Freshness:** I12 (`observedBlock` within N blocks of head; future snapshots also rejected).

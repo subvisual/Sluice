@@ -72,6 +72,36 @@ export type ParsedShipInput = {
 const BPS_ONE = 1_000_000_000;
 const pct = (bps: number) => `${((bps / BPS_ONE) * 100).toFixed(2)}%`;
 
+/**
+ * The fee's own formatter — a band and a maker fee live on different scales.
+ * A band is whole percents (±16.06%) and two decimals render it fine; a fee is
+ * a fraction of one percent, and at 1e9 anything under 50000 rounds to
+ * "0.00%" — a real fee displayed as none. One bps is 1e-7 percent, so seven
+ * digits is the exact floor; trailing zeros are trimmed so an ordinary fee
+ * still reads "0.05%" rather than "0.0500000%".
+ */
+function feePct(bps: number): string {
+  const fixed = ((bps / BPS_ONE) * 100).toFixed(7);
+  return `${fixed.replace(/\.?0+$/, "")}%`;
+}
+
+/**
+ * The fee slot's params line, shared with the read-back path so a shipped
+ * program and a recommendation describe the same wrapper identically. A zero
+ * fee says so outright: the wrapper is still in the program, charging nothing.
+ */
+export function feeSlotParams(bps: number): string {
+  return bps === 0 ? "0% on amount in · charges nothing" : `${feePct(bps)} on amount in`;
+}
+
+/**
+ * A zero fee and an absent fee slot are the same economics, so they read the
+ * same here. Only the slot table below distinguishes them — that is where the
+ * shipped no-op instruction is still shown for what it is.
+ */
+const feeLabel = (bps: number) =>
+  Number.isFinite(bps) && bps > 0 ? `${feePct(bps)} maker fee` : "no maker fee";
+
 export function fromServer(
   res: ServerComposeResult,
   nonce: number,
@@ -126,7 +156,7 @@ function toUiStrategy(s: ServerStrategy): UiStrategy {
   });
 
   const band = Number.isFinite(bandBps) ? `±${pct(bandBps)}` : "full range";
-  const feeText = Number.isFinite(feeBps) ? `${pct(feeBps)} maker fee` : "no maker fee";
+  const feeText = feeLabel(feeBps);
 
   return {
     templateId: s.templateId,
@@ -145,7 +175,9 @@ function toUiStrategy(s: ServerStrategy): UiStrategy {
     facts: [
       { label: "BAND", value: band },
       { label: "DEADLINE", value: `${days}d · ${formatDayShort(deadline)}` },
-      ...(Number.isFinite(feeBps) ? [{ label: "FEE", value: `${pct(feeBps)} maker fee` }] : []),
+      ...(Number.isFinite(feeBps) && feeBps > 0
+        ? [{ label: "FEE", value: feeText }]
+        : []),
       ...legs.map(({ token, virtual }) => ({
         label: `${token.symbol.toUpperCase()} CEILING`,
         value: formatFixed(virtual, token.decimals, displayFrac(token.decimals)),
@@ -170,7 +202,7 @@ function toUiStrategy(s: ServerStrategy): UiStrategy {
         index: 3,
         name: "fee",
         instruction: s.slots.fee?.instruction ?? "— not used",
-        params: s.slots.fee ? `${pct(feeBps)} on amount in` : "no maker fee",
+        params: s.slots.fee ? feeSlotParams(feeBps) : "no maker fee",
       },
       {
         index: 4,

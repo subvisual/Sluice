@@ -211,7 +211,7 @@ test("I5 — a fee wrapper that is not offered is rejected", () => {
 	assert.ok(codes(rec([bad])).includes("I5"));
 });
 
-test("I5 — feeBps out of [0, 1e9) is rejected, in-range is accepted", () => {
+test("I5 — feeBps out of [1, 1e9) is rejected, in-range is accepted", () => {
 	const over = strat([WETH], ["2"]);
 	over.slots.fee = {
 		instruction: "FLAT_FEE_AMOUNT_IN_XD",
@@ -225,6 +225,23 @@ test("I5 — feeBps out of [0, 1e9) is rejected, in-range is accepted", () => {
 		params: { feeBps: 3_000_000 }, // 0.3%
 	};
 	assert.ok(!codes(rec([ok])).includes("I5"));
+});
+
+test("I5 — a fee slot that charges nothing is rejected, and the fix is structural", () => {
+	// feeBps 0 compiles to a FLAT_FEE_AMOUNT_IN_XD that takes nothing: bytes and
+	// gas for a fee the screen can only describe as absent (#44). The message
+	// must send the model to the no-fee template, not to a different number.
+	const zero = strat([WETH], ["2"]);
+	zero.slots.fee = {
+		instruction: "FLAT_FEE_AMOUNT_IN_XD",
+		params: { feeBps: 0 },
+	};
+	assert.ok(codes(rec([zero])).includes("I5"));
+	const m = msg(rec([zero]), "I5");
+	assert.ok(m.includes("full-range"), m);
+	assert.ok(m.includes("drop the fee slot"), m);
+	// One violation, not two — the range message would name a different fix.
+	assert.equal(codes(rec([zero])).filter((c) => c === "I5").length, 1);
 });
 
 test("I5 — a guard is rejected (no guard is offered on this venue)", () => {
@@ -388,7 +405,7 @@ test("I5 feeBps message carries the scale, in the units that trip a model", () =
 		instruction: "FLAT_FEE_AMOUNT_IN_XD",
 		params: { feeBps: 30 }, // 0.3% in the 10000-scale the model knows
 	};
-	// 30 is a valid integer in [0, 1e9), so this specific value does NOT fire —
+	// 30 is a valid integer in [1, 1e9), so this specific value does NOT fire —
 	// the scale hint belongs to the out-of-range case.
 	const huge = strat([WETH], ["2"]);
 	huge.slots.fee = {
