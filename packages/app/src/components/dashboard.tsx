@@ -9,7 +9,6 @@ import {
   type Position,
   type PositionLeg,
 } from "@/lib/book";
-import { demoBook } from "@/lib/demo-book";
 import { countdown, formatDayShort } from "@/lib/time";
 import { DetailSheet } from "./detail-sheet";
 import { RiskChip, StatusChip } from "./chips";
@@ -23,7 +22,7 @@ import { PairIcons } from "./token-icon";
  * drags the small captions below AA).
  */
 export function Dashboard() {
-  const { positions, ship, dock } = useBook();
+  const { positions, isLoading, dock, showDemo } = useBook();
   const [openId, setOpenId] = useState<string | null>(null);
   const now = useNow();
 
@@ -37,7 +36,7 @@ export function Dashboard() {
             Positions
           </h1>
           <p className="mt-1.5 text-[13px] text-muted">
-            {summary(positions, now)}
+            {summary(positions, now, isLoading)}
           </p>
         </div>
         <Link
@@ -49,9 +48,13 @@ export function Dashboard() {
       </div>
 
       {positions === null ? (
-        <BookUnavailable />
+        isLoading ? (
+          <BookLoading />
+        ) : (
+          <BookUnavailable />
+        )
       ) : positions.length === 0 ? (
-        <EmptyState onDemo={() => ship(demoBook())} />
+        <EmptyState onDemo={showDemo} />
       ) : (
         <>
           <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
@@ -110,8 +113,8 @@ function useNow() {
   return now;
 }
 
-function summary(positions: Position[] | null, now: number) {
-  if (positions === null) return "Book unavailable";
+function summary(positions: Position[] | null, now: number, isLoading: boolean) {
+  if (positions === null) return isLoading ? "Loading your book…" : "Book unavailable";
   if (positions.length === 0) return "Nothing live yet";
   const counts = { Live: 0, Expired: 0, Docked: 0 };
   for (const p of positions) counts[positionStatus(p, now)] += 1;
@@ -223,6 +226,21 @@ function Countdown({
 }
 
 /* --------------------------------------------------------------- states */
+
+/** First read still in flight — distinct from `BookUnavailable` so a slow
+ * subgraph never flashes "unavailable" before the real answer lands. */
+function BookLoading() {
+  return (
+    <section className="rounded-[18px] border border-glass-line bg-card-2 p-8 shadow-[var(--shadow-sm)]">
+      <p className="font-mono text-[11px] tracking-[0.1em] text-muted-2">
+        LOADING BOOK
+      </p>
+      <p className="mt-3 max-w-[560px] text-sm leading-relaxed text-muted">
+        Reading your positions from the book subgraph…
+      </p>
+    </section>
+  );
+}
 
 /** The book subgraph read failed or has not run — unknown is not empty. */
 function BookUnavailable() {

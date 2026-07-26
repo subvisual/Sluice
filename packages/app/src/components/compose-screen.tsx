@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import type { Address } from "viem";
-import { useConnection } from "wagmi";
+import { useConnection, usePublicClient, useWalletClient } from "wagmi";
 import { parseAmount } from "@/lib/amount";
 import { useBook } from "@/lib/book";
 import { EXPECTED_CHAIN_ID, REQUEST_DEFAULTS } from "@/lib/compose/constants";
@@ -15,12 +15,12 @@ import {
 import {
   COMPOSE_STEPS,
   fromServer,
-  toPositions,
   type UiRecommendation,
   type UiStrategy,
 } from "@/lib/compose/from-server";
 import type { TokenSelection } from "@/lib/compose/types";
 import type { ServerComposeResult } from "@sluice/arbitration-sdk/serve";
+import { shipRecommendation } from "@/lib/ship";
 import { TOKENS } from "@/lib/tokens";
 import { useTokenBalances } from "@/lib/use-token-balances";
 import { ProvenanceChip, RiskChip } from "./chips";
@@ -42,8 +42,10 @@ type Phase = "idle" | "composing" | "done";
 
 export function ComposeScreen() {
   const router = useRouter();
-  const { ship } = useBook();
+  const { recordShipped, refetch } = useBook();
   const { address, chainId, isConnected } = useConnection();
+  const { data: walletClient } = useWalletClient();
+  const publicClient = usePublicClient();
   const { balances, isLoading: balancesLoading } = useTokenBalances(address);
 
   const [prompt, setPrompt] = useState("");
@@ -52,6 +54,8 @@ export function ComposeScreen() {
   const [step, setStep] = useState(0);
   const [rec, setRec] = useState<UiRecommendation | null>(null);
   const [composeError, setComposeError] = useState<string | null>(null);
+  const [shipError, setShipError] = useState<string | null>(null);
+  const [shipping, setShipping] = useState(false);
   // Any edit invalidates an in-flight or finished run — the request changed.
   const runRef = useRef(0);
 
@@ -59,6 +63,7 @@ export function ComposeScreen() {
     runRef.current += 1;
     setPhase("idle");
     setRec(null);
+    setShipError(null);
   };
 
   const malformed = useMemo(
@@ -168,12 +173,33 @@ export function ComposeScreen() {
     }
   };
 
-  const shipSet = () => {
-    if (!rec) return;
-    // Real path: one wallet signature over the Multicall, then the book
-    // subgraph picks the positions up. Neither is wired yet — see from-server.
-    ship(toPositions(rec, TOKENS));
-    router.push("/");
+  const shipSet = async () => {
+    if (!rec || !rec.validation.ok || !address || !walletClient || !publicClient) {
+      return;
+    }
+    setShipError(null);
+    setShipping(true);
+    try {
+      // One wallet signature over the Multicall (F1 §2). recordShipped caches
+      // the metadata this recommendation carries — keyed by the real
+      // strategyHash — so the dashboard's join can render it before the
+      // subgraph has indexed the ship.
+      const { strategyHashes } = await shipRecommendation({
+        inputs: rec.shipInputs,
+        account: address,
+        walletClient,
+        publicClient,
+      });
+      recordShipped(rec, strategyHashes);
+      refetch();
+      router.push("/");
+    } catch (e) {
+      // ForkGuardError / user rejection / revert — an inline failure, never a
+      // crash. Nothing was shipped; the set is still here to retry or decline.
+      setShipError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setShipping(false);
+    }
   };
 
   return (
@@ -264,6 +290,8 @@ export function ComposeScreen() {
           rec={rec}
           onDecline={invalidate}
           onShip={shipSet}
+          shipping={shipping}
+          shipError={shipError}
         />
       )}
     </div>
@@ -334,10 +362,14 @@ function RecommendationSet({
   rec,
   onDecline,
   onShip,
+  shipping,
+  shipError,
 }: {
   rec: UiRecommendation;
   onDecline: () => void;
   onShip: () => void;
+  shipping: boolean;
+  shipError: string | null;
 }) {
   const n = rec.strategies.length;
 
@@ -401,20 +433,27 @@ function RecommendationSet({
               The validator rejected this set — it cannot ship.
             </p>
           )}
+          {shipError && (
+            <p className="mt-[5px] text-xs leading-normal text-muted">
+              <span className="mr-2 font-mono text-[10px] text-muted-3">FAILED</span>
+              {shipError} — nothing was shipped.
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2.5">
           <button
             onClick={onDecline}
-            className="rounded-[10px] border border-glass-line bg-card-2 px-[18px] py-3 text-sm text-muted shadow-[var(--shadow-sm)] transition-colors hover:border-muted hover:text-text"
+            disabled={shipping}
+            className="rounded-[10px] border border-glass-line bg-card-2 px-[18px] py-3 text-sm text-muted shadow-[var(--shadow-sm)] transition-colors hover:border-muted hover:text-text disabled:cursor-not-allowed disabled:opacity-60"
           >
             Decline
           </button>
           <button
             onClick={onShip}
-            disabled={!rec.validation.ok}
+            disabled={!rec.validation.ok || shipping}
             className="rounded-[10px] bg-ink px-6 py-[13px] text-[15px] font-medium text-white shadow-[var(--shadow)] transition-colors hover:bg-ink-2 disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted disabled:shadow-[inset_0_0_0_1px_var(--border)]"
           >
-            Ship — 1 signature
+            {shipping ? "Shipping…" : "Ship — 1 signature"}
           </button>
         </div>
       </div>

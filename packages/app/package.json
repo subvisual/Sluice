@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/lib/compose/from-server.test.ts src/lib/ship.test.ts"
+    "test": "tsx --test src/lib/compose/from-server.test.ts src/lib/ship.test.ts src/lib/join-book.test.ts"
   },
   "dependencies": {
     "@sluice/arbitration-sdk": "*",
