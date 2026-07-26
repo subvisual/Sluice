@@ -53,3 +53,6 @@ yarn-error.log*
 docs/superpowers/
 .vercel
 .env*
+
+# Playwright MCP browser session artifacts
+.playwright-mcp/
