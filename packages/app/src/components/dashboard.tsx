@@ -213,7 +213,9 @@ function Countdown({
   const { label, tone } =
     status === "Docked"
       ? { label: `docked ${formatDayShort(position.dockedAt!)}`, tone: "muted" }
-      : countdown(position.deadline, now);
+      : position.deadline === null
+        ? { label: "no deadline", tone: "muted" }
+        : countdown(position.deadline, now);
   const color =
     tone === "warn"
       ? "text-warn-text"

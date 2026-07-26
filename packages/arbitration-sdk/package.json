@@ -6,7 +6,9 @@
   "exports": {
     "./serve": "./src/serve.ts",
     "./grammar": "./src/grammar.ts",
-    "./subgraph": "./src/subgraph.ts"
+    "./subgraph": "./src/subgraph.ts",
+    "./swapvm": "./src/swapvm.ts",
+    "./opcodes": "./src/opcodes.ts"
   },
   "scripts": {
     "infer": "tsx src/cli.ts",

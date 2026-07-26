@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { UserBook } from "@sluice/arbitration-sdk/subgraph";
-import { joinBook, metaFromPosition, pairFromTokens, positionFromMeta } from "./join-book";
+import {
+  joinBook,
+  metaFromPosition,
+  pairFromTokens,
+  positionFromMeta,
+} from "./join-book";
 import type { CachedStrategyMeta, StrategyCache } from "./join-book";
 import type { Position } from "./book";
 
@@ -29,175 +33,92 @@ const CACHE_A: CachedStrategyMeta = {
   slots: [{ index: 1, name: "curve", instruction: "XYC_SWAP_XD", params: "…" }],
 };
 
-function bookWith(overrides: Partial<UserBook>): UserBook {
+/** A decoded chain row as `/api/book` hands it over (post-revive). */
+function chainRow(overrides: Partial<Position> = {}): Position {
   return {
-    maker: "0xmaker",
-    strategyCount: 1,
-    liveStrategyCount: 1,
-    tokenBooks: [],
-    liveStrategies: [],
-    recentFills: [],
+    id: "0xmaker-app-hash",
+    strategyHash: HASH_A,
+    pair: "WETH / USDC",
+    templateLabel: "market-make the whole curve",
+    description: "Read back from the aqua subgraph.",
+    bandKind: "band",
+    band: "full range",
+    bandNote: "constant product · fills at any price",
+    legs: [
+      {
+        token: USDC,
+        symbol: "USDC",
+        decimals: 6,
+        virtual: 3_000_000_000n,
+        consumed: 2_000_000_000n,
+      },
+    ],
+    fills: [{ time: "Jul 25 · 09:12", flow: "+1 USDC  →  −1 WETH" }],
+    deadline: 1_900_000_000,
+    dockedAt: null,
+    risk: null,
+    provenance: null,
+    slots: [
+      { index: 1, name: "salt", instruction: "SALT", params: "0x01" },
+      { index: 2, name: "deadline", instruction: "DEADLINE", params: "1900000000" },
+    ],
     ...overrides,
   };
 }
 
-test("joinBook returns null when the book itself is null (subgraph unavailable)", () => {
+test("joinBook returns null when the chain read is null (subgraph unavailable)", () => {
   assert.equal(joinBook(null, {}), null);
 });
 
-test("joinBook returns [] for a valid book with no live strategies (not the same as null)", () => {
-  const result = joinBook(bookWith({ liveStrategies: [] }), {});
-  assert.deepEqual(result, []);
+test("joinBook returns [] for a successful read with no strategies (not the same as null)", () => {
+  assert.deepEqual(joinBook([], {}), []);
 });
 
-test("joinBook joins a live strategy against cached metadata: consumed = ceiling - virtualBalance", () => {
+test("a cache hit overlays recommendation metadata but keeps the chain's legs, fills and dock state", () => {
   const cache: StrategyCache = { [HASH_A]: CACHE_A };
-  const book = bookWith({
-    liveStrategies: [
-      {
-        id: "strat-1",
-        strategyHash: HASH_A,
-        app: "0xapp",
-        fillCount: 2,
-        balances: [
-          { tokenAddress: USDC, symbol: "USDC", decimals: 6, virtualBalance: "1000000000", virtualBalanceHuman: "1000" },
-          { tokenAddress: WETH, symbol: "WETH", decimals: 18, virtualBalance: "500000000000000000", virtualBalanceHuman: "0.5" },
-        ],
-      },
-    ],
-    recentFills: [
-      {
-        id: "fill-1",
-        taker: "0xtaker",
-        tokenIn: "USDC",
-        tokenOut: "WETH",
-        amountIn: "2000000000",
-        amountInHuman: "2000",
-        amountOut: "1500000000000000000",
-        amountOutHuman: "1.5",
-        ts: 1_999_000_000,
-        block: 100,
-        strategyId: "strat-1",
-      },
-      {
-        // Belongs to a different strategy — must not leak into this position's fills.
-        id: "fill-2",
-        taker: "0xtaker2",
-        tokenIn: "WETH",
-        tokenOut: "USDC",
-        amountIn: "1000000000000000000",
-        amountInHuman: "1",
-        amountOut: "3000000000",
-        amountOutHuman: "3000",
-        ts: 1_999_000_500,
-        block: 101,
-        strategyId: "strat-other",
-      },
-    ],
-  });
-
-  const positions = joinBook(book, cache);
+  const positions = joinBook([chainRow()], cache);
   assert.equal(positions?.length, 1);
   const p = positions![0];
 
-  assert.equal(p.strategyHash, HASH_A);
-  assert.equal(p.id, HASH_A);
-  assert.equal(p.pair, "WETH / USDC");
+  // Recommendation-only fields come from the cache…
   assert.equal(p.templateLabel, "tight-clmm");
+  assert.equal(p.description, "a narrow band around mid");
+  assert.equal(p.band, "±1.00%");
   assert.equal(p.risk, "low");
   assert.equal(p.provenance, "ENCLAVE");
-  assert.equal(p.dockedAt, null);
+  assert.deepEqual(p.slots, CACHE_A.slots);
 
-  const usdcLeg = p.legs.find((l) => l.symbol === "USDC")!;
-  assert.equal(usdcLeg.virtual, 3_000_000_000n);
-  assert.equal(usdcLeg.consumed, 3_000_000_000n - 1_000_000_000n);
-
-  const wethLeg = p.legs.find((l) => l.symbol === "WETH")!;
-  assert.equal(wethLeg.virtual, 2_000_000_000_000_000_000n);
-  assert.equal(wethLeg.consumed, 2_000_000_000_000_000_000n - 500_000_000_000_000_000n);
-
-  // Only the fill for THIS strategy id is attached.
+  // …but the chain stays authoritative for amounts, fills, and status.
+  assert.equal(p.legs[0].virtual, 3_000_000_000n);
+  assert.equal(p.legs[0].consumed, 2_000_000_000n);
   assert.equal(p.fills.length, 1);
-  assert.match(p.fills[0].flow, /1\.5 WETH/);
-  assert.match(p.fills[0].flow, /2000 USDC/);
-});
-
-test("joinBook clamps consumed at 0 if a stale cache ceiling is smaller than the on-chain remaining balance", () => {
-  const cache: StrategyCache = {
-    [HASH_A]: { ...CACHE_A, legs: [{ token: USDC, symbol: "USDC", decimals: 6, virtual: 100n }] },
-  };
-  const book = bookWith({
-    liveStrategies: [
-      {
-        id: "strat-1",
-        strategyHash: HASH_A,
-        app: "0xapp",
-        fillCount: 0,
-        balances: [
-          { tokenAddress: USDC, symbol: "USDC", decimals: 6, virtualBalance: "999999999999", virtualBalanceHuman: "999999.999999" },
-        ],
-      },
-    ],
-  });
-  const positions = joinBook(book, cache);
-  assert.equal(positions![0].legs[0].consumed, 0n);
-});
-
-test("joinBook produces a reduced Position for a live strategy with no cache match", () => {
-  const book = bookWith({
-    liveStrategies: [
-      {
-        id: "strat-2",
-        strategyHash: HASH_B,
-        app: "0xapp",
-        fillCount: 0,
-        balances: [
-          { tokenAddress: WETH, symbol: "WETH", decimals: 18, virtualBalance: "1000000000000000000", virtualBalanceHuman: "1" },
-        ],
-      },
-    ],
-  });
-
-  const positions = joinBook(book, {});
-  assert.equal(positions?.length, 1);
-  const p = positions![0];
-
-  assert.equal(p.strategyHash, HASH_B);
-  assert.equal(p.templateLabel, "Aqua strategy");
-  assert.equal(p.risk, null);
-  // Not "TEMPLATE_FALLBACK": a cache-miss position may be a legitimate
-  // ENCLAVE-verified strategy this browser simply has no local record of
-  // (shipped elsewhere, or before the cache existed) — never claim "not
-  // signed" for that (Task 6 review finding 2).
-  assert.equal(p.provenance, null);
-  assert.deepEqual(p.slots, []);
-  assert.equal(p.pair, "WETH");
-  assert.equal(p.legs.length, 1);
-  assert.equal(p.legs[0].virtual, 1_000_000_000_000_000_000n);
-  assert.equal(p.legs[0].consumed, 0n);
   assert.equal(p.dockedAt, null);
+  // The decoded deadline wins — it read the shipped bytes.
+  assert.equal(p.deadline, 1_900_000_000);
 });
 
-test("joinBook falls back to on-chain token metadata for an unmatched strategy with an unknown token", () => {
-  const alien = "0x000000000000000000000000000000000000dEaD";
-  const book = bookWith({
-    liveStrategies: [
-      {
-        id: "strat-3",
-        strategyHash: HASH_B,
-        app: "0xapp",
-        fillCount: 0,
-        balances: [
-          { tokenAddress: alien, symbol: "ALIEN", decimals: 9, virtualBalance: "42", virtualBalanceHuman: "0.000000042" },
-        ],
-      },
-    ],
-  });
-  const positions = joinBook(book, {});
-  const leg = positions![0].legs[0];
-  assert.equal(leg.symbol, "ALIEN");
-  assert.equal(leg.decimals, 9);
-  assert.equal(leg.virtual, 42n);
+test("a cache hit with empty cached slots keeps the decoded slot rows", () => {
+  const cache: StrategyCache = { [HASH_A]: { ...CACHE_A, slots: [] } };
+  const [p] = joinBook([chainRow()], cache)!;
+  assert.equal(p.slots.length, 2);
+  assert.equal(p.slots[0].instruction, "SALT");
+});
+
+test("the cached deadline fills in only when the program did not decode", () => {
+  const cache: StrategyCache = { [HASH_A]: CACHE_A };
+  const [p] = joinBook([chainRow({ deadline: null })], cache)!;
+  assert.equal(p.deadline, 2_000_000_000);
+});
+
+test("a cache miss passes the decoded row through unchanged", () => {
+  const row = chainRow({ strategyHash: HASH_B });
+  const [p] = joinBook([row], {})!;
+  assert.deepEqual(p, row);
+  // In particular: null provenance (no local record — never claim
+  // "TEMPLATE_FALLBACK"/"not signed" for a strategy we know nothing about),
+  // and the honest decoded labels.
+  assert.equal(p.provenance, null);
+  assert.equal(p.risk, null);
 });
 
 test("pairFromTokens sorts by decimals descending and joins symbols", () => {

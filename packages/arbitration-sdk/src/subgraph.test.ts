@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { formatUnits, unwrap, shapeUserBook } from "./subgraph.ts";
+import {
+	formatUnits,
+	unwrap,
+	shapeUserBook,
+	shapeMakerPositions,
+} from "./subgraph.ts";
 
 // --- formatUnits: exact integer -> decimal string, no floating point ---
 
@@ -170,4 +175,89 @@ test("shapeUserBook tolerates a token with null decimals (non-standard ERC20)", 
 	assert.equal(b.decimals, null);
 	assert.equal(b.committedVirtual, "123"); // raw kept
 	assert.equal(b.committedVirtualHuman, "123"); // no scaling when decimals unknown
+});
+
+// --- shapeMakerPositions: dashboard rows, any status ---
+
+const RAW_POSITIONS = {
+	strategies: [
+		{
+			id: "0xmaker-app-hash1",
+			strategyHash: "0xhash1",
+			status: "LIVE",
+			strategyData: "0xdeadbeef",
+			shippedAt: "1750000000",
+			dockedAt: null,
+			balances: [
+				{
+					token: { id: "0xusdc", symbol: "USDC", decimals: 6 },
+					initialVirtual: "5000000000",
+					virtualBalance: "3795500000",
+					totalPulled: "1204500000",
+					totalPushed: "0",
+				},
+			],
+			fills: [
+				{
+					ts: "1750001000",
+					amountIn: "1204500000",
+					amountOut: "490000000000000000",
+					tokenIn: { symbol: "USDC", decimals: 6 },
+					tokenOut: { symbol: "WETH", decimals: 18 },
+				},
+			],
+		},
+		{
+			id: "0xmaker-app-hash2",
+			strategyHash: "0xhash2",
+			status: "DOCKED",
+			strategyData: "0x",
+			shippedAt: "1749000000",
+			dockedAt: "1749500000",
+			balances: [],
+			fills: [],
+		},
+	],
+};
+
+test("shapeMakerPositions keeps every status and the raw strategy bytes", () => {
+	const rows = shapeMakerPositions(RAW_POSITIONS);
+	assert.equal(rows.length, 2);
+	assert.equal(rows[0].status, "LIVE");
+	assert.equal(rows[0].strategyData, "0xdeadbeef");
+	assert.equal(rows[0].dockedAt, null);
+	assert.equal(rows[0].shippedAt, 1750000000);
+	assert.equal(rows[1].status, "DOCKED");
+	assert.equal(rows[1].dockedAt, 1749500000);
+});
+
+test("shapeMakerPositions shapes balances and fills with raw base units", () => {
+	const [row] = shapeMakerPositions(RAW_POSITIONS);
+	assert.deepEqual(row.balances, [
+		{
+			tokenAddress: "0xusdc",
+			symbol: "USDC",
+			decimals: 6,
+			initialVirtual: "5000000000",
+			virtualBalance: "3795500000",
+			totalPulled: "1204500000",
+			totalPushed: "0",
+		},
+	]);
+	assert.deepEqual(row.fills, [
+		{
+			ts: 1750001000,
+			tokenInSymbol: "USDC",
+			tokenInDecimals: 6,
+			amountIn: "1204500000",
+			tokenOutSymbol: "WETH",
+			tokenOutDecimals: 18,
+			amountOut: "490000000000000000",
+		},
+	]);
+});
+
+test("shapeMakerPositions yields an empty list for an unknown maker", () => {
+	assert.deepEqual(shapeMakerPositions({ strategies: [] }), []);
+	assert.deepEqual(shapeMakerPositions({}), []);
 });
