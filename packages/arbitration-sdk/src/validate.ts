@@ -94,6 +94,21 @@ function toScaled(s: string, scale: number): bigint {
 	return BigInt(intPart + padded);
 }
 
+// Every message ends by naming the value that would satisfy the rule, whenever
+// that value is deterministic. The rejection feedback IS the next prompt
+// (compose.ts hands these straight back), and the retry budget is one attempt —
+// a model made to re-derive the number it just got wrong usually gets it wrong
+// again. Where no deterministic fix exists — which template suits the intent —
+// the message states the rule and stops; invented advice is worse than none.
+
+/// The menu for a slot, as a corrective clause. An empty menu is a real answer
+/// on this venue (no guard has an encoder yet), and the fix is to drop the slot.
+function offered(options: string[], slot: string): string {
+	return options.length > 0
+		? `use one of: ${options.join(", ")}`
+		: `nothing is offered here on this venue — omit the ${slot} slot`;
+}
+
 // Grammar checks for one strategy (I5, I7, I8, I10, I11). `at` labels messages.
 function validateStrategy(
 	st: SlotAssignment,
@@ -104,7 +119,10 @@ function validateStrategy(
 ): void {
 	// I8 — templateId is a known seed shape.
 	if (!TEMPLATE_IDS.has(st.templateId)) {
-		push("I8", `${at}: templateId "${st.templateId}" is not a known template`);
+		push(
+			"I8",
+			`${at}: templateId "${st.templateId}" is not a known template — known ids: ${[...TEMPLATE_IDS].join(", ")}`,
+		);
 	}
 
 	// I5 — every named instruction is one this venue actually offers.
@@ -112,13 +130,16 @@ function validateStrategy(
 	if (!curve || !CURVES.has(curve)) {
 		push(
 			"I5",
-			`${at}: curve ${JSON.stringify(curve)} is not a curve on this venue (${CURVE_OPTIONS.join(", ") || "none"})`,
+			`${at}: curve ${JSON.stringify(curve)} is not a curve on this venue — ${offered(CURVE_OPTIONS, "curve")}`,
 		);
 	}
 	const fee = st.slots?.fee;
 	if (fee) {
 		if (!WRAPPERS.has(fee.instruction)) {
-			push("I5", `${at}: fee "${fee.instruction}" is not an offered wrapper`);
+			push(
+				"I5",
+				`${at}: fee "${fee.instruction}" is not an offered wrapper — ${offered(WRAPPER_OPTIONS, "fee")}`,
+			);
 		} else {
 			const feeBps = fee.params?.feeBps;
 			if (feeBps !== undefined) {
@@ -126,7 +147,7 @@ function validateStrategy(
 				if (!Number.isInteger(n) || n < 0 || n >= FEE_BPS_ONE) {
 					push(
 						"I5",
-						`${at}: feeBps ${JSON.stringify(feeBps)} must be an integer in [0, ${FEE_BPS_ONE})`,
+						`${at}: feeBps ${JSON.stringify(feeBps)} must be an integer in [0, ${FEE_BPS_ONE}) — it is out of ${FEE_BPS_ONE}, not 10000, so 0.3% is ${(FEE_BPS_ONE / 1000) * 3}`,
 					);
 				}
 			}
@@ -134,18 +155,25 @@ function validateStrategy(
 	}
 	for (const g of st.slots?.guards ?? []) {
 		if (!GUARDS.has(g?.instruction)) {
-			push("I5", `${at}: guard "${g?.instruction}" is not an offered guard`);
+			push(
+				"I5",
+				`${at}: guard "${g?.instruction}" is not an offered guard — ${offered(GUARD_OPTIONS, "guards")}`,
+			);
 		}
 	}
 
 	// I7 — deadline present and within (now, now + maxDeadlineSec].
 	const dl = st.slots?.deadline?.deadline;
+	const deadlineMax = s.now + q.maxDeadlineSec;
 	if (typeof dl !== "number") {
-		push("I7", `${at}: deadline is missing`);
-	} else if (!(dl > s.now && dl <= s.now + q.maxDeadlineSec)) {
 		push(
 			"I7",
-			`${at}: deadline ${dl} is not within (now ${s.now}, now + maxDeadlineSec ${s.now + q.maxDeadlineSec}]`,
+			`${at}: deadline is missing — set slots.deadline.deadline to ${deadlineMax}`,
+		);
+	} else if (!(dl > s.now && dl <= deadlineMax)) {
+		push(
+			"I7",
+			`${at}: deadline ${dl} is not within (now ${s.now}, now + maxDeadlineSec ${deadlineMax}] — use ${deadlineMax}`,
 		);
 	}
 
@@ -156,9 +184,14 @@ function validateStrategy(
 	const addrs = st.tokens.map((t) => String(t).toLowerCase());
 	for (let k = 1; k < addrs.length; k++) {
 		if (!(addrs[k - 1] < addrs[k])) {
+			// The sorted order is the fix — and the amounts move with their tokens,
+			// which is the half a model drops when it reorders on its own.
+			const canonical = [...st.tokens].sort((x, y) =>
+				String(x).toLowerCase() < String(y).toLowerCase() ? -1 : 1,
+			);
 			push(
 				"I10",
-				`${at}: tokens are not in canonical ascending order (${st.tokens[k - 1]} then ${st.tokens[k]})`,
+				`${at}: tokens are not in canonical ascending order (${st.tokens[k - 1]} then ${st.tokens[k]}) — use ${JSON.stringify(canonical)}, moving each virtualAmount with its token`,
 			);
 			break;
 		}
@@ -172,10 +205,13 @@ function validateStrategy(
 		if (typeof a !== "string" || !DECIMAL.test(a)) {
 			push(
 				"I11",
-				`${at}: virtualAmount ${JSON.stringify(a)} is not a decimal string`,
+				`${at}: virtualAmount ${JSON.stringify(a)} is not a decimal string — quote it as a positive decimal in human units, e.g. "0.25"`,
 			);
 		} else if (ZERO.test(a)) {
-			push("I11", `${at}: virtualAmount[${k}] is zero`);
+			push(
+				"I11",
+				`${at}: virtualAmount[${k}] is zero — every leg must commit a positive amount, or drop the token from this strategy`,
+			);
 		}
 	});
 }
@@ -192,14 +228,19 @@ export function validate(
 	// Budget indexed by lowercased address; amounts kept as decimal strings.
 	const budgetByAddr = new Map<string, string>();
 	for (const b of q.budget) budgetByAddr.set(b.address.toLowerCase(), b.amount);
+	// The allowed-token list, as a corrective clause for I1.
+	const allowed = q.budget.map((b) => `${b.symbol} (${b.address})`).join(", ");
 
 	// I3 — strategy count within [1, maxStrategies].
 	if (r.strategies.length < 1) {
-		push("I3", "recommendation has no strategies");
+		push(
+			"I3",
+			`recommendation has no strategies — return between 1 and ${q.maxStrategies}`,
+		);
 	} else if (r.strategies.length > q.maxStrategies) {
 		push(
 			"I3",
-			`${r.strategies.length} strategies exceeds maxStrategies ${q.maxStrategies}`,
+			`${r.strategies.length} strategies exceeds maxStrategies ${q.maxStrategies} — return at most ${q.maxStrategies}`,
 		);
 	}
 
@@ -207,7 +248,10 @@ export function validate(
 	// `user` is a committer-supplied arg, not part of the recommendation-only
 	// payload (F2 §2/§5), so there is nothing to compare here yet.
 	if (r.chainId !== s.chainId) {
-		push("I4", `recommendation chainId ${r.chainId} != expected ${s.chainId}`);
+		push(
+			"I4",
+			`recommendation chainId ${r.chainId} != expected ${s.chainId} — set "chainId": ${s.chainId}`,
+		);
 	}
 
 	// I1 + I2 — walk every (token, amount) pair once. I1 flags tokens outside the
@@ -223,7 +267,10 @@ export function validate(
 			if (!budgetByAddr.has(addr)) {
 				if (!unknownSeen.has(addr)) {
 					unknownSeen.add(addr);
-					push("I1", `token ${st.tokens[k]} is not in the user's budget`);
+					push(
+						"I1",
+						`token ${st.tokens[k]} is not in the user's budget — the only tokens you may commit are: ${allowed}`,
+					);
 				}
 				continue;
 			}
@@ -243,7 +290,7 @@ export function validate(
 			const budgeted = q.budget.find((b) => b.address.toLowerCase() === addr);
 			push(
 				"I2",
-				`total virtualAmounts for ${budgeted?.symbol ?? addr} (${amounts.join(" + ")}) exceed budget ${cap}`,
+				`total virtualAmounts for ${budgeted?.symbol ?? addr} (${amounts.join(" + ")}) exceed budget ${cap} — divide the ${cap} between your strategies rather than giving each the full amount; the total across all of them must be at most ${cap}`,
 			);
 		}
 	}
@@ -259,12 +306,12 @@ export function validate(
 	if (r.observedBlock > s.headBlock) {
 		push(
 			"I12",
-			`observedBlock ${r.observedBlock} is ahead of head ${s.headBlock}`,
+			`observedBlock ${r.observedBlock} is ahead of head ${s.headBlock} — copy observedBlock from the prompt's snapshot, do not compute it; set "observedBlock": ${s.headBlock}`,
 		);
 	} else if (r.observedBlock < s.headBlock - lag) {
 		push(
 			"I12",
-			`observedBlock ${r.observedBlock} is more than ${lag} blocks behind head ${s.headBlock}`,
+			`observedBlock ${r.observedBlock} is more than ${lag} blocks behind head ${s.headBlock} — set "observedBlock": ${s.headBlock}`,
 		);
 	}
 
