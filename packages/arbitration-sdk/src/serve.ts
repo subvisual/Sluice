@@ -172,10 +172,10 @@ function fallbackResult(
 	const ctx = nowContext(now, pairTokensFor(req.budget));
 	const rec = templateFallback(req, ctx);
 	const { ok, violations } = verdict(rec, req, ctx, now);
-	// compileRecommendation throws on a token outside the SDK's hardcoded
-	// TOKENS map (compile.ts's decimalsOf) — a budget token we can't compile
-	// still degrades to a labelled fallback, never a throw; shipInputs is
-	// just empty rather than the request failing outright.
+	// compileRecommendation throws on a token the address book does not carry
+	// (compile.ts's decimalsOf) — a budget token we can't compile still degrades
+	// to a labelled fallback, never a throw; shipInputs is just empty rather
+	// than the request failing outright.
 	let shipInputs: WireShipInput[];
 	try {
 		shipInputs = shipInputsFor(rec, maker, null);
