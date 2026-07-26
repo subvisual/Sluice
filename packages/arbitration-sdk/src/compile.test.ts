@@ -1,9 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compileRecommendation, saltFor, deriveSaltSeed } from "./compile.ts";
+import { keccak256, toUtf8Bytes } from "ethers";
+import {
+	compileRecommendation,
+	saltFor,
+	deriveSaltSeed,
+	toBaseUnits,
+} from "./compile.ts";
 import {
 	fullRange,
+	fullRangeWithFee,
 	banded,
+	bandedWithFee,
 	aquaOrder,
 	shipBytes,
 	strategyHash,
@@ -134,4 +142,114 @@ test("unknown templateId throws (a bug path, not a user path)", () => {
 		},
 	]);
 	assert.throws(() => compileRecommendation(r, MAKER, deriveSaltSeed(r, null)));
+});
+
+test("banded-fee compiles to the same bytes as the swapvm builder", () => {
+	const r = rec([
+		{
+			templateId: "banded-fee",
+			slots: {
+				curve: { instruction: "XYC_SWAP_XD" },
+				band: {
+					instruction: "XYC_CONCENTRATE_GROW_LIQUIDITY_2D",
+					params: { bandBps: 5_000_000 },
+				},
+				fee: {
+					instruction: "FLAT_FEE_AMOUNT_IN_XD",
+					params: { feeBps: 3_000_000 },
+				},
+				deadline: { deadline: 1_800_100_000 },
+			},
+			tokens: [WETH, USDC],
+			virtualAmounts: ["1", "3000"],
+		},
+	]);
+	const seed = deriveSaltSeed(r, null);
+	const [got] = compileRecommendation(r, MAKER, seed);
+
+	const program = bandedWithFee({
+		salt: saltFor(seed, 0),
+		deadline: 1_800_100_000,
+		bandBps: 5_000_000,
+		tokens: [WETH, USDC],
+		amounts: [1_000_000_000_000_000_000n, 3_000_000_000n],
+		feeBps: 3_000_000,
+	});
+	const order = aquaOrder(MAKER, program);
+	assert.equal(got.strategy, toHex(shipBytes(order)));
+	assert.equal(got.strategyHash, strategyHash(order));
+});
+
+test("full-range-fee compiles to the same bytes as the swapvm builder", () => {
+	const r = rec([
+		{
+			templateId: "full-range-fee",
+			slots: {
+				curve: { instruction: "XYC_SWAP_XD" },
+				fee: {
+					instruction: "FLAT_FEE_AMOUNT_IN_XD",
+					params: { feeBps: 3_000_000 },
+				},
+				deadline: { deadline: 1_800_100_000 },
+			},
+			tokens: [WETH, USDC],
+			virtualAmounts: ["1.5", "5000"],
+		},
+	]);
+	const seed = deriveSaltSeed(r, null);
+	const [got] = compileRecommendation(r, MAKER, seed);
+
+	const program = fullRangeWithFee({
+		salt: saltFor(seed, 0),
+		deadline: 1_800_100_000,
+		feeBps: 3_000_000,
+	});
+	const order = aquaOrder(MAKER, program);
+	assert.equal(got.strategy, toHex(shipBytes(order)));
+	assert.equal(got.strategyHash, strategyHash(order));
+});
+
+// The model's amounts are truncated to the token's decimals upstream, so extra
+// fraction digits reaching compile are a bug — reject, never round.
+test("toBaseUnits rejects amounts with more fraction digits than the token's decimals", () => {
+	assert.throws(() => toBaseUnits("1.1234567", 6)); // USDC has 6dp, this has 7
+});
+
+test("compileRecommendation rejects over-precision virtualAmounts (USDC 6dp)", () => {
+	const r = rec([
+		{
+			templateId: "full-range",
+			slots: {
+				curve: { instruction: "XYC_SWAP_XD" },
+				deadline: { deadline: 1_800_100_000 },
+			},
+			tokens: [WETH, USDC],
+			virtualAmounts: ["1", "1.1234567"],
+		},
+	]);
+	assert.throws(() => compileRecommendation(r, MAKER, deriveSaltSeed(r, null)));
+});
+
+// The ENCLAVE path must seed from the signed text, not the recommendation JSON:
+// two callers with the same rec but different signedText must never collide,
+// and the derivation must be deterministic and match keccak256(signedText) exactly.
+test("deriveSaltSeed uses the signed text (ENCLAVE branch), not the rec JSON", () => {
+	const r = rec([
+		{
+			templateId: "full-range",
+			slots: {
+				curve: { instruction: "XYC_SWAP_XD" },
+				deadline: { deadline: 1_800_100_000 },
+			},
+			tokens: [WETH, USDC],
+			virtualAmounts: ["1", "3000"],
+		},
+	]);
+	const signedText = "some-signed-text";
+	const enclaveSeed = deriveSaltSeed(r, signedText);
+	const jsonSeed = deriveSaltSeed(r, null);
+
+	assert.equal(enclaveSeed, keccak256(toUtf8Bytes(signedText)));
+	assert.notEqual(enclaveSeed, jsonSeed);
+	assert.equal(deriveSaltSeed(r, signedText), enclaveSeed); // deterministic
 });
