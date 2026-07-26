@@ -16,9 +16,11 @@
   "tokens": {
     "WETH": "0x4200000000000000000000000000000000000006",
     "USDC": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
-    "USDe": "0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34"
+    "USDe": "0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34",
+    "USDT": "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2",
+    "cbBTC": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf"
   },
-  "_tokens": "Native USDC (6dp) and WETH (18dp) on Base. Sorted WETH < USDC, which is the tokenA/tokenB order MakerTraits requires. Addresses only — contracts/test/ForkVenue.t.sol parses .tokens.<SYMBOL> as an address, so keep this a flat map.",
+  "_tokens": "The five tokens the composer offers, on Base. Addresses only, lowercase — contracts/test/ForkVenue.t.sol parses .tokens.<SYMBOL> as an address, so keep this a flat map. WETH < USDC by address, which is the tokenA/tokenB order MakerTraits requires; ordering for any pair is ascending address. Every symbol here MUST also appear in tokenList and chainlinkFeeds — src/config.test.ts enforces it.",
 
   "tokenList": [
     {
@@ -32,15 +34,34 @@
       "name": "USD Coin",
       "address": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
       "decimals": 6
+    },
+    {
+      "symbol": "USDe",
+      "name": "USDe",
+      "address": "0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34",
+      "decimals": 18
+    },
+    {
+      "symbol": "USDT",
+      "name": "Tether USD",
+      "address": "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2",
+      "decimals": 6
+    },
+    {
+      "symbol": "cbBTC",
+      "name": "Coinbase Wrapped BTC",
+      "address": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+      "decimals": 8
     }
   ],
-  "_tokenList": "Same tokens as above with display metadata for the app's token picker (packages/app/src/lib/tokens.ts). Keep the two in sync.",
+  "_tokenList": "The same tokens as above with display metadata, and THE list the app's picker offers (packages/app/src/lib/tokens.ts) and the SDK reads decimals from (src/context.ts). symbol/name/decimals were read from real Base on 2026-07-26. A token is offered only if it also has a chainlinkFeeds entry, so every selectable pair has a live mid; src/config.test.ts enforces that the three sections hold identical symbol sets.",
 
   "chainlinkFeeds": {
     "WETH":  { "feed": "0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70", "description": "ETH / USD",   "decimals": 8 },
     "cbBTC": { "feed": "0x07DA0E54543a844a80ABE69c8A12F22B3aA59f9D", "description": "cbBTC / USD", "decimals": 8 },
     "USDC":  { "feed": "0x458138Fc0D67027E9A6778ef40a6ffC318c69061", "description": "USDC / USD",  "decimals": 8 },
-    "USDT":  { "feed": "0xf19d560eB8d2ADf07BD6D13ed03e1D11215721F9", "description": "USDT / USD",  "decimals": 8 }
+    "USDT":  { "feed": "0xf19d560eB8d2ADf07BD6D13ed03e1D11215721F9", "description": "USDT / USD",  "decimals": 8 },
+    "USDe":  { "feed": "0x790181e93e9F4Eedb5b864860C12e4d2CffFe73B", "description": "USDe / USD",  "decimals": 8 }
   },
-  "_chainlinkFeeds": "Base mainnet Chainlink AggregatorV3 USD feeds. Source: data.chain.link, verified live 2026-07-26 (description()/decimals()/latestRoundData() all read against Base). description+decimals are EXPECTED values the fetcher asserts against on-chain reads (src/pricefeed.ts). Reads hit REAL Base, never the pinned fork. Mid for a pair = usd(token0)/usd(token1)."
+  "_chainlinkFeeds": "Base mainnet Chainlink AggregatorV3 USD feeds. Source: data.chain.link, verified live 2026-07-26 (description()/decimals()/latestRoundData() all read against Base; USDe added and verified the same day — 'USDe / USD', 8dp, answer 99986842). All five belong to the 8-decimal feed family; the directory also lists 18-decimal variants per pair, which are NOT what we pin. description+decimals are EXPECTED values the fetcher asserts against on-chain reads (src/pricefeed.ts). Reads hit REAL Base, never the pinned fork. Mid for a pair = usd(token0)/usd(token1)."
 }

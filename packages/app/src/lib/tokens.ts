@@ -23,7 +23,7 @@ export function tokenBy(address: Address): TokenMeta | undefined {
   return TOKENS.find((t) => t.address.toLowerCase() === address.toLowerCase());
 }
 
-/** Display-side lookup (pair labels carry symbols, not addresses). */
+/** Display-side lookup (pair labels carry symbols, not addresses). Case-insensitive: the list holds mixed-case symbols (USDe, cbBTC). */
 export function tokenBySymbol(symbol: string): TokenMeta | undefined {
-  return TOKENS.find((t) => t.symbol === symbol);
+  return TOKENS.find((t) => t.symbol.toLowerCase() === symbol.toLowerCase());
 }

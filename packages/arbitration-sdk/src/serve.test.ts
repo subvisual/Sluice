@@ -92,8 +92,9 @@ test("composeForApp returns compiled shipInputs, one per strategy", async () => 
 
 test("composeForApp degrades to shipInputs: [] instead of throwing when a budget token is unknown to the SDK", async () => {
 	delete process.env.ZG_PRIVATE_KEY;
-	// Not in context.ts's hardcoded TOKENS map (only WETH/USDC) — compileRecommendation's
-	// decimalsOf() throws on this, and fallbackResult must not let that escape.
+	// Not in the config token list — compileRecommendation's decimalsOf() throws
+	// on any address the address book does not carry, and fallbackResult must not
+	// let that escape.
 	const UNKNOWN = {
 		address: "0x1111111111111111111111111111111111111111",
 		symbol: "UNKNOWN",
