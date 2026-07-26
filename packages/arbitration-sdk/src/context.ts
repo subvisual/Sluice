@@ -20,25 +20,30 @@ import {
 	subgraphUrl,
 	type UserBook,
 } from "./subgraph.ts";
+import addresses from "../../../config/addresses.8453.json";
 
 export type TokenInfo = { symbol: string; address: string; decimals: number };
 
-// Base mainnet token addresses (from config/addresses.8453.json).
-export const TOKENS: Record<string, TokenInfo> = {
-	USDC: {
-		symbol: "USDC",
-		address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-		decimals: 6,
-	},
-	WETH: {
-		symbol: "WETH",
-		address: "0x4200000000000000000000000000000000000006",
-		decimals: 18,
-	},
-};
+// The token map, from the ONE address book (F1 §1). This used to be a hardcoded
+// WETH+USDC literal, which compile.ts derives decimals from — so a budget token
+// outside it threw at compile time even though the picker offered it.
+// Keyed by exact symbol so TOKENS.USDC keeps resolving; look up by user input
+// through tokenBySymbol, never by indexing directly.
+export const TOKENS: Record<string, TokenInfo> = Object.fromEntries(
+	addresses.tokenList.map((t) => [
+		t.symbol,
+		{ symbol: t.symbol, address: t.address, decimals: t.decimals },
+	]),
+);
 
+// Case-insensitive: symbols are mixed-case (USDe, cbBTC), so keying on
+// symbol.toUpperCase() silently finds nothing for exactly the tokens whose
+// symbols are not all-caps. Mirrors pricefeed.ts's feedFor.
 export function tokenBySymbol(symbol: string): TokenInfo | undefined {
-	return TOKENS[symbol.toUpperCase()];
+	const key = Object.keys(TOKENS).find(
+		(k) => k.toLowerCase() === symbol.toLowerCase(),
+	);
+	return key ? TOKENS[key] : undefined;
 }
 
 // Job 2 — the market. STILL A STUB (F3 Open Q2).
