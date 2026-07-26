@@ -306,8 +306,13 @@ function BoardHero({
         <p className="font-mono text-[11px] tracking-[0.1em] text-aqua-text">
           {eyebrow}
         </p>
+        {/* One sentence per line — the two halves are the two halves of the
+            product (compose, then ship), and a break between them beats
+            whatever the measure happens to wrap to. Blocks, not <br>: each
+            sentence still wraps on its own when the column is narrower. */}
         <h2 className="mt-[18px] text-[34px] leading-[42px] font-semibold tracking-[-0.03em] text-pretty">
-          Describe a strategy in a sentence. Ship it in one signature.
+          <span className="block">Describe a strategy in a sentence.</span>
+          <span className="block">Ship it in one signature.</span>
         </h2>
         <p className="mt-4 text-[15px] leading-[1.65] text-muted text-pretty">
           Sluice composes risk-rated Aqua strategies from your intent and a
