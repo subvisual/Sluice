@@ -7,7 +7,8 @@ when the server holds a funded 0G key, labelled `TEMPLATE_FALLBACK` otherwise.
 Risk ratings arrive with the deferred reviewer (F2 Gate 2); until then the UI
 shows "risk rating unavailable".
 
-Nothing is signed or written to a chain yet. The screen stops at the recommendation.
+Accepting a recommendation builds the ship `Multicall` the user signs (PR #34);
+the dashboard reads the wallet's shipped strategies back from the subgraph (PR #35).
 
 ## Run
 
@@ -62,9 +63,8 @@ shared by the fork and by mainnet (F1 §1). Adding a token is a JSON edit.
 Sealed inference and the deterministic gate are wired via `/api/compose` (below):
 real, signed `ENCLAVE` recommendations when the server holds a key, otherwise the
 deterministic `TEMPLATE_FALLBACK` seed. Still not wired: market/pair context beyond
-the user's own book (F3 job 2), the `RecommendationRegistry` commit path, and the
-ship `Multicall`. `nonce` is a stand-in until `RecommendationRegistry` is deployed,
-and is labelled as one on screen.
+the user's own book (F3 job 2). `nonce` is a fixed field of the recommendation
+payload schema.
 
 ## /api/compose — the server-side enclave path
 

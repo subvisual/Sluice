@@ -100,12 +100,6 @@ function Rail({ mode }: { mode: RpcMode }) {
           <span>New strategy</span>
         </Link>
 
-        <p className="mt-3.5 mb-1 ml-2.5 text-[10px] font-semibold tracking-[0.12em] text-muted-3">
-          AUDIT
-        </p>
-        {/* Reserved slots for the two out-of-scope screens — visible, not links. */}
-        <SoonItem glyph="◇" label="Recommendations" />
-        <SoonItem glyph="≣" label="Trace & audit" />
       </nav>
 
       <div className="mt-auto rounded-[14px] border border-glass-line bg-card-2 p-3.5 shadow-[var(--shadow-sm)]">
@@ -196,14 +190,3 @@ function TheGraphMark() {
   );
 }
 
-function SoonItem({ glyph, label }: { glyph: string; label: string }) {
-  return (
-    <div className="flex items-center gap-2.5 rounded-[10px] px-2.5 py-2.5 text-sm text-muted-3">
-      <span className="w-3.5 text-center text-xs">{glyph}</span>
-      <span>{label}</span>
-      <span className="ml-auto font-mono text-[9px] tracking-[0.06em] text-muted-3">
-        SOON
-      </span>
-    </div>
-  );
-}

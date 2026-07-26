@@ -7,9 +7,8 @@
 //
 // SCOPE: job 1 only. Job 2 (market: pool depth, realised vol) comes from
 // composed hosted DEX/price subgraphs, not ours, and is blocked on F3 Open Q2
-// (which price subgraph). The Recommendation/Template join (Notion F3 §3) is
-// not in the deployed schema yet — it needs our RecommendationRegistry, which
-// is deferred with F2 verifiability.
+// (which price subgraph). The Recommendation/Template join (Notion F3 §3) does
+// not exist — there is no on-chain record of recommendations to index.
 //
 // Endpoint is a CONFIG value, never a code assumption (F3 §2): defaults to the
 // deployed Studio Base subgraph and swaps to the local fork graph-node via

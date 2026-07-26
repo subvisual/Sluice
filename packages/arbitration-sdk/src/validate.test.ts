@@ -287,10 +287,10 @@ test("the fully-valid fixture emits no grammar violations", () => {
 		assert.ok(!c.includes(code as any), `unexpected ${code}`);
 });
 
-test("never emits an N/A or deferred invariant — I6, I9, I13, I14", () => {
+test("never emits an N/A invariant — I6, I9", () => {
 	// I6 (partial-fill⇒invalidation) and I9 (oracle⇒feed) have NO opcode on this
-	// router. I13 (nonce) is on-chain; I14 (recompile-equality) is ship-side. A
-	// maximally-broken recommendation must still only fire in-scope codes.
+	// router. A maximally-broken recommendation must still only fire in-scope
+	// codes.
 	const broken = strat([USDC, WETH], ["0"]); // bad order + zero amount + short amounts
 	broken.templateId = "nope";
 	broken.slots.curve = { instruction: "DECAY_XD" };
@@ -322,6 +322,6 @@ test("never emits an N/A or deferred invariant — I6, I9, I13, I14", () => {
 	]);
 	for (const code of emitted)
 		assert.ok(allowed.has(code), `unexpected code ${code}`);
-	for (const forbidden of ["I6", "I9", "I13", "I14"])
+	for (const forbidden of ["I6", "I9"])
 		assert.ok(!emitted.has(forbidden), `emitted forbidden ${forbidden}`);
 });

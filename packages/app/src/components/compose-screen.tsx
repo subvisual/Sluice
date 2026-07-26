@@ -129,8 +129,7 @@ export function ComposeScreen() {
 
   const ok = built.ok && malformed.length === 0;
 
-  // `nonceOf[user] + 1` (I13). RecommendationRegistry is not deployed yet, so
-  // this is a stand-in.
+  // `nonce` is a fixed field of the recommendation payload schema.
   const nonce = 1;
 
   const compose = async () => {

@@ -39,7 +39,7 @@ terms or decisions actually get resolved.
 │   │   ├── f1-aqua-strategy-vm/
 │   │   │   ├── README.md                  ← Notion link + local scope
 │   │   │   └── adr/                       ← feature-scoped decisions
-│   │   ├── f2-verified-private-recommendations/
+│   │   ├── f2-private-recommendations/
 │   │   ├── f3-market-book-context/
 │   │   └── wiring-delivery/
 │   └── prds/                              ← <slug>.md + <slug>-issues.md

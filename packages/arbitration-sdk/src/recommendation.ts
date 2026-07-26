@@ -2,7 +2,7 @@
 //
 // Scope: this checks the model's output is well-FORMED (parseable, right shape,
 // decimal-string amounts, tokens within the stated budget). It is NOT the F2
-// I1–I14 validator and makes no claim about grammar-correctness, compilability,
+// I1–I12 validator and makes no claim about grammar-correctness, compilability,
 // or safety — those are out of scope. Unknown opcode names are surfaced as
 // soft notes, not hard failures, because the F1 grammar itself is provisional.
 

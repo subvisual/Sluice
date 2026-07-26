@@ -1,13 +1,14 @@
 # Design — 0G inference CLI (first F2 step)
 
-**Date:** 2026-07-25 · **Branch:** `pf/f2-inference-cli` · **Feature:** [F2 — Verified Private Recommendations](./README.md)
+**Date:** 2026-07-25 · **Branch:** `pf/f2-inference-cli` · **Feature:** [F2 — Private Recommendations](./README.md)
 
 > **Note (post-write):** F2's Notion page later pivoted (decisions→recommendations,
-> `DecisionRegistry`→`RecommendationRegistry`, epoch→per-user nonce, agent→user-as-maker). This
+> agent→user-as-maker). This
 > spec describes the **inference CLI**, which is framing-agnostic and was built as designed; the
-> downstream references below (DecisionRegistry, "Issue 2", framing codec) belong to the old plan.
+> downstream references below ("Issue 2", the framing codec, the old registry) belong to the old,
+> since-cut plan.
 > The live Gate 0 run also found the enclave signs an attestation record, not our text — see
-> ADR-0001's Gate 0 update — and ran model `qwen/qwen2.5-omni-7b`, not the drafted `qwen-2.5-7b`
+> the Gate 0 note in the F2 README — and ran model `qwen/qwen2.5-omni-7b`, not the drafted `qwen-2.5-7b`
 > in the config table below. Both are recorded; this doc is kept as the CLI's build record.
 
 The first runnable slice of the 0G integration: a one-shot CLI that takes a free-form prompt,
@@ -24,8 +25,8 @@ implementation-specific design for this one step.
 
 `npm run infer -- "your prompt"` → the 0G answer + a proof block a third party can re-verify.
 
-Non-goal: everything else in F2. No on-chain commit, no `DecisionRegistry`, no framing/epoch
-codec, no mandate/validator, no encrypted memory, no REPL, no web UI. Those are later issues.
+Non-goal: everything else in F2. No framing/epoch codec, no mandate/validator, no REPL, no
+web UI. Those are later issues.
 
 ## Where this sits in the F2 plan
 
@@ -33,8 +34,8 @@ codec, no mandate/validator, no encrypted memory, no REPL, no web UI. Those are 
   types any prompt. The existing report-style spike (`spike/inference-spike.ts`) stays as-is —
   it additionally exercises the 3-line framing-compliance path this CLI deliberately skips.
 - The reusable module it introduces (`src/inference.ts`) is the **seed of Issue 3**'s live
-  sealed-inference client. Later issues extend it (framing, epoch, `verifyLocal`, `narrate`);
-  this step ships only the round-trip + verification.
+  sealed-inference client. Later issues extend it; this step ships only the round-trip +
+  verification.
 
 ## Chosen approach: library-first
 
@@ -135,10 +136,9 @@ acceptance:
 - `npm run infer -- "…"` prints a non-empty result and `verified ✓` against a live provider.
 - The printed proof URL, fetched independently, returns the same `{text, signature}`, and
   `ethers.verifyMessage` on them recovers the same signer across ≥3 runs (the Gate 0 assertion).
-- Record the recovered signer (the future `registerSigner` target) and first latency back into
-  the F2 plan / Notion, per Gate 0.
+- Record the recovered signer and first latency back into the F2 plan / Notion, per Gate 0.
 
 ## Follow-ups (out of scope here, noted for the plan)
 
-- Feed the recovered signer + latency into `docs/prds/f2-verified-private-recommendations.md` and Notion.
-- Issue 2 onward build the framing codec, `DecisionRegistry`, and on-chain commit atop this module.
+- Feed the recovered signer + latency into `docs/prds/f2-private-recommendations.md` and Notion.
+- Later issues build the recommendation codec and validator atop this module.

@@ -194,12 +194,12 @@ export function DetailSheet({
             <ProvenanceChip provenance={position.provenance} />
             {position.provenance === "ENCLAVE" ? (
               <span className="flex items-center gap-1.5 text-[11.5px] text-muted">
-                <span className="text-aqua-text">✓</span> hash matches on-chain
-                commitment
+                <span className="text-aqua-text">✓</span> signed by the 0G
+                enclave
               </span>
             ) : position.provenance === "TEMPLATE_FALLBACK" ? (
               <span className="text-[11.5px] text-muted">
-                not signed — no on-chain commitment to check
+                deterministic template — not a model output
               </span>
             ) : (
               <span className="text-[11.5px] text-muted">
@@ -207,8 +207,6 @@ export function DetailSheet({
                 record of how it was produced
               </span>
             )}
-            {/* Points at the future trace view (nav: Trace & audit · SOON). */}
-            <span className="ml-auto text-xs text-aqua-text">Full trace →</span>
           </div>
         </div>
 
