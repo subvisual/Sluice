@@ -21,6 +21,12 @@ interface IERC5267 {
         );
 }
 
+/// @dev Just the metadata we assert. forge-std ships no IERC20Metadata.
+interface IERC20Metadata {
+    function symbol() external view returns (string memory);
+    function decimals() external view returns (uint8);
+}
+
 /// @title The venue is what we think it is
 /// @notice G1 from F1 §7 — the gate the whole venue rescope rests on. Everything else in
 ///         F1 assumes real Aqua and SwapVM bytecode is reachable on a Base fork at the
@@ -49,6 +55,9 @@ contract ForkVenueTest is Test {
     address internal router;
     address internal weth;
     address internal usdc;
+    address internal usde;
+    address internal usdt;
+    address internal cbbtc;
     uint256 internal forkBlock;
 
     function setUp() public {
@@ -57,6 +66,9 @@ contract ForkVenueTest is Test {
         router = vm.parseJsonAddress(cfg, ".swapVMRouter");
         weth = vm.parseJsonAddress(cfg, ".tokens.WETH");
         usdc = vm.parseJsonAddress(cfg, ".tokens.USDC");
+        usde = vm.parseJsonAddress(cfg, ".tokens.USDe");
+        usdt = vm.parseJsonAddress(cfg, ".tokens.USDT");
+        cbbtc = vm.parseJsonAddress(cfg, ".tokens.cbBTC");
         forkBlock = vm.parseJsonUint(cfg, ".forkBlock");
 
         vm.createSelectFork(vm.envOr("SLUICE_RPC_URL", PUBLIC_BASE_RPC), forkBlock);
@@ -108,5 +120,25 @@ contract ForkVenueTest is Test {
 
         assertEq(name, "AquaSwapVMRouter", "not the Aqua-flavoured router - the instruction set would differ");
         assertEq(verifyingContract, router, "EIP-712 domain does not bind to this address");
+    }
+
+    /// @notice Every token the composer offers is real, and its decimals are what tokenList says.
+    /// @dev Not cosmetic: the compiler scales virtual amounts by these decimals, so a wrong
+    ///      value here ships the wrong size, and identical bytes with different amounts hash
+    ///      the same (F1 §2). Symbols are mixed-case on purpose — USDe and cbBTC are not
+    ///      all-caps, which is exactly what a toUpperCase() lookup gets wrong.
+    function test_offeredTokensMatchTheTokenList() public view {
+        assertEq(IERC20Metadata(weth).decimals(), 18, "WETH is not 18dp");
+        assertEq(IERC20Metadata(usdc).decimals(), 6, "USDC is not 6dp");
+        assertEq(IERC20Metadata(usde).decimals(), 18, "USDe is not 18dp");
+        assertEq(IERC20Metadata(usdt).decimals(), 6, "USDT is not 6dp");
+        assertEq(IERC20Metadata(cbbtc).decimals(), 8, "cbBTC is not 8dp");
+
+        assertGt(usde.code.length, 0, "no code at USDe");
+        assertGt(usdt.code.length, 0, "no code at USDT");
+        assertGt(cbbtc.code.length, 0, "no code at cbBTC");
+
+        assertEq(IERC20Metadata(usdt).symbol(), "USDT", "USDT symbol mismatch");
+        assertEq(IERC20Metadata(cbbtc).symbol(), "cbBTC", "cbBTC symbol mismatch");
     }
 }
