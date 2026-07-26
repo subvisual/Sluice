@@ -94,10 +94,11 @@ npm run dev
 ```
 
 Add `NEXT_PUBLIC_DEV_AUTOCONNECT=1` (what `demo-up.sh` does) to connect on load
-instead of on a click and to **pin the read path to the fork**. Without the pin,
-a `sluice-rpc=mainnet` cookie left in the browser from any earlier session sends
-the page to Base — empty wallet, someone else's book, both venues chainId 8453,
-nothing on screen admitting it.
+instead of on a click and to **pin the read path to the fork**. Without the pin
+the page reads Base — that is the default now, and any `sluice-rpc` cookie left
+in the browser can say so too — giving an empty wallet, someone else's book, both
+venues chainId 8453, nothing on screen admitting it. Driving the fork **without**
+autoconnect means picking `LOCAL FORK` in the header dropdown first.
 
 ## 4. Walk the UI
 

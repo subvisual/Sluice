@@ -18,14 +18,19 @@ export const LOCAL_RPC_URL =
 export const MAINNET_RPC_URL =
   process.env.NEXT_PUBLIC_BASE_RPC_URL ?? "https://mainnet.base.org";
 
-/** Missing or unrecognised cookie ⇒ "local" — the safe rehearsal default. */
+/**
+ * Missing or unrecognised cookie ⇒ "mainnet" — a first-time visitor has no anvil
+ * on 127.0.0.1, so the fork default read as a broken app. Defaulting to Base
+ * costs nothing in safety: this selects a READ url, and the fork rehearsal pins
+ * itself to local anyway via NEXT_PUBLIC_DEV_AUTOCONNECT (see layout.tsx).
+ */
 export function parseRpcMode(
   cookieHeader: string | null | undefined,
 ): RpcMode {
   const match = cookieHeader?.match(
     new RegExp(`(?:^|;\\s*)${RPC_COOKIE}=([^;]*)`),
   );
-  return match?.[1] === "mainnet" ? "mainnet" : "local";
+  return match?.[1] === "local" ? "local" : "mainnet";
 }
 
 export function rpcUrlFor(mode: RpcMode): string {

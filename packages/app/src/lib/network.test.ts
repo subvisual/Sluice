@@ -7,10 +7,10 @@ import {
   rpcUrlFor,
 } from "./network";
 
-test("parseRpcMode: missing header defaults to local", () => {
-  assert.equal(parseRpcMode(null), "local");
-  assert.equal(parseRpcMode(undefined), "local");
-  assert.equal(parseRpcMode(""), "local");
+test("parseRpcMode: missing header defaults to mainnet", () => {
+  assert.equal(parseRpcMode(null), "mainnet");
+  assert.equal(parseRpcMode(undefined), "mainnet");
+  assert.equal(parseRpcMode(""), "mainnet");
 });
 
 test("parseRpcMode: reads the sluice-rpc cookie", () => {
@@ -20,15 +20,15 @@ test("parseRpcMode: reads the sluice-rpc cookie", () => {
 
 test("parseRpcMode: finds the cookie among others", () => {
   assert.equal(
-    parseRpcMode("wagmi.store=abc; sluice-rpc=mainnet; theme=dark"),
-    "mainnet",
+    parseRpcMode("wagmi.store=abc; sluice-rpc=local; theme=dark"),
+    "local",
   );
 });
 
-test("parseRpcMode: unknown value falls back to local", () => {
-  assert.equal(parseRpcMode("sluice-rpc=goerli"), "local");
+test("parseRpcMode: unknown value falls back to mainnet", () => {
+  assert.equal(parseRpcMode("sluice-rpc=goerli"), "mainnet");
   // must not match a longer cookie name that merely ends in sluice-rpc
-  assert.equal(parseRpcMode("not-sluice-rpc=mainnet"), "local");
+  assert.equal(parseRpcMode("not-sluice-rpc=local"), "mainnet");
 });
 
 test("rpcUrlFor maps modes to the two URLs", () => {

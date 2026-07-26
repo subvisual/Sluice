@@ -31,9 +31,9 @@ export default async function RootLayout({
 }>) {
   const cookieHeader = (await headers()).get("cookie");
   // Autoconnect pins the read path to the fork. The account it connects exists
-  // ONLY on anvil, so a leftover `sluice-rpc=mainnet` cookie from some earlier
-  // session would leave the demo reading Base: an empty wallet, someone else's
-  // book, and nothing on screen saying so — both venues are chainId 8453.
+  // ONLY on anvil, and the cookie default is mainnet, so without the pin the
+  // demo would read Base: an empty wallet, someone else's book, and nothing on
+  // screen saying so — both venues are chainId 8453.
   const mode = DEV_AUTOCONNECT ? "local" : parseRpcMode(cookieHeader);
   const initialState = cookieToInitialState(
     getAdapter(mode).wagmiConfig as Config,
