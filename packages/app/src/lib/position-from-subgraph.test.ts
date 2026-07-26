@@ -114,7 +114,41 @@ test("a banded-fee program matches its template sequence", () => {
   assert.equal(dto.templateLabel, "banded + maker fee");
   assert.equal(dto.band, "banded");
   const fee = dto.slots.find((s) => s.name === "fee")!;
-  assert.equal(fee.params, "0.30% on amount in");
+  assert.equal(fee.params, "0.3% on amount in");
+});
+
+test("a shipped fee is read back at its own resolution, and a zero fee says so", () => {
+  // A maker fee lives well below one percent: at 2dp everything under 0.005%
+  // read back as "0.00%" — a real fee shown as none (#44).
+  const tiny = bandedWithFee({
+    salt: 9n,
+    deadline: DEADLINE,
+    bandBps: 150_000_000,
+    feeBps: 100, // 0.00001%
+    tokens: [WETH, USDC],
+    amounts: [2_000_000_000_000_000_000n, 5_000_000_000n],
+  });
+  const tinyDto = toPositionDto(row(toHex(shipBytes(aquaOrder(MAKER, tiny)))));
+  assert.equal(
+    tinyDto.slots.find((s) => s.name === "fee")!.params,
+    "0.00001% on amount in",
+  );
+
+  // The validator rejects feeBps 0 now, but a foreign program on-chain can
+  // still carry one — the row names it for the no-op it is.
+  const zero = bandedWithFee({
+    salt: 9n,
+    deadline: DEADLINE,
+    bandBps: 150_000_000,
+    feeBps: 0,
+    tokens: [WETH, USDC],
+    amounts: [2_000_000_000_000_000_000n, 5_000_000_000n],
+  });
+  const zeroDto = toPositionDto(row(toHex(shipBytes(aquaOrder(MAKER, zero)))));
+  assert.equal(
+    zeroDto.slots.find((s) => s.name === "fee")!.params,
+    "0% on amount in · charges nothing",
+  );
 });
 
 test("undecodable strategy bytes still yield a position, honestly labelled", () => {

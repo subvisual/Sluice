@@ -8,10 +8,10 @@ import {
   toHex,
   type Instruction,
 } from "@sluice/arbitration-sdk/swapvm";
-import { opcodeName, FEE_BPS_ONE } from "@sluice/arbitration-sdk/opcodes";
+import { opcodeName } from "@sluice/arbitration-sdk/opcodes";
 import { TEMPLATES } from "@sluice/arbitration-sdk/grammar";
 import { displayFrac, formatFixed } from "./amount";
-import { shortLabel } from "./compose/from-server";
+import { feeSlotParams, shortLabel } from "./compose/from-server";
 import type { Fill, SlotRow } from "./book";
 import type { PositionDto, PositionLegDto } from "./position-dto";
 import { formatDayShort, formatDeadlineAbs } from "./time";
@@ -154,8 +154,7 @@ function slotParams(opName: string, ins: Instruction): string {
   if (opName === "XYC_SWAP_XD") return "constant-product amount computation";
   if (opName.startsWith("XYC_CONCENTRATE"))
     return "liquidity deltas computed from the ship amounts";
-  if (opName === "FLAT_FEE_AMOUNT_IN_XD")
-    return `${pct(uintOf(ins.args))} on amount in`;
+  if (opName === "FLAT_FEE_AMOUNT_IN_XD") return feeSlotParams(uintOf(ins.args));
   return ins.args.length ? toHex(ins.args) : "—";
 }
 
@@ -164,8 +163,6 @@ const uintOf = (args: Uint8Array): number => {
   for (const b of args) value = (value << 8n) | BigInt(b);
   return Number(value);
 };
-
-const pct = (bps: number) => `${((bps / FEE_BPS_ONE) * 100).toFixed(2)}%`;
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 

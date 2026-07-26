@@ -50,7 +50,7 @@ export const WRAPPERS: InstructionSpec[] = [
 		summary:
 			"Maker fee charged on the input side. Pure arithmetic — no token movement, " +
 			"so unlike the protocol-fee variants it cannot make quote() and swap() disagree.",
-		params: `feeBps: integer in [0, ${FEE_BPS_ONE}) where ${FEE_BPS_ONE} = 100%`,
+		params: `feeBps: integer in [1, ${FEE_BPS_ONE}) where ${FEE_BPS_ONE} = 100%. Never 0 — a fee that charges nothing still ships this instruction; the no-fee templates exist for that.`,
 	},
 ];
 
@@ -130,7 +130,7 @@ export const COMPAT_RULES: string[] = [
 	'Amounts are in WHOLE TOKEN UNITS, exactly as the BUDGET states them: "0.5" WETH, "1500" USDC. NEVER base units — no 1e18, no 1e6, no "1000000000000000000". The compiler scales by each token\'s decimals; emitting scaled amounts overshoots the budget by orders of magnitude and is rejected.',
 	"Amounts stay within the user's stated budget, PER TOKEN, summed across every strategy in the recommendation. Strategies ship TOGETHER — they are legs of one position, not alternatives to choose between — so returning N of them means SPLITTING the budget across them, never repeating the full budget in each. Never a token the user did not select.",
 	'The virtual amounts set both the price (their ratio) and the depth (their size). For a pair that should trade near parity, ship equal nominal VALUE on each side: against a 3000 USD/ETH mid, "0.5" WETH pairs with "1500" USDC.',
-	`feeBps is out of ${FEE_BPS_ONE}, not 10000: 0.3% is ${(FEE_BPS_ONE / 1000) * 3}.`,
+	`feeBps is out of ${FEE_BPS_ONE}, not 10000: 0.3% is ${(FEE_BPS_ONE / 1000) * 3}. Never 0: to charge no fee, pick full-range or banded and omit the fee slot entirely.`,
 ];
 
 export type Template = {
