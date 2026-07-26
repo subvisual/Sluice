@@ -12,7 +12,6 @@ import {
 } from "react";
 import type { Address, Hex } from "viem";
 import { useAccount } from "wagmi";
-import type { UserBook } from "@sluice/arbitration-sdk/subgraph";
 import { demoBook } from "./demo-book";
 import {
   joinBook,
@@ -22,6 +21,7 @@ import {
   type CachedStrategyMeta,
   type StrategyCache,
 } from "./join-book";
+import { revivePosition, type PositionDto } from "./position-dto";
 import { TOKENS } from "./tokens";
 import type { UiRecommendation } from "./compose/from-server";
 
@@ -29,18 +29,21 @@ import type { UiRecommendation } from "./compose/from-server";
  * The user's book — every strategy this wallet has shipped.
  *
  * The real source is the F3 book subgraph (`GET /api/book`), read for the
- * connected address. `null` means "unknown" (the subgraph read failed, or
- * there is no connected address to read for) — the dashboard must render
- * that as unavailable, never as "no positions" (Wiring §10). `[]` means the
- * read succeeded and genuinely found nothing live.
+ * connected address: every strategy ANY status, with the program already
+ * decoded server-side (deadline, slot rows, template match). `null` means
+ * "unknown" (the subgraph read failed, or there is no connected address to
+ * read for) — the dashboard must render that as unavailable, never as "no
+ * positions" (Wiring §10). `[]` means the read succeeded and genuinely found
+ * nothing.
  *
- * The subgraph alone cannot render a card: it knows the current committed
- * balance and fills for a strategyHash, not the template/band/risk/slots it
- * was recommended with. So this module also keeps a local metadata cache,
- * keyed by the real on-chain `strategyHash` and persisted to `localStorage`,
- * written whenever this browser ships (`recordShipped`) or seeds the demo
- * fixtures (`showDemo`). `src/lib/join-book.ts` does the actual JOIN — this
- * file is the fetch, the cache, and the optimistic overlay around it.
+ * The chain alone cannot say how a strategy was recommended: risk rating,
+ * the recommendation's wording and band terms live only in the signed
+ * recommendation (until the RecommendationRegistry ships). So this module
+ * also keeps a local metadata cache, keyed by the real on-chain
+ * `strategyHash` and persisted to `localStorage`, written whenever this
+ * browser ships (`recordShipped`) or seeds the demo fixtures (`showDemo`).
+ * `src/lib/join-book.ts` does the actual JOIN — this file is the fetch, the
+ * cache, and the optimistic overlay around it.
  */
 
 export type RiskRating = "low" | "medium" | "high";
@@ -48,10 +51,10 @@ export type RiskRating = "low" | "medium" | "high";
 /**
  * Who produced the recommendation this position came from — F2 §4.
  * `null` is distinct from `"TEMPLATE_FALLBACK"`: it means this browser has no
- * local record at all (a reduced/cache-miss position — shipped elsewhere, or
- * before this browser cached it), not that the strategy is known to be
- * unsigned. Never render `null` as "not signed" — that overclaims something
- * we cannot check either way (Task 6 review finding 2).
+ * local record at all (a cache-miss position — shipped elsewhere, or before
+ * this browser cached it), not that the strategy is known to be unsigned.
+ * Never render `null` as "not signed" — that overclaims something we cannot
+ * check either way (Task 6 review finding 2).
  */
 export type Provenance = "ENCLAVE" | "TEMPLATE_FALLBACK" | null;
 
@@ -89,8 +92,13 @@ export type Position = {
   bandNote: string;
   legs: PositionLeg[];
   fills: Fill[];
-  /** Unix seconds. At expiry the position unwinds automatically. */
-  deadline: number;
+  /**
+   * Unix seconds; at expiry the position unwinds automatically. `null` when
+   * the on-chain program carries no DEADLINE instruction (a strategy shipped
+   * outside Sluice) — rendered as "no deadline", never as 1970 or a made-up
+   * future date.
+   */
+  deadline: number | null;
   /** Unix seconds; set when the user docks. Docked hashes are burned forever. */
   dockedAt: number | null;
   /** Absent rating renders "risk rating unavailable" — never a number. */
@@ -103,7 +111,7 @@ export type PositionStatus = "Live" | "Expired" | "Docked";
 
 export function positionStatus(p: Position, nowSec: number): PositionStatus {
   if (p.dockedAt !== null) return "Docked";
-  return p.deadline <= nowSec ? "Expired" : "Live";
+  return p.deadline !== null && p.deadline <= nowSec ? "Expired" : "Live";
 }
 
 type BookValue = {
@@ -171,7 +179,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
   // `address` at all, or being `null`).
   const [bookFetch, setBookFetch] = useState<{
     address: Address;
-    book: UserBook | null;
+    book: Position[] | null;
   } | null>(null);
   const [refetchTick, setRefetchTick] = useState(0);
 
@@ -235,7 +243,8 @@ export function BookProvider({ children }: { children: ReactNode }) {
       try {
         const res = await fetch(`/api/book?maker=${address}`);
         if (!res.ok) throw new Error(`book fetch failed with status ${res.status}`);
-        const book = (await res.json()) as UserBook;
+        const body = (await res.json()) as { positions: PositionDto[] };
+        const book = body.positions.map(revivePosition);
         if (!cancelled) setBookFetch({ address, book });
       } catch {
         // Unavailable, not empty — `joinBook(null, …)` preserves that.
@@ -254,8 +263,8 @@ export function BookProvider({ children }: { children: ReactNode }) {
   // Only trust a `bookFetch` resolved for the address connected RIGHT NOW.
   // `undefined` = nothing resolved yet for this exact address (first read in
   // flight, or an address switch invalidated the previous one); `null` =
-  // resolved, but the read failed; a `UserBook` = resolved successfully.
-  const currentBook: UserBook | null | undefined =
+  // resolved, but the read failed; a `Position[]` = resolved successfully.
+  const currentBook: Position[] | null | undefined =
     address && bookFetch?.address === address ? bookFetch.book : undefined;
 
   const isLoading =

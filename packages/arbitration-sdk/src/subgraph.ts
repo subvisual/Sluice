@@ -248,3 +248,99 @@ export async function fetchUserBook(
 	const data = unwrap<any>(json, "book");
 	return shapeUserBook(maker, data);
 }
+
+// ---------------------------------------------------------------------------
+// Dashboard read — every strategy this maker has shipped, ANY status.
+//
+// Deliberately separate from bookQuery: the composer's book wants live
+// strategies only (context for new recommendations), while the dashboard must
+// also show Expired and Docked positions, and needs the raw `strategyData`
+// bytes (the deadline lives only in the program) plus per-strategy fills.
+// ---------------------------------------------------------------------------
+
+export type MakerPositionBalance = {
+	tokenAddress: string;
+	symbol: string | null;
+	decimals: number | null;
+	initialVirtual: string; // the shipped ceiling, raw base units
+	virtualBalance: string; // current remaining; zeroed by dock
+	totalPulled: string; // gross pulls, raw base units
+	totalPushed: string; // gross pushes, excludes ship funding
+};
+
+export type MakerPositionFill = {
+	ts: number;
+	tokenInSymbol: string | null;
+	tokenInDecimals: number | null;
+	amountIn: string;
+	tokenOutSymbol: string | null;
+	tokenOutDecimals: number | null;
+	amountOut: string;
+};
+
+export type MakerPosition = {
+	id: string; // maker-app-strategyHash — unique per live row
+	strategyHash: string;
+	status: string; // LIVE | DOCKED (expiry is program-internal, not indexed)
+	strategyData: string; // hex of abi.encode(Order) — decode with decodeOrder
+	shippedAt: number;
+	dockedAt: number | null;
+	balances: MakerPositionBalance[];
+	fills: MakerPositionFill[];
+};
+
+function positionsQuery(maker: string): string {
+	const m = maker.toLowerCase();
+	return `{
+    strategies(where: { maker: "${m}" }, orderBy: shippedAt, orderDirection: desc, first: 100) {
+      id strategyHash status strategyData shippedAt dockedAt
+      balances { token { id symbol decimals } initialVirtual virtualBalance totalPulled totalPushed }
+      fills(orderBy: ts, orderDirection: desc, first: 12) {
+        ts amountIn amountOut tokenIn { symbol decimals } tokenOut { symbol decimals }
+      }
+    }
+  }`;
+}
+
+// Map raw strategy rows into MakerPositions. Pure: no network, no clock.
+export function shapeMakerPositions(data: any): MakerPosition[] {
+	return (data?.strategies ?? []).map((s: any) => ({
+		id: s.id,
+		strategyHash: s.strategyHash,
+		status: s.status,
+		strategyData: s.strategyData,
+		shippedAt: Number(s.shippedAt),
+		dockedAt: s.dockedAt != null ? Number(s.dockedAt) : null,
+		balances: (s.balances ?? []).map((bal: any) => ({
+			tokenAddress: bal.token?.id ?? "",
+			symbol: bal.token?.symbol ?? null,
+			decimals: bal.token?.decimals ?? null,
+			initialVirtual: bal.initialVirtual,
+			virtualBalance: bal.virtualBalance,
+			totalPulled: bal.totalPulled,
+			totalPushed: bal.totalPushed,
+		})),
+		fills: (s.fills ?? []).map((f: any) => ({
+			ts: Number(f.ts),
+			tokenInSymbol: f.tokenIn?.symbol ?? null,
+			tokenInDecimals: f.tokenIn?.decimals ?? null,
+			amountIn: f.amountIn,
+			tokenOutSymbol: f.tokenOut?.symbol ?? null,
+			tokenOutDecimals: f.tokenOut?.decimals ?? null,
+			amountOut: f.amountOut,
+		})),
+	}));
+}
+
+// Fetch every position (any status) this maker has shipped.
+export async function fetchMakerPositions(
+	maker: string,
+	url = subgraphUrl(),
+): Promise<MakerPosition[]> {
+	if (!ADDRESS.test(maker)) {
+		throw new Error(`not a valid address: "${maker}"`);
+	}
+	const json = await post(url, positionsQuery(maker));
+	const data = unwrap<any>(json, "positions");
+	return shapeMakerPositions(data);
+}

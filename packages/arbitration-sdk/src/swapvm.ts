@@ -311,6 +311,33 @@ export function decodeProgram(program: Uint8Array): Instruction[] {
 	return out;
 }
 
+// Reverse of shipBytes(): recover the Order from the exact bytes ship() stored
+// (the subgraph's `strategyData`). This is what lets the dashboard read a
+// position's program — and its deadline — from the chain instead of trusting
+// anything remembered client-side.
+export function decodeOrder(data: Uint8Array): Order {
+	const [decoded] = AbiCoder.defaultAbiCoder().decode(
+		["tuple(address maker, uint256 traits, bytes data)"],
+		toHex(data),
+	);
+	return {
+		maker: decoded.maker,
+		traits: BigInt(decoded.traits),
+		program: fromHex(decoded.data),
+	};
+}
+
+// The DEADLINE instruction's unix seconds, or null when the program carries
+// none. Our templates always emit one; a maker's book can also hold strategies
+// shipped outside Sluice, and those must render as "no deadline", not as 1970.
+export function deadlineOf(instructions: Instruction[]): number | null {
+	const found = instructions.find((ins) => ins.opcode === op("DEADLINE"));
+	if (!found) return null;
+	let value = 0n;
+	for (const b of found.args) value = (value << 8n) | BigInt(b);
+	return Number(value);
+}
+
 // Used by the app's "why this" expander, which shows the user structured
 // instructions rather than a wall of bytes.
 export function formatProgram(program: Uint8Array): string {

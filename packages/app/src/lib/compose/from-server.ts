@@ -203,9 +203,10 @@ function truncateFraction(input: string, decimals: number): string {
  * "banded · concentrate around the current price" — the part after the "·"
  * is the human-readable description; the slug-ish prefix is not. Falls back
  * to the full label (no "·" to split on), then to the raw templateId (no
- * template found at all).
+ * template found at all). Shared with the subgraph read-back mapper so both
+ * paths label a template identically.
  */
-function shortLabel(label: string | undefined, templateId: string): string {
+export function shortLabel(label: string | undefined, templateId: string): string {
   if (!label) return templateId;
   const after = label.split("·")[1]?.trim();
   return after || label;

@@ -16,6 +16,10 @@ import {
 	fullRangeWithFee,
 	banded,
 	bandedWithFee,
+	aquaOrder,
+	shipBytes,
+	decodeOrder,
+	deadlineOf,
 	type BandedParams,
 } from "./swapvm.ts";
 import { OP, isRealOpcode, FIRST_REAL_OPCODE, LAST_REAL_OPCODE } from "./opcodes.ts";
@@ -232,4 +236,28 @@ test("formatProgram renders instructions by name", () => {
 test("encodeProgram concatenates in order", () => {
 	const program = encodeProgram([salt(0n), deadline(1)]);
 	assert.equal(toHex(program), "0x150800000000000000000d050000000001");
+});
+
+test("decodeOrder recovers the Order from shipBytes exactly", () => {
+	const maker = "0x6878d79f988e7ecb537016b93bb77b4d680e1f01";
+	const program = fullRange({ salt: 0xbeefn, deadline: 1_800_000_000 });
+	const order = aquaOrder(maker, program);
+	const decoded = decodeOrder(shipBytes(order));
+	assert.equal(decoded.maker.toLowerCase(), maker.toLowerCase());
+	assert.equal(decoded.traits, order.traits);
+	assert.equal(toHex(decoded.program), toHex(program));
+});
+
+test("decodeOrder rejects bytes that are not an abi-encoded order", () => {
+	assert.throws(() => decodeOrder(new Uint8Array([0x01, 0x02, 0x03])));
+});
+
+test("deadlineOf reads the DEADLINE args back as unix seconds", () => {
+	const program = fullRange({ salt: 1n, deadline: 1_800_000_000 });
+	assert.equal(deadlineOf(decodeProgram(program)), 1_800_000_000);
+});
+
+test("deadlineOf is null when the program carries no DEADLINE", () => {
+	const program = encodeProgram([salt(1n), xycSwap()]);
+	assert.equal(deadlineOf(decodeProgram(program)), null);
 });
