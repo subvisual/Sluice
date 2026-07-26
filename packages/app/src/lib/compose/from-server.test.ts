@@ -47,6 +47,38 @@ const SERVER_RESULT = {
   promptVersion: "sluice.compose/2",
 };
 
+/** SERVER_RESULT with the fee slot re-parameterised, or dropped entirely. */
+function withFee(feeBps: number) {
+  const s = SERVER_RESULT.recommendation.strategies[0];
+  return {
+    ...SERVER_RESULT,
+    recommendation: {
+      ...SERVER_RESULT.recommendation,
+      strategies: [
+        {
+          ...s,
+          slots: {
+            ...s.slots,
+            fee: { instruction: "FLAT_FEE_AMOUNT_IN_XD", params: { feeBps } },
+          },
+        },
+      ],
+    },
+  };
+}
+
+function withoutFee() {
+  const s = SERVER_RESULT.recommendation.strategies[0];
+  const slots = { ...s.slots, fee: undefined };
+  return {
+    ...SERVER_RESULT,
+    recommendation: {
+      ...SERVER_RESULT.recommendation,
+      strategies: [{ ...s, templateId: "banded", slots }],
+    },
+  };
+}
+
 test("fromServer maps a recommendation into the UI shapes", () => {
   const ui = fromServer(SERVER_RESULT, 1);
 
@@ -74,6 +106,36 @@ test("fromServer maps a recommendation into the UI shapes", () => {
   for (const n of ["curve", "band", "fee", "deadline"]) assert.ok(names.includes(n), n);
   // Fee fact: 500_000 / 1e9 → 0.05%.
   assert.ok(s.facts.some((f) => f.value.includes("0.05%")));
+});
+
+test("a fee below 0.005% is rendered, not rounded away to 0.00%", () => {
+  // The band's 2dp formatter turned every feeBps under 50000 into "0.00%" — a
+  // real fee displayed as none (#44). The fee needs its own resolution.
+  const ui = fromServer(withFee(100), 1); // 100 / 1e9 → 0.00001%
+  const s = ui.strategies[0];
+  assert.ok(s.facts.some((f) => f.label === "FEE" && f.value === "0.00001% maker fee"));
+  assert.equal(s.slots.find((r) => r.name === "fee")!.params, "0.00001% on amount in");
+  assert.match(s.description, /0\.00001% maker fee/);
+});
+
+test("a zero fee reads as no maker fee, exactly like an absent fee slot", () => {
+  const zero = fromServer(withFee(0), 1).strategies[0];
+  const absent = fromServer(withoutFee(), 1).strategies[0];
+
+  // Same economics, same words: no FEE chip on either card.
+  assert.equal(zero.facts.some((f) => f.label === "FEE"), false);
+  assert.equal(absent.facts.some((f) => f.label === "FEE"), false);
+  assert.match(zero.description, /no maker fee/);
+  assert.match(absent.description, /no maker fee/);
+
+  // Only the slot table separates them — it describes what actually ships,
+  // and a zero fee still ships the wrapper.
+  assert.equal(
+    zero.slots.find((r) => r.name === "fee")!.params,
+    "0% on amount in · charges nothing",
+  );
+  assert.equal(absent.slots.find((r) => r.name === "fee")!.params, "no maker fee");
+  assert.equal(absent.slots.find((r) => r.name === "fee")!.instruction, "— not used");
 });
 
 test("fromServer truncates a virtualAmount with more fraction digits than the token has", () => {

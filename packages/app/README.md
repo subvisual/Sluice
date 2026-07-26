@@ -9,6 +9,27 @@ shows "risk rating unavailable".
 
 Accepting a recommendation builds the ship `Multicall` the user signs (PR #34);
 the dashboard reads the wallet's shipped strategies back from the subgraph (PR #35).
+Accepting is not all-or-nothing: every strategy is a choice you keep or drop, and
+only what you keep is shipped.
+
+## Choosing, and what gets signed
+
+A recommendation is **one set that shares one budget** — the validator's I2 sums
+every strategy's `virtualAmounts` per token against what you offered — so the
+strategies are legs of a portfolio, not variants of the same idea. Each card is
+therefore selected by default and can be dropped; drop everything but one and only
+that one ships, **with the amounts it was recommended and validated with**. Nothing
+is rescaled to soak up the budget a dropped strategy would have used: the signed
+recommendation is never rewritten (F2 §4).
+
+Whatever survives goes out as a single `Multicall` on the Aqua router — one
+transaction, one signature, `msg.sender` still you. The one thing that can add a
+signature is a first-time ERC20 approval: Aqua pulls the maker's tokens only when
+a taker fills, so an approval is what makes a shipped position *fillable*, not
+what makes `ship()` succeed. `planShip` reads the allowances before anything is
+sent and the screen states the real count ("One transaction — Aqua is already
+approved"); on a wallet that speaks EIP-5792 the approvals ride along in the same
+atomic batch, so it stays one signature even the first time.
 
 ## Run
 
@@ -45,6 +66,24 @@ the UI: an injected wallet signs via its *own* Base RPC entry (repoint it at the
 anvil URL to rehearse against the fork), and WalletConnect/mobile wallets cannot
 reach `127.0.0.1` — fork mode is extension-only.
 
+### Rehearsing the ship without a browser wallet
+
+`NEXT_PUBLIC_DEV_ACCOUNT=<address anvil holds>` adds a "Connect fork account"
+connector (`src/lib/dev-wallet.ts`) that forwards `eth_sendTransaction` straight
+to the fork, which signs with its own unlocked key. It holds no key of its own and
+no node other than anvil will sign for that address, so pointed anywhere else it
+simply stops working. Absent the variable, none of it is constructed.
+
+```bash
+anvil --fork-url $SLUICE_RPC_URL --fork-block-number 49100000
+cast send 0x4200000000000000000000000000000000000006 "deposit()" --value 5ether \
+  --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+  --rpc-url http://127.0.0.1:8545
+```
+
+For USDC (no faucet on a fork) write the balance slot directly:
+`cast rpc anvil_setStorageAt $USDC $(cast index address $ACCOUNT 9) $(cast to-uint256 25000000000)`.
+
 ## Layout
 
 | Path | Owns |
@@ -65,6 +104,10 @@ real, signed `ENCLAVE` recommendations when the server holds a key, otherwise th
 deterministic `TEMPLATE_FALLBACK` seed. Still not wired: market/pair context beyond
 the user's own book (F3 job 2). `nonce` is a fixed field of the recommendation
 payload schema.
+
+Worth knowing when the choice UI looks thin: the deterministic fallback emits
+**one** strategy, so without a `ZG_PRIVATE_KEY` there is exactly one card to keep
+or drop. A set of three to choose between is the enclave path (`maxStrategies` 3).
 
 ## /api/compose — the server-side enclave path
 

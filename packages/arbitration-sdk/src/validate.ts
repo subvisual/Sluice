@@ -14,8 +14,10 @@
 //
 //   Grammar (per strategy, against grammar.ts / the pinned opcode table):
 //   I5  slots use ONLY offered instructions — curve ∈ CURVE_OPTIONS (exactly
-//       one, structural), fee ∈ WRAPPER_OPTIONS with feeBps ∈ [0, FEE_BPS_ONE),
+//       one, structural), fee ∈ WRAPPER_OPTIONS with feeBps ∈ [1, FEE_BPS_ONE),
 //       guards ∈ GUARD_OPTIONS. Anything else cannot be compiled for this venue.
+//       feeBps 0 is excluded deliberately: it compiles to a fee instruction
+//       that charges nothing, which is the no-fee templates' job (#44).
 //   I7  deadline present, in (now, now + q.maxDeadlineSec]
 //   I8  templateId references a known seed template
 //   I10 tokens in canonical (strictly ascending address) order, no duplicates
@@ -140,10 +142,20 @@ function validateStrategy(
 			const feeBps = fee.params?.feeBps;
 			if (feeBps !== undefined) {
 				const n = Number(feeBps);
-				if (!Number.isInteger(n) || n < 0 || n >= FEE_BPS_ONE) {
+				// 0 is the one in-range value that is still wrong, and it gets its
+				// own message because its fix is structural — a different template,
+				// not a different number. A zero fee ships a FLAT_FEE_AMOUNT_IN_XD
+				// that charges nothing: gas and bytes spent on a fee the screen can
+				// only describe as absent.
+				if (n === 0) {
 					push(
 						"I5",
-						`${at}: feeBps ${JSON.stringify(feeBps)} must be an integer in [0, ${FEE_BPS_ONE}) — it is out of ${FEE_BPS_ONE}, not 10000, so 0.3% is ${(FEE_BPS_ONE / 1000) * 3}`,
+						`${at}: feeBps 0 charges nothing but still ships a FLAT_FEE_AMOUNT_IN_XD instruction — to charge no fee, drop the fee slot and use templateId "full-range" or "banded"; to charge one, 0.05% is ${FEE_BPS_ONE / 2000}`,
+					);
+				} else if (!Number.isInteger(n) || n < 1 || n >= FEE_BPS_ONE) {
+					push(
+						"I5",
+						`${at}: feeBps ${JSON.stringify(feeBps)} must be an integer in [1, ${FEE_BPS_ONE}) — it is out of ${FEE_BPS_ONE}, not 10000, so 0.3% is ${(FEE_BPS_ONE / 1000) * 3}`,
 					);
 				}
 			}
