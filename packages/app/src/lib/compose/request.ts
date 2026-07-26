@@ -6,7 +6,7 @@ import type { RecommendationRequest, TokenMeta, TokenSelection } from "./types";
  * Building the request envelope (F2 §5) from what the Compose screen collected,
  * plus the checks the CLIENT can honestly make.
  *
- * These are not the validator. Gate 1 (F2 §6, I1–I14) runs over the *model's
+ * These are not the validator. Gate 1 (F2 §6, I1–I12) runs over the *model's
  * output* against this request; everything here runs over the *input* before
  * anything is sent, and exists only to stop us spending an inference round trip
  * on a request that cannot be satisfied.
@@ -121,7 +121,7 @@ export function buildRecommendationRequest(draft: RequestDraft): BuildResult {
 }
 
 /**
- * JSON-safe view of the request, for display and for the trace.
+ * JSON-safe view of the request, for display and for the record.
  *
  * `bigint` through `JSON.stringify` throws, and coercing to a JS number is a
  * silent correctness bug — amounts are decimal strings everywhere they leave

@@ -17,14 +17,14 @@ you have signed. (Two extensions are parked, with *different* blockers: **whole-
 composition** waits on the sizing maths that keeps all-or-nothing legs coverable; **continuous
 management** waits on an authorization problem — session keys / smart accounts — not an agent
 problem.) Every recommendation
-is computed privately in a 0G TDX enclave and signed; the signature is verified on-chain to prove
-**provenance** (a real 0G TEE produced it, our committer authorised it), then a deterministic
+is computed privately in a 0G TDX enclave and signed — recovering the signer proves
+**provenance** (a real 0G TEE produced it) — then a deterministic
 validator **rejects** non-compliant recommendations and re-infers — it never rewrites a signed one,
 and refusals stay on the record.
 
 Three load-bearing integrations — remove any and the project stops making sense:
 **1inch Aqua + SwapVM** (the venue, the strategy grammar, the compiler, the taker), **0G**
-(private signed recommendations + encrypted trace), **The Graph** (the user's book + market context,
+(private signed recommendations), **The Graph** (the user's book + market context,
 derived off-chain). The concept page is the argument and holds no implementation detail —
 feature pages do.
 
@@ -42,7 +42,7 @@ the page itself is one fetch away.
 | --- | --- |
 | [Sluice — Strategy Composer for 1inch Aqua](https://app.notion.com/p/3a7caae5863181e685dec2690a6eed83) | The concept and the argument. Start here. |
 | [F1 — Aqua & the Strategy VM](https://app.notion.com/p/3a8caae5863181459491dcb6e7e25a1b) | 1inch Aqua + SwapVM: the fork venue, the slot grammar, the compiler, the taker. |
-| [F2 — Verified Private Recommendations](https://app.notion.com/p/3a8caae5863181609acbcfd69a5db06b) | 0G: sealed TEE inference, signed recommendations, validator + reviewer, encrypted trace. |
+| [F2 — Private Recommendations](https://app.notion.com/p/3a8caae5863181609acbcfd69a5db06b) | 0G: sealed TEE inference, signed recommendations, validator + reviewer. |
 | [F3 — Market & Book Context](https://app.notion.com/p/3a8caae58631812cadd9df083e8d0dd9) | The Graph: the user's own book subgraph + composed market context. |
 | [Wiring & Delivery](https://app.notion.com/p/3a8caae58631816d9aa0eb077e013ffe) | Shared vocabulary, per-user request flow, transaction shape, gates, demo. |
 | [Prize Strategy](https://app.notion.com/p/3a7caae5863181209c77ca7d889bbb64) | Sponsor targeting and prize math. |
@@ -116,15 +116,14 @@ Monorepo (npm workspaces):
 
 **For now, development and testing run against a Base mainnet fork** at a pinned block, so we build
 against the real deployed Aqua/SwapVM rather than a copy. We self-deploy only our own contracts
-(today `SluiceStrategy.sol`; the `RecommendationRegistry` when it ships — no taker contract);
+(today `SluiceStrategy.sol` — no taker contract);
 addresses are pinned in `config/addresses.8453.json`. A fork
 shares Base's chainId, so guard signing with a fork probe (`anvil_nodeInfo` — **not `eth_getCode`**,
 which returns identical bytecode either way) plus an explicit `SLUICE_ALLOW_MAINNET` opt-in.
 
 This repo signs transactions — secrets live in direnv `.envrc` files (`packages/app/.envrc`,
 `packages/arbitration-sdk/.envrc`), all gitignored; never commit one. The only key any code reads
-today is `ZG_PRIVATE_KEY` (funded 0G Galileo key). Planned with the registry, not present yet:
-`SLUICE_COMMITTER_KEY` (commits recommendations) and `SLUICE_OWNER_KEY` (registry admin, cold).
+today is `ZG_PRIVATE_KEY` (funded 0G Galileo key).
 The user is the maker and signs the ship `Multicall` themselves.
 
 ## Agent skills

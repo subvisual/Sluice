@@ -3,8 +3,7 @@
 **Source of truth:** [F1 — Aqua & the Strategy VM (1inch Aqua + SwapVM)](https://app.notion.com/p/3a8caae5863181459491dcb6e7e25a1b)
 
 1inch Aqua + SwapVM. F1 owns **the venue, the strategy language, and what fills what we ship**:
-a **Base mainnet fork** at a pinned block running the *real, already-deployed* Aqua/SwapVM
-(`RecommendationRegistry` is the only contract we self-deploy, and it is not in the ship path),
+a **Base mainnet fork** at a pinned block running the *real, already-deployed* Aqua/SwapVM,
 the **slot grammar** an LLM can safely fill (settled — Q2 closed 2026-07-25, G3-proven; the
 program is a nest, salt → deadline → band → fee → curve, with four shipped templates:
 `full-range`, `full-range-fee`, `banded`, `banded-fee` — one home,
@@ -34,8 +33,7 @@ explicit `SLUICE_ALLOW_MAINNET` opt-in. Addresses are pinned in `config/addresse
 Provenance is `strategyHash = keccak256(strategy)` (`Aqua.sol:41`) — and the `strategy` bytes we
 ship **are `abi.encode(Order{maker, traits, program})`**, so effectively
 `keccak256(abi.encode(order))`; the bare program is never hashed (fork-proven,
-`contracts/test/StrategyHashSemantics.t.sol`). Computed before signing and checked by
-recompile-equality. Aqua's preimage has no maker field, so identical **bytes** collide across
+`contracts/test/StrategyHashSemantics.t.sol`). Computed before signing. Aqua's preimage has no maker field, so identical **bytes** collide across
 makers — key on `(maker, app, strategyHash)` — but a SwapVM Aqua-mode strategy embeds the maker
 in the bytes, so identical **programs** from different makers do not collide. Emit a `SALT` in
 every strategy — opcode `0x15` on the deployed Base router; opcode numbers are read from the

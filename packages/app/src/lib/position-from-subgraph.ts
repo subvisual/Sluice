@@ -24,9 +24,8 @@ import { tokenBy } from "./tokens";
  * Everything here is read back from the chain: the ceiling is `initialVirtual`
  * from the ship-funding event, consumed is `totalPulled`, and the deadline and
  * slot rows come from decoding `strategyData` itself. What cannot be read back
- * yet — risk rating, provenance, the recommendation's wording — is null or
- * labelled as unavailable, never invented (the Recommendation join waits on
- * the RecommendationRegistry).
+ * — risk rating, provenance, the recommendation's wording — is null or
+ * labelled as unavailable, never invented.
  */
 
 // Each template's exact instruction sequence, as the compiler emits it
@@ -66,7 +65,7 @@ export function toPositionDto(row: MakerPosition): PositionDto {
     fills: row.fills.map(toFill),
     deadline: decoded.deadline,
     dockedAt: row.dockedAt,
-    // Not recoverable from the chain until the RecommendationRegistry ships.
+    // Not recoverable from the chain.
     risk: null,
     provenance: null,
     slots: decoded.slots,
@@ -120,7 +119,7 @@ function decode(strategyData: string): Decoded {
     templateLabel: template ? shortLabel(template.label, template.id) : "on-chain program",
     description: template
       ? `${capitalize(template.describesIntent)} — read back from the aqua subgraph.`
-      : "On-chain program read back from the aqua subgraph — shipped outside this composer, or before the recommendation registry.",
+      : "On-chain program read back from the aqua subgraph — shipped outside this composer.",
     band: hasBand ? "banded" : "full range",
     bandNote: hasBand
       ? "concentrated around the shipped price · exact width lives in the signed recommendation"

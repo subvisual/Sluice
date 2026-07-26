@@ -38,7 +38,7 @@ import type { UiRecommendation } from "./compose/from-server";
  *
  * The chain alone cannot say how a strategy was recommended: risk rating,
  * the recommendation's wording and band terms live only in the signed
- * recommendation (until the RecommendationRegistry ships). So this module
+ * recommendation. So this module
  * also keeps a local metadata cache, keyed by the real on-chain
  * `strategyHash` and persisted to `localStorage`, written whenever this
  * browser ships (`recordShipped`) or seeds the demo fixtures (`showDemo`).

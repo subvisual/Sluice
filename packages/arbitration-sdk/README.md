@@ -1,6 +1,6 @@
 # @sluice/arbitration-sdk
 
-F2 (Verified Private Recommendations) SDK. Currently: a **strategy composer CLI** (prompt +
+F2 (Private Recommendations) SDK. Currently: a **strategy composer CLI** (prompt +
 budget → a grammar-shaped strategy recommendation from a live 0G enclave), a one-shot **0G
 inference CLI** (the Gate 0 round-trip it is built on), and an **F3 subgraph book reader** (a
 maker's own Aqua book, read from The Graph).
@@ -30,8 +30,7 @@ Without `--maker` the composer uses the stub context, exactly as before.
 
 **Scope:** read-only, job 1 only. The market half of the context (pool depth / realised vol) is
 **still a labelled stub** — job 2, F3 Open Q2 (which price subgraph). The `Recommendation`/`Template`
-join (Notion F3 §3) is not in the deployed schema yet — it needs `RecommendationRegistry`, deferred
-with F2 verifiability.
+join (Notion F3 §3) does not exist — there is no on-chain record of recommendations to index.
 
 Modules: `subgraph.ts` (client + pure shaping), `subgraph-cli.ts`, `context.ts` (`liveContext` /
 `bookToContext`).
@@ -87,7 +86,7 @@ signature, and an independent proof URL).
     echo "same prompt, via stdin" | npm run infer
 
 Exit code is `0` only when the proof verifies. Design notes:
-`../../docs/features/f2-verified-private-recommendations/2026-07-25-inference-cli-design.md`.
+`../../docs/features/f2-private-recommendations/2026-07-25-inference-cli-design.md`.
 
 ### Funding the compute ledger
 
@@ -115,7 +114,6 @@ key-dependent commands via `direnv exec`); `cp .env.example .env` also works. Ne
 - **The 0G signature is over a provider attestation record**
   (`reqHash:respHash:centralized:aliyun:certHash`), **not** the response text — our output
   appears only as a non-reproducible hash. Verify against the signed record, never the content.
-  This reshapes the on-chain binding for `RecommendationRegistry`; see ADR-0001's Gate 0 update.
 - SDK gotchas: load `@0gfoundation/0g-compute-ts-sdk` via CommonJS (`createRequire`) — its ESM
   build is broken under Node 22; a fresh wallet needs `addLedger` then `acknowledgeProviderSigner`
   before the first inference; the signature endpoint lives at `{endpoint}/signature/...`

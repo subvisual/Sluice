@@ -2,8 +2,8 @@
 // StrategyRecommendation, produced by a live 0G inference call.
 //
 // Scope: this is the "just get a recommendation" path. It reuses the Gate 0
-// round-trip (inferChat) and receives the enclave signature, but does NOT
-// verify it, commit it, or persist anything — verifiability is out of scope.
+// round-trip (inferChat), which fetches the enclave signature and recovers its
+// signer (the provenance surfaced to the caller); nothing is persisted.
 //
 // The loop is validator-driven (F2 §4: "nothing is ever edited. Violations
 // reject and re-infer"). Each attempt is parsed for shape and then run through
@@ -57,7 +57,7 @@ const OUTPUT_SCHEMA = `Return ONLY a JSON object (no markdown fences, no prose),
   ]
 }`;
 
-// F2 §9: promptVersion goes into every trace. When the composer behaves
+// F2 §9: promptVersion is recorded with every result. When the composer behaves
 // differently at hour 30 than at hour 14, "we edited the prompt" is the most
 // likely answer — unanswerable unless the version is recorded. Version 1 was
 // the app-side six-section contract deleted in PR #30; this builder succeeds
@@ -154,7 +154,7 @@ export function buildComposeMessages(
 
 export type ComposeResult = {
 	parse: ParseResult;
-	raw: InferResult; // the underlying 0G response (unverified, by scope)
+	raw: InferResult; // the underlying 0G response, with its proof fields
 	attempts: number;
 	// The validator verdict on the LAST model attempt. Empty when an ENCLAVE
 	// result was accepted; on TEMPLATE_FALLBACK it records the invariants the
@@ -242,8 +242,8 @@ export async function compose(
 
 	// Attempts spent and the last model output was still malformed or violating:
 	// deterministic template fallback, clearly labelled — never a model output.
-	// `raw`, `violations` and `messages` keep the last rejected attempt for
-	// the trace.
+	// `raw`, `violations` and `messages` keep the last rejected attempt on
+	// the record.
 	const rec = templateFallback(req, ctx);
 	parse = parseRecommendation(JSON.stringify(rec), req);
 	return { parse, raw, attempts, violations, source: FALLBACK_SOURCE, messages };

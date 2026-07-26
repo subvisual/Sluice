@@ -8,8 +8,8 @@
 // inputs always yield identical bytes.
 //
 // This is the "labelled, never a model output" half of Issue 6. It carries no
-// enclave signature and makes no verifiability claim (out of current scope);
-// the label is what keeps it from being presented as something the model said.
+// enclave signature — the label is what keeps it from being presented as
+// something the model said.
 
 import { TEMPLATES, type Template } from "./grammar.ts";
 import type { MarketContext } from "./context.ts";

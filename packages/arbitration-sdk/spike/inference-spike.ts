@@ -1,11 +1,11 @@
 /**
  * F2 Gate 0 — validate 0G sealed inference BEFORE building anything on top of it.
  *
- * This probe proves (or kills) every assumption ADR-0001 / ADR-0002 rest on:
+ * This probe proves (or kills) every assumption the F2 design rests on:
  *   1. the ledger can be funded (capture the real deposit min + faucet reality)
  *   2. an inference round-trips and returns a chatID (ZG-Res-Key)
  *   3. the signature is fetchable out-of-band and is EIP-191 over the response TEXT
- *   4. verifyMessage(text, sig) recovers to a STABLE signer -> that's what we registerSigner
+ *   4. verifyMessage(text, sig) recovers to a STABLE signer -> the provenance signer
  *   5. the signed `text` is BYTE-FOR-BYTE the assistant content (no server normalization)
  *   6. the 7B can emit our 3-line framed decision (header + 20-digit epoch + JSON) — retry rate
  *   7. per-call latency (first I12 datapoint) + the Galileo chainId on the wallet
@@ -137,11 +137,11 @@ async function main() {
 		bad("signature.fetch", e);
 	}
 
-	// 4. EIP-191 recovery -> the address we will registerSigner (THE assertion)
+	// 4. EIP-191 recovery -> the stable provenance signer (THE assertion)
 	try {
 		const recovered = ethers.verifyMessage(signedText, signature);
-		ok("EIP-191.recover", `signer = ${recovered}  <-- registerSigner THIS`);
-		results["REGISTER_THIS_SIGNER"] = recovered;
+		ok("EIP-191.recover", `signer = ${recovered}  <-- the stable TEE signer`);
+		results["STABLE_TEE_SIGNER"] = recovered;
 	} catch (e) {
 		bad("EIP-191.recover", e);
 	}

@@ -12,7 +12,7 @@ is the shared-context area, not a fourth feature, but it carries a PRD like the 
 | Slug | Notion page |
 | --- | --- |
 | `f1-aqua-strategy-vm` | F1 — Aqua & the Strategy VM (1inch Aqua + SwapVM) |
-| `f2-verified-private-recommendations` | F2 — Verified Private Recommendations (0G) |
+| `f2-private-recommendations` | F2 — Private Recommendations (0G) |
 | `f3-market-book-context` | F3 — Market & Book Context (The Graph) |
 | `wiring-delivery` | Wiring & Delivery |
 

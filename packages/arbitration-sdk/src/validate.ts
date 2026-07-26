@@ -10,8 +10,7 @@
 //   I1  every token in r is a token the user selected in q.budget
 //   I2  per token: Σ virtualAmounts across ALL strategies <= q.budget[token]
 //   I3  r.strategies.length in [1, q.maxStrategies]
-//   I4  r.chainId == config chain (the r.user == q.user half is committer-
-//       supplied, deferred with the commit path — F2 §2/§5)
+//   I4  r.chainId == config chain
 //
 //   Grammar (per strategy, against grammar.ts / the pinned opcode table):
 //   I5  slots use ONLY offered instructions — curve ∈ CURVE_OPTIONS (exactly
@@ -28,11 +27,8 @@
 // N/A on this venue — deliberately NOT emitted (the opcodes do not exist here):
 //   I6  (partial-fill ⇒ token-invalidation): no LimitSwap / invalidation opcode.
 //   I9  (oracle adjuster ⇒ feed configured): no oracle-adjust opcode anywhere.
-// Deferred (out of the recommendation-only scope):
-//   I13 nonce replay — enforced on-chain in commitRecommendation (F2 §2).
-//   I14 byte-for-byte recompile-equality — a ship-path defence; I5 already
-//       guarantees every named instruction is dispatchable (compilable) here.
-//   I15 whole-balance sizing — parked (F2 §6).
+// Parked:
+//   I15 whole-balance sizing — belongs to the future whole-balance mode (F2 §6).
 
 import type {
 	RecommendationRequest,
@@ -47,8 +43,8 @@ import {
 } from "./grammar.ts";
 import { FEE_BPS_ONE } from "./opcodes.ts";
 
-// One rejection. `code` is the invariant id so a caller (and the trace) can
-// see exactly which rule fired; `message` is human-facing.
+// One rejection. `code` is the invariant id so a caller (and the attempt log)
+// can see exactly which rule fired; `message` is human-facing.
 export type Violation = {
 	code: "I1" | "I2" | "I3" | "I4" | "I5" | "I7" | "I8" | "I10" | "I11" | "I12";
 	message: string;

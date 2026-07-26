@@ -25,12 +25,11 @@ Three integrations, each load-bearing:
   authored through a settled template **grammar** an LLM can safely fill, then **compiled**
   deterministically to SwapVM bytecode. A forge script (`contracts/script/Take.s.sol`) driving a
   funded EOA produces the fills a fork otherwise lacks.
-- **0G** — private, verifiable recommendations. Composition runs inside an Intel TDX enclave and is
-  signed; the chain verifies the signature to prove **provenance** (a real 0G TEE produced it, our
-  committer authorised it). Review splits by what has a right answer: a deterministic validator
-  **rejects** non-compliant recommendations and re-infers (never rewriting a signed one), while a
-  **reviewer agent** judges what does not — risk rating, intent match, band sensibility. Traces
-  live encrypted in 0G Storage for audit.
+- **0G** — private recommendations. Composition runs inside an Intel TDX enclave and is signed;
+  recovering the signer proves **provenance** (a real 0G TEE produced it). Review splits by what
+  has a right answer: a deterministic validator **rejects** non-compliant recommendations and
+  re-infers (never rewriting a signed one), while a **reviewer agent** (a stretch) judges what
+  does not — risk rating, intent match, band sensibility.
 - **The Graph** — market & book context. A net-new subgraph indexes the user's own Aqua book
   (`Position`/`Fill`); composed external subgraphs supply market data (depth, realised vol, fees).
   Together they form the `MarketContext` the recommendation is built from.
@@ -48,7 +47,7 @@ Running so far:
   reject-and-re-infer loop and a labelled `TEMPLATE_FALLBACK` when attempts are exhausted. Four
   templates (full-range, full-range-fee, banded, banded-fee) compile to SwapVM bytecode and are
   fixture-proven — shipped **and** filled on the Base fork. Alongside: the one-shot
-  `npm run infer` CLI (verifiable EIP-191 proof) and the `npm run fund` ledger CLI.
+  `npm run infer` CLI (signed EIP-191 proof) and the `npm run fund` ledger CLI.
 - **Foundry contracts** (`contracts/`): `SluiceStrategy.sol`, ship/take scripts, three fork test
   suites against the deployed Aqua/SwapVM.
 - The **Next.js app** (`packages/app`): the compose screen behind a real `POST /api/compose` —
@@ -72,7 +71,7 @@ Local docs are organised by the same four features as Notion:
 | | |
 | --- | --- |
 | [F1 — Aqua & the Strategy VM](docs/features/f1-aqua-strategy-vm/README.md) | Aqua + SwapVM: the fork venue, the slot grammar, the compiler, the taker |
-| [F2 — Verified Private Recommendations](docs/features/f2-verified-private-recommendations/README.md) | 0G: sealed inference, signed recommendations, validator, encrypted trace |
+| [F2 — Private Recommendations](docs/features/f2-private-recommendations/README.md) | 0G: sealed inference, signed recommendations, validator |
 | [F3 — Market & Book Context](docs/features/f3-market-book-context/README.md) | The Graph: the user's book subgraph + composed market context |
 | [Wiring & Delivery](docs/features/wiring-delivery/README.md) | Shared vocabulary, the per-user request flow, transaction shape, demo |
 
