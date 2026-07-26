@@ -52,7 +52,7 @@ const OUTPUT_SCHEMA = `Return ONLY a JSON object (no markdown fences, no prose),
         "deadline": { "deadline": <unix seconds> }
       },
       "tokens": ["<token address>", ...],          // canonical ASCENDING address order
-      "virtualAmounts": ["<decimal string>", ...]  // aligned with tokens; NEVER a number
+      "virtualAmounts": ["<decimal string>", ...]  // aligned with tokens; NEVER a number; whole token units ("0.5"), NEVER base units ("500000000000000000")
     }
   ]
 }`;
@@ -66,7 +66,15 @@ const OUTPUT_SCHEMA = `Return ONLY a JSON object (no markdown fences, no prose),
 //
 // /3 adds the Tier 0 "echo, don't compute" blocks: risk appetite (appetite.ts),
 // reference pairing (pairing.ts) and band tiers (tiers.ts).
-export const PROMPT_VERSION = "sluice.compose/3";
+//
+// /4 fixes the units contract underneath them. COMPAT_RULES told the model
+// "10000 USDC is 10000e6" while the schema asked for decimal strings and the
+// BUDGET was stated in whole tokens — so it emitted base units and every
+// attempt died on I2 (1e21 > 1), which meant the enclave path could never
+// reach the screen. /3's pairing block hands over numbers to echo and hides
+// most of this, but it is omitted whenever the budget does not hold both sides
+// of the pair, and a rule that teaches base units is wrong even when unused.
+export const PROMPT_VERSION = "sluice.compose/4";
 
 // How many band tiers a tiered recommendation carries — see tiers.ts. A request
 // that allows fewer strategies than this gets no tier block at all rather than

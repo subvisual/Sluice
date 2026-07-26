@@ -2,6 +2,7 @@ import { cookieStorage, createStorage, http } from "wagmi";
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
 import { base } from "@reown/appkit/networks";
 import { rpcUrlFor, type RpcMode } from "./network";
+import { DEV_ACCOUNT, devWallet } from "./dev-wallet";
 
 /**
  * Reown Cloud projectId. Public by design (NEXT_PUBLIC_). When absent, the
@@ -30,5 +31,11 @@ export function getAdapter(mode: RpcMode) {
     transports: {
       [base.id]: http(rpcUrlFor(mode)),
     },
+    // Rehearsal only, and only when NEXT_PUBLIC_DEV_ACCOUNT names an address
+    // anvil holds — see dev-wallet.ts. AppKit keeps connectors passed here
+    // alongside the ones it adds itself.
+    connectors: DEV_ACCOUNT
+      ? [devWallet({ address: DEV_ACCOUNT, rpcUrl: rpcUrlFor(mode) })]
+      : [],
   });
 }

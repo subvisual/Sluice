@@ -127,8 +127,9 @@ export const COMPAT_RULES: string[] = [
 	"The band comes BEFORE the fee and the curve, and requires a curve after it. You choose bandBps only — the compiler derives the concentration deltas from the virtual amounts; never emit deltas.",
 	"A tighter band quotes deeper but exhausts on a smaller price move: the shipped amounts are drained exactly when the price reaches a band edge, and a draw past the edge reverts for the taker.",
 	"DEADLINE is always present, and within the request's maxDeadlineSec.",
-	"Amounts stay within the user's stated budget, PER TOKEN, summed across every strategy in the recommendation. Never a token the user did not select.",
-	"The virtual amounts set both the price (their ratio) and the depth (their size). For a pair that should trade near parity, ship equal nominal value on each side — mind that decimals differ, so 10000 USDC is 10000e6 and 10000 USDe is 10000e18.",
+	'Amounts are in WHOLE TOKEN UNITS, exactly as the BUDGET states them: "0.5" WETH, "1500" USDC. NEVER base units — no 1e18, no 1e6, no "1000000000000000000". The compiler scales by each token\'s decimals; emitting scaled amounts overshoots the budget by orders of magnitude and is rejected.',
+	"Amounts stay within the user's stated budget, PER TOKEN, summed across every strategy in the recommendation. Strategies ship TOGETHER — they are legs of one position, not alternatives to choose between — so returning N of them means SPLITTING the budget across them, never repeating the full budget in each. Never a token the user did not select.",
+	'The virtual amounts set both the price (their ratio) and the depth (their size). For a pair that should trade near parity, ship equal nominal VALUE on each side: against a 3000 USD/ETH mid, "0.5" WETH pairs with "1500" USDC.',
 	`feeBps is out of ${FEE_BPS_ONE}, not 10000: 0.3% is ${(FEE_BPS_ONE / 1000) * 3}.`,
 ];
 
