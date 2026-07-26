@@ -35,6 +35,14 @@ const SERVER_RESULT = {
   proof: null,
   validation: { ok: true, violations: [] },
   attempts: 0,
+  shipInputs: [
+    {
+      strategyHash: "0xaaaa000000000000000000000000000000000000000000000000000000aaaa",
+      strategy: "0x0203010203",
+      tokens: [WETH, USDC],
+      amounts: ["2000000000000000000", "3000000000"],
+    },
+  ],
   contextSource: "stub" as const,
   promptVersion: "sluice.compose/2",
 };
@@ -88,6 +96,20 @@ test("fromServer truncates a virtualAmount with more fraction digits than the to
   assert.equal(ui.strategies[0].legs.length, 2);
   assert.equal(ui.strategies[0].legs[1].token.symbol, "USDC");
   assert.equal(ui.strategies[0].legs[1].virtual, 1000333333n);
+});
+
+test("fromServer re-parses shipInputs amounts from decimal strings into bigints", () => {
+  const ui = fromServer(SERVER_RESULT, 1);
+
+  assert.equal(ui.shipInputs.length, 1);
+  const shipInput = ui.shipInputs[0];
+  assert.equal(shipInput.strategyHash, SERVER_RESULT.shipInputs[0].strategyHash);
+  assert.equal(shipInput.strategy, SERVER_RESULT.shipInputs[0].strategy);
+  assert.deepEqual(shipInput.tokens, SERVER_RESULT.shipInputs[0].tokens);
+  assert.equal(shipInput.amounts.length, 2);
+  assert.equal(shipInput.amounts[0], BigInt(SERVER_RESULT.shipInputs[0].amounts[0]));
+  assert.equal(shipInput.amounts[1], BigInt(SERVER_RESULT.shipInputs[0].amounts[1]));
+  assert.equal(typeof shipInput.amounts[0], "bigint");
 });
 
 test("fromServer drops legs for tokens outside the app token list", () => {
