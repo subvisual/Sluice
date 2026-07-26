@@ -138,28 +138,4 @@ export function buildRecommendationRequest(draft: RequestDraft): BuildResult {
   };
 }
 
-/**
- * JSON-safe view of the request, for display and for the record.
- *
- * `bigint` through `JSON.stringify` throws, and coercing to a JS number is a
- * silent correctness bug — amounts are decimal strings everywhere they leave
- * this process (F2 §3).
- */
-export function serializeRequest(request: RecommendationRequest) {
-  return {
-    user: request.user,
-    chainId: request.chainId,
-    prompt: request.prompt,
-    budget: Object.fromEntries(
-      Object.entries(request.budget).map(([token, amount]) => [
-        token,
-        amount.toString(),
-      ]),
-    ),
-    maxStrategies: request.maxStrategies,
-    maxDeadlineSec: request.maxDeadlineSec,
-    maxInferenceRetries: request.maxInferenceRetries,
-  };
-}
-
 const eq = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
