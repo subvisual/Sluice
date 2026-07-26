@@ -1,6 +1,3 @@
-/** Wire schema of the recommendation the enclave returns — F2 §3. */
-export const RECOMMENDATION_SCHEMA = "sluice.recommendation/1";
-
 /**
  * Request limits — F2 §5.
  *

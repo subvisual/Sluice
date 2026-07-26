@@ -13,14 +13,12 @@
   --desk-2: #7ea8cf;
   --desk-3: #9dc0dd;
   --glass: rgba(255, 255, 255, 0.46);
-  --glass-2: rgba(255, 255, 255, 0.6);
   --glass-3: rgba(255, 255, 255, 0.34);
   --glass-line: rgba(255, 255, 255, 0.72);
   --glass-edge: rgba(255, 255, 255, 0.55);
   --sheet: rgba(255, 255, 255, 0.94);
 
   /* surfaces */
-  --page: #f2f6f8;
   --surface: #ffffff;
   --surface-2: #eaf1f5;
   --card: #ffffff;
@@ -63,7 +61,6 @@
 }
 
 @theme inline {
-  --color-page: var(--page);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-card: var(--card);
@@ -74,7 +71,6 @@
   --color-track-2: var(--track-2);
   --color-slot-line: var(--slot-line);
   --color-glass: var(--glass);
-  --color-glass-2: var(--glass-2);
   --color-glass-3: var(--glass-3);
   --color-glass-line: var(--glass-line);
   --color-glass-edge: var(--glass-edge);

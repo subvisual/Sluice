@@ -1,6 +1,5 @@
 {
   "chainId": 8453,
-  "chainName": "base",
   "forkBlock": 49100000,
   "_forkBlock": "Pinned so the venue does not drift between rehearsal and demo. F1 §1.",
 
