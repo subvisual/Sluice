@@ -14,7 +14,12 @@ import { loadConfig, type Config } from "./config.ts";
 import { initBroker, type ChatMessage, type ZGBroker } from "./inference.ts";
 import { chainStateFor, compose, PROMPT_VERSION } from "./compose.ts";
 import { compileRecommendation, deriveSaltSeed } from "./compile.ts";
-import { liveContext, stubContext, type MarketContext } from "./context.ts";
+import {
+	liveContext,
+	pairTokensFor,
+	stubContext,
+	type MarketContext,
+} from "./context.ts";
 import {
 	FALLBACK_SOURCE,
 	templateFallback,
@@ -111,8 +116,17 @@ function getBroker(cfg: Config): Promise<ZGBroker> {
 // computed from it would already be in the past. Re-key it to the request's
 // wall clock — the SAME `now` the validator uses, so the two can never drift
 // across the second boundary between two Date.now() calls.
-function nowContext(now: number): MarketContext {
-	return { ...stubContext(), observedAt: now };
+function nowContext(
+	now: number,
+	pairTokens?: [string, string],
+): MarketContext {
+	const base = stubContext();
+	if (!pairTokens) return { ...base, observedAt: now };
+	return {
+		...base,
+		observedAt: now,
+		pair: { ...base.pair, pair: `${pairTokens[0]}/${pairTokens[1]}` },
+	};
 }
 
 // The validator clock. observedAt/observedBlock are SNAPSHOT facts the model
@@ -158,7 +172,7 @@ function fallbackResult(
 	now: number,
 	maker: string,
 ): ServerComposeResult {
-	const ctx = nowContext(now);
+	const ctx = nowContext(now, pairTokensFor(req.budget));
 	const rec = templateFallback(req, ctx);
 	const { ok, violations } = verdict(rec, req, ctx, now);
 	// compileRecommendation throws on a token outside the SDK's hardcoded
@@ -220,9 +234,11 @@ export async function composeForApp(
 	// and `contextSource` carries the degradation into the response.
 	let ctx: MarketContext;
 	try {
-		ctx = await liveContext(input.user);
+		ctx = await liveContext(input.user, {
+			pairTokens: pairTokensFor(req.budget),
+		});
 	} catch {
-		ctx = nowContext(now);
+		ctx = nowContext(now, pairTokensFor(req.budget));
 	}
 
 	try {

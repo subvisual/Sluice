@@ -46,6 +46,24 @@ export function tokenBySymbol(symbol: string): TokenInfo | undefined {
 	return key ? TOKENS[key] : undefined;
 }
 
+/**
+ * The pair a request is about, derived from its budget.
+ *
+ * Ascending address, which is I10's canonical order and the tokenA/tokenB order
+ * MakerTraits requires — and already what "WETH/USDC" is. `undefined` for any
+ * budget that is not exactly two tokens: there is no pair to name, and naming
+ * one anyway is how a USDC-only request ended up described as WETH/USDC.
+ */
+export function pairTokensFor(
+	budget: Array<{ symbol: string; address: string }>,
+): [string, string] | undefined {
+	if (budget.length !== 2) return undefined;
+	const [a, b] = [...budget].sort((x, y) =>
+		x.address.toLowerCase() < y.address.toLowerCase() ? -1 : 1,
+	);
+	return [a.symbol, b.symbol];
+}
+
 // Job 2 — the market. STILL A STUB (F3 Open Q2).
 export type PairContext = {
 	pair: string;
