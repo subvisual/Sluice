@@ -50,12 +50,6 @@ export function NetworkToggle({ mode }: { mode: RpcMode }) {
 
   return (
     <div className="flex items-center gap-2.5">
-      {mode === "local" && (
-        <span className="hidden max-w-72 text-right text-[10px] leading-tight text-muted-3 xl:block">
-          Rehearsal: point your wallet&apos;s Base RPC at the fork — extension
-          wallets only, mobile can&apos;t reach 127.0.0.1.
-        </span>
-      )}
       <div ref={rootRef} className="relative">
         <button
           type="button"
