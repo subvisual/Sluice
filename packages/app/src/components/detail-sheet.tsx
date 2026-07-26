@@ -154,14 +154,17 @@ export function DetailSheet({
                   DEADLINE
                 </div>
                 <div className="mt-[7px] font-mono text-sm tabular-nums">
-                  {formatDeadlineAbs(position.deadline)}
+                  {position.deadline === null
+                    ? "none in program"
+                    : formatDeadlineAbs(position.deadline)}
                 </div>
               </div>
               <DeadlineCountdown position={position} now={now} status={status} />
             </div>
             <p className="mt-3 text-[11.5px] leading-relaxed text-muted-3">
-              At expiry the position unwinds automatically — no action needed
-              from you.
+              {position.deadline === null
+                ? "This program carries no DEADLINE instruction — it stays live until docked."
+                : "At expiry the position unwinds automatically — no action needed from you."}
             </p>
           </div>
 
@@ -261,7 +264,9 @@ function DeadlineCountdown({
   const { label, tone } =
     status === "Docked"
       ? { label: `docked ${formatDayShort(position.dockedAt!)}`, tone: "muted" }
-      : countdown(position.deadline, now);
+      : position.deadline === null
+        ? { label: "no deadline", tone: "muted" }
+        : countdown(position.deadline, now);
   const color =
     tone === "warn"
       ? "text-warn-text"

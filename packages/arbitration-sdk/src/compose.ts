@@ -18,6 +18,9 @@ import { inferChat, type ChatMessage, type ZGBroker } from "./inference.ts";
 import type { InferResult } from "./proof.ts";
 import { grammarPromptBlock } from "./grammar.ts";
 import { contextPromptBlock, type MarketContext } from "./context.ts";
+import { appetitePromptBlock, classifyRiskAppetite } from "./appetite.ts";
+import { pairingPlan, pairingPromptBlock } from "./pairing.ts";
+import { bandTiers, tiersPromptBlock } from "./tiers.ts";
 import {
 	parseRecommendation,
 	type ParseResult,
@@ -58,9 +61,17 @@ const OUTPUT_SCHEMA = `Return ONLY a JSON object (no markdown fences, no prose),
 // differently at hour 30 than at hour 14, "we edited the prompt" is the most
 // likely answer — unanswerable unless the version is recorded. Version 1 was
 // the app-side six-section contract deleted in PR #30; this builder succeeds
-// it. Bump on ANY change to the framing below, grammarPromptBlock() or
-// contextPromptBlock().
-export const PROMPT_VERSION = "sluice.compose/2";
+// it. Bump on ANY change to the framing below, grammarPromptBlock(),
+// contextPromptBlock(), or the appetite/pairing/tier blocks.
+//
+// /3 adds the Tier 0 "echo, don't compute" blocks: risk appetite (appetite.ts),
+// reference pairing (pairing.ts) and band tiers (tiers.ts).
+export const PROMPT_VERSION = "sluice.compose/3";
+
+// How many band tiers a tiered recommendation carries — see tiers.ts. A request
+// that allows fewer strategies than this gets no tier block at all rather than
+// a truncated one.
+const TIER_COUNT = 3;
 
 export function buildComposeMessages(
 	req: RecommendationRequest,
@@ -88,8 +99,32 @@ export function buildComposeMessages(
 	const now = ctx.observedAt;
 	const deadlineMax = now + req.maxDeadlineSec;
 
+	// Everything the model would otherwise have to DERIVE, derived here instead:
+	// what the user's words say about risk, the pairing arithmetic, and the band
+	// widths. Each block is omitted rather than faked when its inputs are absent
+	// — a budget that does not hold both sides of the pair gets no pairing block,
+	// and a request that cannot carry three strategies gets no tier block.
+	const appetite = classifyRiskAppetite(req.prompt);
+	const tiered = req.maxStrategies >= TIER_COUNT;
+	const pairing = pairingPlan(ctx, req, tiered ? TIER_COUNT : 1);
+	const tiers = tiered
+		? tiersPromptBlock(
+				bandTiers(ctx.pair.realizedVol7dPct, req.maxDeadlineSec, appetite),
+				{
+					// Pair data (F3 job 2) is a stub for every context we can build
+					// today — contextPromptBlock states the same thing the same way.
+					// Both flip together when F3 Open Q2 settles the price source.
+					stubVol: true,
+					maxStrategies: req.maxStrategies,
+					hasPairing: pairing !== null,
+				},
+			)
+		: "";
+
 	const user = [
 		`USER PROMPT: ${req.prompt}`,
+		"",
+		appetitePromptBlock(appetite),
 		"",
 		"BUDGET (a ceiling the user set — never exceed, per token):",
 		budgetLines,
@@ -104,6 +139,8 @@ export function buildComposeMessages(
 		`  in (now, now + maxDeadlineSec] = (${now}, ${deadlineMax}]; use ${deadlineMax} unless a shorter one is intended.`,
 		"",
 		contextPromptBlock(ctx),
+		...(pairing ? ["", pairingPromptBlock(pairing)] : []),
+		...(tiers ? ["", tiers] : []),
 		extra
 			? `\nPREVIOUS ATTEMPT WAS REJECTED — fix these and return valid JSON only:\n${extra}`
 			: "",

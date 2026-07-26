@@ -325,3 +325,125 @@ test("never emits an N/A or deferred invariant — I6, I9, I13, I14", () => {
 	for (const forbidden of ["I6", "I9", "I13", "I14"])
 		assert.ok(!emitted.has(forbidden), `emitted forbidden ${forbidden}`);
 });
+
+// ---- Every message names the fix, wherever the fix is deterministic --------
+//
+// The rejection feedback IS the next prompt (compose.ts), and there is exactly
+// one retry. These assert the corrective VALUE is in the text — not merely the
+// rule the model already broke once.
+
+const msg = (
+	r: StrategyRecommendation,
+	code: string,
+	q = req,
+	s = fresh,
+): string => validate(r, q, s).find((v) => v.code === code)?.message ?? "";
+
+test("I1 message lists the tokens the user actually selected", () => {
+	const m = msg(rec([strat([WETH, DAI], ["1", "500"])]), "I1");
+	assert.ok(m.includes(WETH), m);
+	assert.ok(m.includes("WETH"), m);
+});
+
+test("I2 message names the cap and says to divide it, not repeat it", () => {
+	const m = msg(rec([strat([WETH], ["1.5"]), strat([WETH], ["1"])]), "I2");
+	assert.ok(m.includes("divide"), m);
+	assert.ok(m.includes("at most 2"), m);
+});
+
+test("I3 messages name the permitted strategy count in both directions", () => {
+	const q: RecommendationRequest = { ...req, maxStrategies: 1 };
+	assert.ok(
+		msg(rec([strat([WETH], ["1"]), strat([WETH], ["0.5"])]), "I3", q).includes(
+			"at most 1",
+		),
+	);
+	assert.ok(msg(rec([]), "I3", q).includes("between 1 and 1"));
+});
+
+test("I4 message names the chainId to set", () => {
+	const m = msg(rec([strat([WETH], ["2"])], { chainId: 1 }), "I4");
+	assert.ok(m.includes('"chainId": 8453'), m);
+});
+
+test("I5 messages name the offered instruction, or say to omit the slot", () => {
+	const badCurve = strat([WETH], ["2"]);
+	badCurve.slots.curve = { instruction: "XYC_CONCENTRATE_GROW_LIQUIDITY_XD" };
+	assert.ok(msg(rec([badCurve]), "I5").includes("XYC_SWAP_XD"));
+
+	const badFee = strat([WETH], ["2"]);
+	badFee.slots.fee = { instruction: "PROGRESSIVE_FEE_IN_XD" };
+	assert.ok(msg(rec([badFee]), "I5").includes("FLAT_FEE_AMOUNT_IN_XD"));
+
+	// No guard has an encoder on this venue: the fix is to drop the slot, and an
+	// empty menu must read as an answer rather than as a truncated sentence.
+	const badGuard = strat([WETH], ["2"]);
+	badGuard.slots.guards = [{ instruction: "ONLY_TAKER_TOKEN_BALANCE_GTE" }];
+	assert.ok(msg(rec([badGuard]), "I5").includes("omit the guards slot"));
+});
+
+test("I5 feeBps message carries the scale, in the units that trip a model", () => {
+	const over = strat([WETH], ["2"]);
+	over.slots.fee = {
+		instruction: "FLAT_FEE_AMOUNT_IN_XD",
+		params: { feeBps: 30 }, // 0.3% in the 10000-scale the model knows
+	};
+	// 30 is a valid integer in [0, 1e9), so this specific value does NOT fire —
+	// the scale hint belongs to the out-of-range case.
+	const huge = strat([WETH], ["2"]);
+	huge.slots.fee = {
+		instruction: "FLAT_FEE_AMOUNT_IN_XD",
+		params: { feeBps: 2_000_000_000 },
+	};
+	assert.equal(codes(rec([over])).includes("I5"), false);
+	assert.ok(msg(rec([huge]), "I5").includes("3000000"));
+});
+
+test("I7 messages name the exact deadline to use", () => {
+	const late = strat([WETH], ["2"]);
+	late.slots.deadline = { deadline: DEADLINE + 1 };
+	assert.ok(msg(rec([late]), "I7").includes(`use ${DEADLINE}`));
+
+	const missing = strat([WETH], ["2"]);
+	// The parser rejects a missing deadline before the validator ever sees one,
+	// so this shape only reaches here through a direct validate() call.
+	delete (missing.slots as { deadline?: unknown }).deadline;
+	assert.ok(msg(rec([missing]), "I7").includes(String(DEADLINE)));
+});
+
+test("I8 message lists the known template ids", () => {
+	const bad = strat([WETH], ["2"]);
+	bad.templateId = "T1";
+	const m = msg(rec([bad]), "I8");
+	assert.ok(m.includes("full-range"), m);
+	assert.ok(m.includes("banded"), m);
+});
+
+test("I10 message gives the sorted order and says to move the amounts with it", () => {
+	const q: RecommendationRequest = {
+		...req,
+		budget: [
+			{ symbol: "WETH", address: WETH, amount: "2" },
+			{ symbol: "USDC", address: USDC, amount: "3000" },
+		],
+	};
+	const m = msg(rec([strat([USDC, WETH], ["3000", "1"])]), "I10", q);
+	// WETH (0x4200…) sorts before USDC (0x8335…) — the corrected array, verbatim.
+	assert.ok(m.includes(JSON.stringify([WETH, USDC])), m);
+	assert.ok(m.includes("virtualAmount"), m);
+});
+
+test("I11 messages say what a valid amount looks like", () => {
+	assert.ok(msg(rec([strat([WETH], ["abc"])]), "I11").includes('"0.25"'));
+	assert.ok(msg(rec([strat([WETH], ["0"])]), "I11").includes("positive amount"));
+});
+
+test("I12 message names the block to use", () => {
+	const stale: ChainState = {
+		chainId: 8453,
+		headBlock: OBSERVED_BLOCK + DEFAULT_MAX_BLOCK_LAG + 1,
+		now: NOW,
+	};
+	const m = msg(rec([strat([WETH], ["2"])]), "I12", req, stale);
+	assert.ok(m.includes(`"observedBlock": ${stale.headBlock}`), m);
+});
