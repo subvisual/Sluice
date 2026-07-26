@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { EXPECTED_CHAIN_ID } from "@/lib/compose/constants";
 import type { RpcMode } from "@/lib/network";
 import { ConnectButton } from "./connect-button";
+import { NetworkToggle } from "./network-toggle";
 
 /**
  * The persistent shell: one floating rounded panel on a blue "desk" gradient.
@@ -40,7 +41,8 @@ export function AppShell({
               </span>
             </p>
             <div className="ml-auto flex items-center justify-end gap-3.5">
-              <ConnectButton />
+              <NetworkToggle mode={mode} />
+              <ConnectButton mode={mode} />
             </div>
           </header>
           <main className="box-border min-h-0 flex-1 overflow-y-auto p-[30px]">
@@ -64,9 +66,8 @@ function Rail({ mode }: { mode: RpcMode }) {
   const pathname = usePathname();
 
   // The fork shares Base's chainId, so the network label is derived from the
-  // RPC target — chainId alone cannot tell a rehearsal from the real thing.
-  const isLocal = mode === "local";
-  const networkLabel = `${isLocal ? "BASE FORK" : "BASE"} · ${EXPECTED_CHAIN_ID}`;
+  // RPC mode — chainId alone cannot tell a rehearsal from the real thing.
+  const networkLabel = `${mode === "local" ? "BASE FORK" : "BASE"} · ${EXPECTED_CHAIN_ID}`;
 
   return (
     <aside className="box-border flex h-full w-[236px] min-h-0 flex-none flex-col gap-[22px] overflow-y-auto border-r border-glass-edge bg-glass-3 px-[14px] py-[22px]">
