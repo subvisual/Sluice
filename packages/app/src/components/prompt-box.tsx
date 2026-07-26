@@ -1,8 +1,11 @@
 // No "use client" — leaf of the Compose screen's client tree (callback props).
 
+// Each seeds an intent one of the four templates serves. (An earlier example
+// promised an oracle-triggered all-at-once sale — an intent with no opcode on
+// the deployed router; do not reintroduce it.)
 const EXAMPLES = [
   "Earn fees on ETH/USDC while it stays rangebound this week.",
-  "Sell my ETH if it reaches 4,200 — all at once, not a bit at a time.",
+  "Quote deep around the current price — I don't expect ETH to move much.",
   "I want exposure to ETH but I'm not confident about the range.",
 ];
 

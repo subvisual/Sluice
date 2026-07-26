@@ -1,9 +1,11 @@
 # @sluice/app
 
 The Compose screen — [Wiring §6](https://app.notion.com/p/3a8caae58631816d9aa0eb077e013ffe).
-Connect a wallet, type a sentence, set a per-token budget, and get back a risk-rated
+Connect a wallet, type a sentence, set a per-token budget, and get back an
 Aqua/SwapVM strategy recommendation from the enclave path (`/api/compose`) — real
 when the server holds a funded 0G key, labelled `TEMPLATE_FALLBACK` otherwise.
+Risk ratings arrive with the deferred reviewer (F2 Gate 2); until then the UI
+shows "risk rating unavailable".
 
 Nothing is signed or written to a chain yet. The screen stops at the recommendation.
 
@@ -57,3 +59,8 @@ deterministic validator — and returns the recommendation with its provenance.
 
 On Vercel: set the `ZG_*` vars as server env vars (never `NEXT_PUBLIC_`);
 `maxDuration: 60` needs a plan that allows it.
+
+The route is **unauthenticated**: anyone who can reach it spends the 0G compute
+ledger (and up to 60s of server time) per call. Fine locally; before sharing a
+deployed URL, put a same-origin check or a rate limit in front so the ledger
+cannot be drained from a link an hour before the demo.

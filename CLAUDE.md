@@ -63,8 +63,11 @@ lives on the Wiring page.
 - **Recommendation** (one enclave-signed payload, ≥1 strategies, one nonce, `id = keccak256(signedText)`)
   → compiles to one or more **Positions** (one shipped strategy on-chain, keyed by `strategyHash`).
   One recommendation → N strategies → N positions → one `Multicall` → **one** user signature.
-- **Slot assignment** is the model's structured output (six ordered slots); it is **never** raw
-  bytecode. The deterministic compiler turns it into SwapVM bytecode.
+- **Slot assignment** is the model's structured output — a template pick (`full-range`,
+  `full-range-fee`, `banded`, `banded-fee`) plus its slot fields (curve, optional band/fee
+  params, deadline, virtual amounts); it is **never** raw bytecode. The old six-ordered-slots
+  grammar could not be built against the deployed router (PR #15) — do not reintroduce it. The
+  deterministic compiler owns bytes, ordering and `SALT`.
 - The over-committed-book / "fillability" / `balanceFloor` / `largestAllOrNothingDraw` /
   `exposureHeadroom` vocabulary is **parked** — it belongs only to the future whole-balance mode.
   Reintroducing it unqualified is a known bug returning.
@@ -92,24 +95,34 @@ on Notion F1.
 
 ## Stack & layout
 
-No code scaffolded yet beyond `packages/arbitration-sdk` (0G inference client + CLI); the toolchain
-below is intended (from `.gitignore` + Notion Wiring §1). Planned monorepo:
-`packages/` (arbitration-sdk, taker, sluice-app, dashboard) · `contracts/` · `subgraph/` ·
-`config/addresses.<chainId>.json`.
+Monorepo (npm workspaces):
 
-- **Contracts** — Hardhat (Ignition deploys, typechain) + Foundry (`forge`, forge-std)
-- **Subgraph** (F3) — The Graph, codegen into `subgraph/generated/`
-- **Agent / dashboard** — TypeScript/Node (dashboard is Next.js)
+- **`packages/arbitration-sdk`** — the composer: 0G sealed inference, the deterministic I1–I12
+  validator wired into a reject-and-re-infer loop, the SwapVM compiler + fork-proven fixtures,
+  the serve facade behind `/api/compose`, the F3 subgraph book reader, and the
+  `infer`/`compose`/`subgraph`/`fund` CLIs
+- **`packages/app`** — Next.js compose screen + `POST /api/compose` (bundles the SDK; the 0G key
+  stays server-side)
+- **`contracts/`** — Foundry only (no Hardhat): `SluiceStrategy.sol`, `Ship.s.sol`/`Take.s.sol`,
+  three fork test suites. The taker is `contracts/script/Take.s.sol` driving a funded EOA —
+  deliberately **no taker contract**
+- **`subgraph/`** — The Graph, codegen into `subgraph/generated/`; deployed to Ethereum mainnet +
+  Base (Studio), with a local fork stack in `subgraph/local`
+- **`config/`** — `addresses.8453.json` (pinned addresses + fork block), `opcodes.8453.json`
+  (pinned opcode table)
 
 **For now, development and testing run against a Base mainnet fork** at a pinned block, so we build
 against the real deployed Aqua/SwapVM rather than a copy. We self-deploy only our own contracts
-(taker, `RecommendationRegistry`); addresses are pinned in `config/addresses.8453.json`. A fork
+(today `SluiceStrategy.sol`; the `RecommendationRegistry` when it ships — no taker contract);
+addresses are pinned in `config/addresses.8453.json`. A fork
 shares Base's chainId, so guard signing with a fork probe (`anvil_nodeInfo` — **not `eth_getCode`**,
 which returns identical bytecode either way) plus an explicit `SLUICE_ALLOW_MAINNET` opt-in.
 
-This repo signs transactions — keys live in `.env` (gitignored); never
-commit one. Two keys: `SLUICE_COMMITTER_KEY` (commits recommendations) and `SLUICE_OWNER_KEY`
-(registry admin, cold). The user is the maker and signs the ship `Multicall` themselves.
+This repo signs transactions — secrets live in direnv `.envrc` files (`packages/app/.envrc`,
+`packages/arbitration-sdk/.envrc`), all gitignored; never commit one. The only key any code reads
+today is `ZG_PRIVATE_KEY` (funded 0G Galileo key). Planned with the registry, not present yet:
+`SLUICE_COMMITTER_KEY` (commits recommendations) and `SLUICE_OWNER_KEY` (registry admin, cold).
+The user is the maker and signs the ship `Multicall` themselves.
 
 ## Agent skills
 

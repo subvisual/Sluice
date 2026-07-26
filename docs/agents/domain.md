@@ -43,7 +43,10 @@ terms or decisions actually get resolved.
 │   │   ├── f3-market-book-context/
 │   │   └── wiring-delivery/
 │   └── prds/                              ← <slug>.md + <slug>-issues.md
-└── src/
+├── packages/                              ← arbitration-sdk (composer/SDK), app (Next.js)
+├── contracts/                             ← Foundry: fork venue, ship/take scripts, tests
+├── subgraph/                              ← generic Aqua subgraph + local fork stack
+└── config/                                ← pinned addresses + opcode tables
 ```
 
 A decision that touches only one feature belongs in that feature's `adr/`. A decision that

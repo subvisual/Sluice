@@ -43,6 +43,8 @@ const SERVER_RESULT = {
       amounts: ["2000000000000000000", "3000000000"],
     },
   ],
+  contextSource: "stub" as const,
+  promptVersion: "sluice.compose/2",
 };
 
 test("fromServer maps a recommendation into the UI shapes", () => {
@@ -51,6 +53,8 @@ test("fromServer maps a recommendation into the UI shapes", () => {
   assert.equal(ui.provenance, "TEMPLATE_FALLBACK");
   assert.match(ui.reason ?? "", /ZG_PRIVATE_KEY/);
   assert.equal(ui.nonce, 1);
+  // Book provenance survives the mapping — the screen labels a stub book.
+  assert.equal(ui.contextSource, "stub");
   assert.equal(ui.strategies.length, 1);
 
   const s = ui.strategies[0];

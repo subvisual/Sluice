@@ -408,6 +408,13 @@ function RecommendationSet({
           {rec.proof.verified ? "verified" : "unverified"} · {rec.proof.latencyMs}ms
         </p>
       )}
+      {/* Book provenance (F3 job 1) — a stub book must say so on screen. */}
+      <p className="mt-2 font-mono text-[10.5px] text-muted-3">
+        book ·{" "}
+        {rec.contextSource === "subgraph"
+          ? "live from the aqua subgraph"
+          : "stub — not your live book"}
+      </p>
       {!rec.validation.ok && (
         <ul className="mt-2 flex flex-col gap-1">
           {rec.validation.violations.map((v) => (

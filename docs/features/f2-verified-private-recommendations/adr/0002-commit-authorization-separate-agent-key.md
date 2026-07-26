@@ -9,6 +9,14 @@
 > key stays separate from the shared enclave signer and from the owner; read it with the new nouns.
 > (Note also ADR-0001's Gate 0 update: the enclave signs an attestation record, not our text.)
 
+> **⚠️ Drift note (2026-07-26):** three statements in the historical body below are superseded and
+> left intact for history. (1) "the signature covers only the **response text**" — Gate 0 proved it
+> covers 0G's 5-field **attestation record** (`reqHash:respHash:centralized:aliyun:certHash`), not
+> the response text; see ADR-0001's Gate 0 update. (2) `ownerFallbackDock` no longer exists in the
+> registry design — it was a daemon-era function; under the composer framing the **user is the
+> maker** and docks their own positions. (3) "epoch-fresh" reads as **per-user-nonce-fresh**
+> (Notion F2 §2). The decision itself is unchanged.
+
 `DecisionRegistry.commitDecision` is restricted to a **registered committer (agent) key**
 (`onlyCommitter`), separate from the owner. The owner alone may `registerSigner`,
 `registerCommitter`, and `ownerFallbackDock`.

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { PROMPT_VERSION } from "./compose.ts";
 import { budgetEntryToDecimal, composeForApp } from "./serve.ts";
 
 const WETH = {
@@ -44,13 +45,18 @@ test("composeForApp without ZG_PRIVATE_KEY returns a labelled, valid fallback", 
 	assert.equal(res.proof, null);
 	assert.equal(res.messages, null);
 	assert.equal(res.attempts, 0);
-	// The fallback draws strictly on the user's budget, and it passes the validator.
+	// The fallback draws strictly on the user's budget, and it passes the
+	// validator — on the WALL clock, since nothing was fetched: the deadline
+	// bound and the stub snapshot share the request's single `now`.
 	assert.equal(res.recommendation.strategies.length, 1);
 	assert.deepEqual(res.recommendation.strategies[0].tokens, [
 		WETH.address,
 		USDC.address,
 	]);
 	assert.deepEqual(res.validation, { ok: true, violations: [] });
+	// Nothing was fetched, so the book is a stub — and the response says so.
+	assert.equal(res.contextSource, "stub");
+	assert.equal(res.promptVersion, PROMPT_VERSION);
 });
 
 test("composeForApp sorts the budget into canonical token order (I10)", async () => {

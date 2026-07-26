@@ -22,8 +22,9 @@ Three integrations, each load-bearing:
 
 - **1inch Aqua + SwapVM** — the venue and the language. We run against a **Base mainnet fork** at a
   pinned block (real, already-deployed Aqua), self-deploying only our own contracts. Strategies are
-  authored through a fixed six-slot **grammar** an LLM can safely fill, then **compiled**
-  deterministically to SwapVM bytecode. A `SluiceTaker` produces the fills a fork otherwise lacks.
+  authored through a settled template **grammar** an LLM can safely fill, then **compiled**
+  deterministically to SwapVM bytecode. A forge script (`contracts/script/Take.s.sol`) driving a
+  funded EOA produces the fills a fork otherwise lacks.
 - **0G** — private, verifiable recommendations. Composition runs inside an Intel TDX enclave and is
   signed; the chain verifies the signature to prove **provenance** (a real 0G TEE produced it, our
   committer authorised it). Review splits by what has a right answer: a deterministic validator
@@ -38,10 +39,21 @@ Three integrations, each load-bearing:
 
 Hackathon build, pre-alpha. Nothing here is audited; don't point it at real funds.
 
-Running so far: a **generic 1inch Aqua subgraph** — the first that exists — live on Ethereum
-mainnet and Base against real protocol activity (`subgraph/`); and the **0G inference CLI** in
-`packages/arbitration-sdk` (`npm run infer -- "…"`), which runs a prompt on a live 0G provider and
-prints the answer plus a verifiable EIP-191 proof.
+Running so far:
+
+- A **generic 1inch Aqua subgraph** — the first that exists — live on Ethereum mainnet and Base
+  against real protocol activity, plus a local fork stack (`subgraph/`).
+- The **composer** in `packages/arbitration-sdk`: `npm run compose` turns intent + budget into a
+  recommendation from a live 0G enclave, with the deterministic I1–I12 validator wired into a
+  reject-and-re-infer loop and a labelled `TEMPLATE_FALLBACK` when attempts are exhausted. Four
+  templates (full-range, full-range-fee, banded, banded-fee) compile to SwapVM bytecode and are
+  fixture-proven — shipped **and** filled on the Base fork. Alongside: the one-shot
+  `npm run infer` CLI (verifiable EIP-191 proof) and the `npm run fund` ledger CLI.
+- **Foundry contracts** (`contracts/`): `SluiceStrategy.sol`, ship/take scripts, three fork test
+  suites against the deployed Aqua/SwapVM.
+- The **Next.js app** (`packages/app`): the compose screen behind a real `POST /api/compose` —
+  signed `ENCLAVE` recommendations when the server holds a funded 0G key, `TEMPLATE_FALLBACK`
+  otherwise. (Risk rating itself arrives with the deferred reviewer agent.)
 
 The venue is a **Base fork** sharing Base's chainId, so a wrong-network mistake looks perfectly
 correct — guarded by a fork probe plus an explicit `SLUICE_ALLOW_MAINNET` opt-in, with addresses

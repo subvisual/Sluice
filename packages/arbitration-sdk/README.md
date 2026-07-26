@@ -38,27 +38,42 @@ Modules: `subgraph.ts` (client + pure shaping), `subgraph-cli.ts`, `context.ts` 
 
 ## Strategy composer CLI
 
-Turns a plain-language intent and a token budget into a structured `StrategyRecommendation` — the
-six-slot SwapVM assignment (template + slots + tokens + virtual amounts) — composed by a live 0G
-Compute provider.
+Turns a plain-language intent and a token budget into a structured `StrategyRecommendation` — a
+SwapVM slot assignment for the deployed Base router (template + band/fee/curve/deadline slots +
+tokens + virtual amounts) — composed by a live 0G Compute provider.
 
     npm run compose -- "sell my ETH if it hits 3500, all at once" --budget WETH=2
     npm run compose -- "earn fees on ETH/USDC, rangebound this week" --budget WETH=1,USDC=3000
 
-`--budget SYM=amt,SYM=amt` (WETH, USDC) is required; `--max-strategies N` and `--max-deadline SEC`
-are optional. Exit `0` when a well-formed recommendation parsed. One retry on malformed output.
+`--budget SYM=amt,SYM=amt` (WETH, USDC) is required; `--max-strategies N`, `--max-deadline SEC`
+and `--maker 0x…` (live book context, above) are optional.
 
-**Scope — read this.** The output is grammar-**shaped**, not grammar-**correct**: it follows the
-provisional F1 §5 menu (which has known opcode-name errors and is marked "do not build the
-validator against it"), so it is **not compiled and not shippable**. There is **no verification**:
-the enclave signature is received but not checked, nothing is committed on-chain, nothing is
-persisted. Verifiability (`RecommendationRegistry`, the trace, the I1–I14 validator) is
-deliberately out of scope for this path. Market/book context is a hardcoded stub, not live F3.
+**Scope — read this.** The grammar is **settled**: every instruction the model may pick is loaded
+from the pinned, fork-verified opcode table (`config/opcodes.8453.json`, PR #14), so the menu
+cannot drift from the venue we ship to. The deterministic **validator (I1–I12) is wired into the
+compose loop** (PR #20): every well-formed attempt is gated, a violating output is fed the
+failing invariants back as rejection feedback and re-inferred, bounded by `MAX_COMPOSE_ATTEMPTS`
+**total attempts** (currently 2); when the attempts are spent the run falls through to the
+deterministic `TEMPLATE_FALLBACK` — labelled, never presented as a model output. Book context
+(F3 job 1) is live via `--maker`; without it, or when the subgraph is down, the labelled stub is
+used. Still true: this path does **not** compile or ship the recommendation, nothing is committed
+on-chain or persisted, and the enclave signature is recovered and surfaced (signer, `verified`,
+proof URL) but **not enforced** — no registered-signer assertion, no failure on an unverified
+proof.
 
-Modules: `grammar.ts` (the slot menu + templates T1–T3), `context.ts` (the stub), `compose.ts`
-(prompt + round-trip), `recommendation.ts` (types + a light structural parse), `compose-cli.ts`.
+Modules: `grammar.ts` (the settled instruction menu + the four seed templates: `full-range`,
+`full-range-fee`, `banded`, `banded-fee`), `opcodes.ts` (the pinned opcode table), `swapvm.ts`
+(the deterministic strategy encoder), `validate.ts` (the I1–I12 gate), `compose.ts` (prompt +
+validator-driven re-infer loop), `fallback.ts` (the deterministic `TEMPLATE_FALLBACK`),
+`recommendation.ts` (types + a light structural parse), `context.ts` (`liveContext` / stub),
+`serve.ts` (`composeForApp` — the server facade behind the app's `POST /api/compose`, PR #30),
+`compose-cli.ts`, `fund-cli.ts` (`npm run fund`, PR #22), and `fixtures.ts`/`fixtures-cli.ts`.
 
-## 0G inference CLI
+### Fixtures
+
+`npm run fixtures` regenerates `config/fixtures/strategies.json`: the encoded program and
+`strategyHash` for each seed template, printed with a disassembly. These are the fork-proven
+shapes `grammar.test.ts` compiles every template against.
 
 ## 0G inference CLI
 
@@ -88,7 +103,8 @@ Both print wallet + ledger balances before and after. The wallet itself is funde
 ### Config (env; defaults in `.env.example`)
 
 `ZG_PRIVATE_KEY` (required, funded Galileo key) · `ZG_RPC` · `ZG_PROVIDER` · `ZG_MODEL` ·
-`ZG_DEPOSIT`.
+`ZG_DEPOSIT`. Secrets live in the gitignored direnv `.envrc` (repo convention — run
+key-dependent commands via `direnv exec`); `cp .env.example .env` also works. Never commit a key.
 
 ### Gate 0 findings (live run, 2026-07-25)
 
