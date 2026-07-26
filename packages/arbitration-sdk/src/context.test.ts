@@ -80,6 +80,7 @@ test("contextPromptBlock renders the real book and labels it live", () => {
 		observedBlock: 49_000_000,
 		source: "subgraph" as const,
 		pair: stubContext().pair,
+		pairFieldSource: stubContext().pairFieldSource,
 		userBook: bookToContext(BOOK),
 	};
 	const block = contextPromptBlock(ctx);
@@ -88,13 +89,44 @@ test("contextPromptBlock renders the real book and labels it live", () => {
 	assert.match(block, /USDC: 0\.238866 committed across 24 live/);
 	assert.match(block, /recent fills: 1/);
 	// The market half must still announce itself as a stub (honesty rule).
-	assert.match(block, /pair data is a STUB/);
+	assert.match(block, /mid [\d.]+ \[STUB\]/);
 });
 
 test("contextPromptBlock marks the stub book as a stub", () => {
 	const block = contextPromptBlock(stubContext());
 	assert.match(block, /USER BOOK \(stub\)/);
-	assert.match(block, /pair data is a STUB/);
+	assert.match(block, /mid [\d.]+ \[STUB\]/);
+});
+
+test("stubContext labels every pair field as stub", () => {
+	const ctx = stubContext();
+	assert.deepEqual(ctx.pairFieldSource, {
+		feeTierBps: "stub",
+		poolDepthUsd: "stub",
+		realizedVol7dPct: "stub",
+		recentVolume24hUsd: "stub",
+		midPrice: "stub",
+	});
+});
+
+test("contextPromptBlock tags mid LIVE and the rest STUB when mid is chainlink", () => {
+	const base = stubContext();
+	const ctx = {
+		...base,
+		pairFieldSource: {
+			...base.pairFieldSource,
+			midPrice: "chainlink" as const,
+		},
+	};
+	const block = contextPromptBlock(ctx);
+	assert.match(block, /mid [\d.]+ \[LIVE\]/);
+	assert.match(block, /poolDepth .*\[STUB\]/);
+	assert.match(block, /realizedVol\(7d\) .*\[STUB\]/);
+});
+
+test("contextPromptBlock tags mid STUB in a fully-stub context", () => {
+	const block = contextPromptBlock(stubContext());
+	assert.match(block, /mid [\d.]+ \[STUB\]/);
 });
 
 test("contextPromptBlock handles an empty book", () => {
@@ -103,6 +135,7 @@ test("contextPromptBlock handles an empty book", () => {
 		observedBlock: 1,
 		source: "subgraph" as const,
 		pair: stubContext().pair,
+		pairFieldSource: stubContext().pairFieldSource,
 		userBook: {
 			maker: "0xabc",
 			strategyCount: 0,

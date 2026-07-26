@@ -34,5 +34,13 @@
       "decimals": 6
     }
   ],
-  "_tokenList": "Same tokens as above with display metadata for the app's token picker (packages/app/src/lib/tokens.ts). Keep the two in sync."
+  "_tokenList": "Same tokens as above with display metadata for the app's token picker (packages/app/src/lib/tokens.ts). Keep the two in sync.",
+
+  "chainlinkFeeds": {
+    "WETH":  { "feed": "0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70", "description": "ETH / USD",   "decimals": 8 },
+    "cbBTC": { "feed": "0x07DA0E54543a844a80ABE69c8A12F22B3aA59f9D", "description": "cbBTC / USD", "decimals": 8 },
+    "USDC":  { "feed": "0x458138Fc0D67027E9A6778ef40a6ffC318c69061", "description": "USDC / USD",  "decimals": 8 },
+    "USDT":  { "feed": "0xf19d560eB8d2ADf07BD6D13ed03e1D11215721F9", "description": "USDT / USD",  "decimals": 8 }
+  },
+  "_chainlinkFeeds": "Base mainnet Chainlink AggregatorV3 USD feeds. Source: data.chain.link, verified live 2026-07-26 (description()/decimals()/latestRoundData() all read against Base). description+decimals are EXPECTED values the fetcher asserts against on-chain reads (src/pricefeed.ts). Reads hit REAL Base, never the pinned fork. Mid for a pair = usd(token0)/usd(token1)."
 }

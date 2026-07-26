@@ -3,14 +3,17 @@
 // Two jobs land in one MarketContext (F3 §1):
 //   - Job 1, the user's OWN book — what they've already shipped. This is now
 //     REAL: read from the Aqua subgraph (see subgraph.ts) via liveContext().
-//   - Job 2, the MARKET — pool depth, realised vol, fee tier. Still a STUB:
-//     it comes from composed hosted DEX/price subgraphs and is blocked on F3
-//     Open Q2 (which price subgraph). Labelled as a stub end-to-end so nothing
-//     downstream — or on stage — mistakes it for live data.
+//   - Job 2, the MARKET — now PARTIAL real: midPrice is live, read from
+//     Chainlink USD feeds on real Base (see pricefeed.ts). Depth, realised
+//     vol, fee tier, and volume are still stubbed — they come from composed
+//     hosted DEX/price subgraphs and are blocked on F3 Open Q2 (which price
+//     subgraph). Labelled per-field via pairFieldSource so nothing downstream
+//     — or on stage — mistakes a stub field for live data.
 //
 // `source` records which it is, and contextPromptBlock() renders that honesty
 // straight into the prompt the enclave signs.
 
+import { fetchMid } from "./pricefeed.ts";
 import {
 	fetchMeta,
 	fetchUserBook,
@@ -48,6 +51,26 @@ export type PairContext = {
 	midPrice: number; // token1 per token0, human units
 };
 
+// Per-field liveness for the market pair (job 2). Only the MARKET-DATA fields
+// carry a source — the `pair` NAME string does not. This is the job-2 analogue
+// of MarketContext.source (which labels the book, job 1).
+export type PairDataField =
+	| "feeTierBps"
+	| "poolDepthUsd"
+	| "realizedVol7dPct"
+	| "recentVolume24hUsd"
+	| "midPrice";
+export type PairFieldSource = "chainlink" | "stub" | "deferred";
+export type PairLiveness = Record<PairDataField, PairFieldSource>;
+
+const ALL_STUB_LIVENESS: PairLiveness = {
+	feeTierBps: "stub",
+	poolDepthUsd: "stub",
+	realizedVol7dPct: "stub",
+	recentVolume24hUsd: "stub",
+	midPrice: "stub",
+};
+
 // Job 1 — the user's own book, distilled for the prompt.
 export type UserTokenCommit = {
 	symbol: string; // or address, if the token has no symbol
@@ -68,6 +91,7 @@ export type MarketContext = {
 	observedBlock: number;
 	source: "stub" | "subgraph"; // where the BOOK came from (job 1)
 	pair: PairContext; // job 2 — always a stub for now
+	pairFieldSource: PairLiveness; // job 2 — per-field live/stub, keyed to `pair`
 	userBook: UserBookContext; // job 1 — real when source === "subgraph"
 };
 
@@ -96,6 +120,30 @@ export function bookToContext(book: UserBook): UserBookContext {
 	};
 }
 
+// Build a real PairContext: real mid from Chainlink, the rest still stub (mid
+// only, this pass). Network — reads real Base. The non-mid fields keep the
+// STUB_PAIR values and are labelled "stub" so nothing reads them as live.
+export async function fetchPairContext(
+	token0: string,
+	token1: string,
+	opts: { provider?: import("ethers").Provider } = {},
+): Promise<{
+	pair: PairContext;
+	pairFieldSource: PairLiveness;
+	oldestFeedUpdatedAt: number;
+}> {
+	const midRead = await fetchMid(token0, token1, opts);
+	return {
+		pair: {
+			...STUB_PAIR,
+			pair: `${token0}/${token1}`,
+			midPrice: midRead.mid,
+		},
+		pairFieldSource: { ...ALL_STUB_LIVENESS, midPrice: "chainlink" },
+		oldestFeedUpdatedAt: midRead.oldestUpdatedAt,
+	};
+}
+
 // A fixed, plausible snapshot. STUB — market AND book are hardcoded. Kept for
 // tests and for `compose` runs without a maker address.
 export function stubContext(): MarketContext {
@@ -105,6 +153,7 @@ export function stubContext(): MarketContext {
 		observedBlock: 22_500_000,
 		source: "stub",
 		pair: STUB_PAIR,
+		pairFieldSource: ALL_STUB_LIVENESS,
 		userBook: {
 			maker: null,
 			strategyCount: 1,
@@ -123,13 +172,35 @@ export function stubContext(): MarketContext {
 // unit tests.
 export async function liveContext(
 	maker: string,
-	opts: { url?: string; pair?: PairContext } = {},
+	opts: {
+		url?: string;
+		pair?: PairContext;
+		pairFieldSource?: PairLiveness;
+		pairTokens?: [string, string];
+	} = {},
 ): Promise<MarketContext> {
 	const url = opts.url ?? subgraphUrl();
 	const [meta, book] = await Promise.all([
 		fetchMeta(url),
 		fetchUserBook(maker, url),
 	]);
+
+	// The pair (job 2). An injected pair wins (tests / offline). Otherwise fetch
+	// the real mid from Chainlink; a price-read failure degrades to a labelled
+	// stub pair — it must NOT sink the (real) book we just read.
+	let pair = opts.pair ?? STUB_PAIR;
+	let pairFieldSource = opts.pairFieldSource ?? ALL_STUB_LIVENESS;
+	if (!opts.pair) {
+		try {
+			const [t0, t1] = opts.pairTokens ?? ["WETH", "USDC"];
+			const fetched = await fetchPairContext(t0, t1);
+			pair = fetched.pair;
+			pairFieldSource = fetched.pairFieldSource;
+		} catch {
+			// keep the stub pair + all-stub labels: honest degrade, not a crash.
+		}
+	}
+
 	return {
 		// A _meta without a timestamp must not anchor time at 0: the prompt
 		// derives "now" and the deadline window from observedAt, so a zero here
@@ -138,13 +209,21 @@ export async function liveContext(
 		observedAt: meta.timestamp ?? Math.floor(Date.now() / 1000),
 		observedBlock: meta.block,
 		source: "subgraph",
-		pair: opts.pair ?? STUB_PAIR,
+		pair,
+		pairFieldSource,
 		userBook: bookToContext(book),
 	};
 }
 
 export function contextPromptBlock(ctx: MarketContext): string {
 	const p = ctx.pair;
+	const src = ctx.pairFieldSource;
+	const tag = (f: PairDataField): string =>
+		src[f] === "chainlink"
+			? "LIVE"
+			: src[f] === "deferred"
+				? "DEFERRED"
+				: "STUB";
 	const bookHeader =
 		ctx.source === "subgraph"
 			? `USER BOOK (live from subgraph @ block ${ctx.observedBlock}${ctx.userBook.maker ? `, maker ${ctx.userBook.maker}` : ""}):`
@@ -159,9 +238,9 @@ export function contextPromptBlock(ctx: MarketContext): string {
 					)
 					.join("\n");
 	return [
-		`MARKET CONTEXT — pair data is a STUB (F3 job 2 / Open Q2, not live), observed at block ${ctx.observedBlock}:`,
-		`  pair ${p.pair} | mid ${p.midPrice} | feeTier ${p.feeTierBps}bps`,
-		`  poolDepth $${p.poolDepthUsd.toLocaleString("en-US")} | realizedVol(7d) ${p.realizedVol7dPct}% | volume(24h) $${p.recentVolume24hUsd.toLocaleString("en-US")}`,
+		`MARKET CONTEXT (per-field liveness tagged; observed at block ${ctx.observedBlock}):`,
+		`  pair ${p.pair} | mid ${p.midPrice} [${tag("midPrice")}] | feeTier ${p.feeTierBps}bps [${tag("feeTierBps")}]`,
+		`  poolDepth $${p.poolDepthUsd.toLocaleString("en-US")} [${tag("poolDepthUsd")}] | realizedVol(7d) ${p.realizedVol7dPct}% [${tag("realizedVol7dPct")}] | volume(24h) $${p.recentVolume24hUsd.toLocaleString("en-US")} [${tag("recentVolume24hUsd")}]`,
 		bookHeader,
 		`  live strategies: ${ctx.userBook.liveStrategyCount} (of ${ctx.userBook.strategyCount} total)`,
 		committed,
