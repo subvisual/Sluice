@@ -17,6 +17,7 @@ import {
 	type InferFn,
 } from "./compose.ts";
 import { stubContext, TOKENS } from "./context.ts";
+import { bandTiers } from "./tiers.ts";
 import { FALLBACK_SOURCE } from "./fallback.ts";
 import type { Config } from "./config.ts";
 import type { ZGBroker } from "./inference.ts";
@@ -175,4 +176,84 @@ test("the composer never mutates the request or context", async () => {
 
 	assert.deepEqual(REQ, reqCopy);
 	assert.deepEqual(CTX, ctxCopy);
+});
+
+// ---- The Tier 0 "echo, don't compute" blocks (#24, #25, #26) --------------
+//
+// Each block exists because the alternative is a 7B model deriving the value
+// itself: classifying the user's risk wording, dividing a budget by a mid
+// price across two decimal scales, or picking band widths from a volatility.
+// These assert the derived values actually reach the prompt.
+
+const PAIR_REQ: RecommendationRequest = {
+	prompt: "market-make WETH/USDC, keep it safe",
+	budget: [
+		{ symbol: "WETH", address: TOKENS.WETH.address, amount: "2" },
+		{ symbol: "USDC", address: TOKENS.USDC.address, amount: "3000" },
+	],
+	maxStrategies: 3,
+	maxDeadlineSec: 604_800,
+};
+
+test("the prompt states the risk appetite read from the user's words", () => {
+	const [, user] = buildComposeMessages(PAIR_REQ, CTX);
+	assert.match(user.content, /RISK APPETITE .*: CONSERVATIVE/);
+
+	const [, degen] = buildComposeMessages(
+		{ ...PAIR_REQ, prompt: "max yield, I can stomach it" },
+		CTX,
+	);
+	assert.match(degen.content, /RISK APPETITE .*: AGGRESSIVE/);
+});
+
+test("the prompt carries pairing arithmetic the model would otherwise do itself", () => {
+	const [, user] = buildComposeMessages(PAIR_REQ, CTX);
+	// 3000 USDC binds against 2 WETH at mid 3450 → 0.869565 WETH, 1000 each.
+	assert.match(user.content, /REFERENCE PAIRING/);
+	assert.ok(user.content.includes("0.869565"), "value-matched total missing");
+	assert.ok(user.content.includes("0.289855"), "per-strategy share missing");
+});
+
+test("the prompt carries band tiers, with the appetite applied", () => {
+	const [, user] = buildComposeMessages(PAIR_REQ, CTX);
+	assert.match(user.content, /SUGGESTED BAND TIERS/);
+	for (const t of bandTiers(
+		CTX.pair.realizedVol7dPct,
+		PAIR_REQ.maxDeadlineSec,
+		"conservative",
+	)) {
+		assert.ok(user.content.includes(String(t.bandBps)), `${t.bandBps} missing`);
+	}
+});
+
+test("blocks are omitted, never faked, when their inputs are absent", () => {
+	// A single-token budget has no second side to pair against: no pairing block
+	// rather than an invented counterpart. (REQ is USDC-only.)
+	const [, single] = buildComposeMessages(REQ, CTX);
+	assert.ok(!single.content.includes("REFERENCE PAIRING"));
+
+	// A request that cannot carry three strategies gets no tier block rather
+	// than a truncated one.
+	const [, oneShot] = buildComposeMessages({ ...PAIR_REQ, maxStrategies: 1 }, CTX);
+	assert.ok(!oneShot.content.includes("SUGGESTED BAND TIERS"));
+	// ...but the pairing block stays, now split for a single strategy.
+	assert.ok(oneShot.content.includes("REFERENCE PAIRING"));
+});
+
+test("the tier block never outlives its stub label", () => {
+	// Pair data is a stub end to end (F3 job 2). The tiers are derived from it,
+	// so they must inherit the label — the same rule contextPromptBlock follows.
+	const [, user] = buildComposeMessages(PAIR_REQ, CTX);
+	const tierBlock = user.content.slice(user.content.indexOf("SUGGESTED BAND TIERS"));
+	assert.match(tierBlock, /STUB/);
+});
+
+test("rejection feedback still lands after the new blocks", () => {
+	const [, user] = buildComposeMessages(PAIR_REQ, CTX, "I7: deadline is stale");
+	assert.match(user.content, /PREVIOUS ATTEMPT WAS REJECTED/);
+	assert.ok(
+		user.content.indexOf("PREVIOUS ATTEMPT") >
+			user.content.indexOf("SUGGESTED BAND TIERS"),
+		"feedback must come last, closest to the model's turn",
+	);
 });
