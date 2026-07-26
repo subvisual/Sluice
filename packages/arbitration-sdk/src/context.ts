@@ -3,10 +3,12 @@
 // Two jobs land in one MarketContext (F3 §1):
 //   - Job 1, the user's OWN book — what they've already shipped. This is now
 //     REAL: read from the Aqua subgraph (see subgraph.ts) via liveContext().
-//   - Job 2, the MARKET — pool depth, realised vol, fee tier. Still a STUB:
-//     it comes from composed hosted DEX/price subgraphs and is blocked on F3
-//     Open Q2 (which price subgraph). Labelled as a stub end-to-end so nothing
-//     downstream — or on stage — mistakes it for live data.
+//   - Job 2, the MARKET — now PARTIAL real: midPrice is live, read from
+//     Chainlink USD feeds on real Base (see pricefeed.ts). Depth, realised
+//     vol, fee tier, and volume are still stubbed — they come from composed
+//     hosted DEX/price subgraphs and are blocked on F3 Open Q2 (which price
+//     subgraph). Labelled per-field via pairFieldSource so nothing downstream
+//     — or on stage — mistakes a stub field for live data.
 //
 // `source` records which it is, and contextPromptBlock() renders that honesty
 // straight into the prompt the enclave signs.

@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { assertFeedMatches, deriveMid, feedFor } from "./pricefeed.ts";
+import {
+	assertFeedMatches,
+	assertLiveAnswer,
+	deriveMid,
+	feedFor,
+} from "./pricefeed.ts";
 
 test("deriveMid returns token1 per token0 (usd0 / usd1)", () => {
 	assert.equal(deriveMid(1878.18, 0.9999), 1878.18 / 0.9999);
@@ -38,4 +43,16 @@ test("assertFeedMatches throws on a decimals mismatch", () => {
 		() => assertFeedMatches("WETH", { description: "ETH / USD", decimals: 18 }),
 		/WETH/,
 	);
+});
+
+test("assertLiveAnswer throws on a zero answer", () => {
+	assert.throws(() => assertLiveAnswer("WETH", 0n), /WETH/);
+});
+
+test("assertLiveAnswer throws on a negative answer", () => {
+	assert.throws(() => assertLiveAnswer("WETH", -1n), /WETH/);
+});
+
+test("assertLiveAnswer does not throw on a normal positive answer", () => {
+	assert.doesNotThrow(() => assertLiveAnswer("WETH", 187818000000n));
 });

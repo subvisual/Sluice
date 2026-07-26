@@ -59,6 +59,17 @@ export function assertFeedMatches(
 	}
 }
 
+// Pure guard: a deprecated/broken aggregator can report a non-positive
+// answer (0 or negative). Refuse it rather than let it flow into deriveMid
+// and silently sign a 0/Infinity/negative mid.
+export function assertLiveAnswer(symbol: string, answer: bigint): void {
+	if (answer <= 0n) {
+		throw new Error(
+			`Chainlink feed for ${symbol}: non-positive answer ${answer}`,
+		);
+	}
+}
+
 export type FeedRead = {
 	symbol: string;
 	priceUsd: number;
@@ -83,6 +94,7 @@ export async function readUsdFeed(
 	assertFeedMatches(symbol, { description, decimals });
 	// ethers v6 returns bigint for int256/uint256.
 	const answer = round.answer as bigint;
+	assertLiveAnswer(symbol, answer);
 	const priceUsd = Number(answer) / 10 ** decimals;
 	return {
 		symbol,
