@@ -18,6 +18,7 @@ import {
 	liveContext,
 	pairTokensFor,
 	stubContext,
+	stubPairFor,
 	type MarketContext,
 } from "./context.ts";
 import {
@@ -122,11 +123,7 @@ function nowContext(
 ): MarketContext {
 	const base = stubContext();
 	if (!pairTokens) return { ...base, observedAt: now };
-	return {
-		...base,
-		observedAt: now,
-		pair: { ...base.pair, pair: `${pairTokens[0]}/${pairTokens[1]}` },
-	};
+	return { ...base, observedAt: now, ...stubPairFor(pairTokens) };
 }
 
 // The validator clock. observedAt/observedBlock are SNAPSHOT facts the model

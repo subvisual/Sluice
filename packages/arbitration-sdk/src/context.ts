@@ -189,6 +189,29 @@ export function stubContext(): MarketContext {
 	};
 }
 
+/**
+ * The stub pair, re-keyed to the tokens a request actually names.
+ *
+ * STUB_PAIR's midPrice is a WETH/USDC number. It may only travel with the
+ * WETH/USDC label — carried onto another pair it is not a stale price, it is
+ * the wrong price, and pairingPlan would divide by it. So for any other pair
+ * the mid is 0 and labelled "deferred": pairing.ts:110 rejects a zero mid, so
+ * the prompt loses the pairing block rather than gaining wrong arithmetic.
+ */
+export function stubPairFor(pairTokens: [string, string]): {
+	pair: PairContext;
+	pairFieldSource: PairLiveness;
+} {
+	const label = `${pairTokens[0]}/${pairTokens[1]}`;
+	if (label === STUB_PAIR.pair) {
+		return { pair: STUB_PAIR, pairFieldSource: ALL_STUB_LIVENESS };
+	}
+	return {
+		pair: { ...STUB_PAIR, pair: label, midPrice: 0 },
+		pairFieldSource: { ...ALL_STUB_LIVENESS, midPrice: "deferred" },
+	};
+}
+
 // Build a MarketContext with a REAL book (job 1) read from the subgraph, keyed
 // to the subgraph's indexed head block. The market (job 2) stays a stub until
 // F3 Open Q2 settles the price source. Network call — used by the CLI, not the
@@ -211,8 +234,10 @@ export async function liveContext(
 	// The pair (job 2). An injected pair wins (tests / offline). Otherwise fetch
 	// the real mid from Chainlink; a price-read failure degrades to a labelled
 	// stub pair — it must NOT sink the (real) book we just read.
-	let pair = opts.pair ?? STUB_PAIR;
-	let pairFieldSource = opts.pairFieldSource ?? ALL_STUB_LIVENESS;
+	const requested = opts.pairTokens ?? ["WETH", "USDC"];
+	const initial = stubPairFor([requested[0], requested[1]]);
+	let pair = opts.pair ?? initial.pair;
+	let pairFieldSource = opts.pairFieldSource ?? initial.pairFieldSource;
 	if (!opts.pair) {
 		try {
 			const [t0, t1] = opts.pairTokens ?? ["WETH", "USDC"];
@@ -220,7 +245,12 @@ export async function liveContext(
 			pair = fetched.pair;
 			pairFieldSource = fetched.pairFieldSource;
 		} catch {
-			// keep the stub pair + all-stub labels: honest degrade, not a crash.
+			// Honest degrade, not a crash: keep the real book we just read, and
+			// present the pair with no mid rather than the stub's WETH/USDC one.
+			const [t0, t1] = opts.pairTokens ?? ["WETH", "USDC"];
+			const stub = stubPairFor([t0, t1]);
+			pair = stub.pair;
+			pairFieldSource = stub.pairFieldSource;
 		}
 	}
 
@@ -262,7 +292,7 @@ export function contextPromptBlock(ctx: MarketContext): string {
 					.join("\n");
 	return [
 		`MARKET CONTEXT (per-field liveness tagged; observed at block ${ctx.observedBlock}):`,
-		`  pair ${p.pair} | mid ${p.midPrice} [${tag("midPrice")}] | feeTier ${p.feeTierBps}bps [${tag("feeTierBps")}]`,
+		`  pair ${p.pair} | mid ${p.midPrice > 0 ? p.midPrice : "unavailable"} [${tag("midPrice")}] | feeTier ${p.feeTierBps}bps [${tag("feeTierBps")}]`,
 		`  poolDepth $${p.poolDepthUsd.toLocaleString("en-US")} [${tag("poolDepthUsd")}] | realizedVol(7d) ${p.realizedVol7dPct}% [${tag("realizedVol7dPct")}] | volume(24h) $${p.recentVolume24hUsd.toLocaleString("en-US")} [${tag("recentVolume24hUsd")}]`,
 		bookHeader,
 		`  live strategies: ${ctx.userBook.liveStrategyCount} (of ${ctx.userBook.strategyCount} total)`,
