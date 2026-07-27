@@ -2,7 +2,7 @@
   <img src="docs/assets/cover.png" alt="Sluice — Strategy Composer for 1inch Aqua" width="880">
 </p>
 
-# 🚰 Sluice
+# 🚰 sluice
 
 **A strategy composer for 1inch Aqua.** ETHGlobal Lisbon 2026.
 
