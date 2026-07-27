@@ -96,13 +96,42 @@ restart of the UI. `demo-down.sh` stops the lot, from any shell.
 
 Composition needs `ZG_PRIVATE_KEY` in `packages/app/.envrc` and a funded 0G ledger — without
 either it still answers, labelled `TEMPLATE_FALLBACK`. To make a shipped strategy actually fill,
-drive a taker over it:
+fund a taker and drive it over your position:
 
 ```sh
+scripts/fork-fund.sh taker  # anvil account 1 — deliberately not the maker
 node scripts/fork-take.mjs --maker <address> --in USDC --amount 200
 ```
 
-Or run the pieces directly:
+`fork-fund.sh` is the fork's faucet: no token here has one, so it writes balances straight into
+the token's storage slot and approves Aqua. It takes a role — `demo` (what `demo-up.sh` runs),
+`maker`, or `taker` — and each role is a target balance sheet rather than a top-up, so re-running
+it is safe. It refuses to run against anything that isn't an anvil fork.
+
+### Running the pieces directly
+
+`demo-up.sh` is the fork stack, the wallet and the app in sequence. Each runs on its own.
+
+**The fork and the index** — an anvil fork of Base plus a graph-node indexing it, driven from
+`subgraph/`:
+
+```sh
+FORK_BLOCK=$(jq -r .forkBlock config/addresses.8453.json) make -C subgraph fork-up
+make -C subgraph fork-status   # sync state + protocol counters
+make -C subgraph fork-reset    # teardown then fresh start
+make -C subgraph fork-down     # stop everything, wipe index state
+```
+
+`fork-up.sh` also takes `BASE_RPC_URL` for the upstream it forks from (default
+`https://mainnet.base.org`). Without `FORK_BLOCK` it forks the chain head instead of the pinned
+block, so pass it if you want the venue identical between runs. Two rules keep the index honest:
+start it **before** sending local transactions — anything mined earlier is invisible to it — and
+run `fork-reset` after **every** anvil restart, because block hashes change and a stale index
+serves plausible wrong data rather than failing.
+
+**The wallet** — `scripts/fork-fund.sh <role>`, as above.
+
+**The app and the CLIs:**
 
 ```sh
 npm install
@@ -113,6 +142,12 @@ npm run compose --workspace @sluice/arbitration-sdk
 # Run the app (compose screen + /api/compose)
 npm run dev
 ```
+
+The app reads Base mainnet by default; the header dropdown switches it to the fork at
+`NEXT_PUBLIC_RPC_URL` (default `http://127.0.0.1:8545`). Point it at your local index with
+`SLUICE_SUBGRAPH_URL=http://localhost:8000/subgraphs/name/sluice/aqua-local`, and — to rehearse a
+ship without a browser wallet — set `NEXT_PUBLIC_DEV_ACCOUNT=<funded address>` and
+`NEXT_PUBLIC_DEV_AUTOCONNECT=1`, which is what `demo-up.sh` does.
 
 Other SDK CLIs: `npm run infer` (one-shot signed inference), `npm run subgraph` (read a maker's
 book), `npm run fund` (0G ledger). See each package's own README for details and required
